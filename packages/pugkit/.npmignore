@@ -1,0 +1,28 @@
+# Development files
+*.test.js
+*.test.mjs
+*.spec.js
+*.spec.mjs
+tests/
+__tests__/
+
+# Documentation
+docs/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Linting and formatting
+.eslintrc
+.eslintrc.js
+.eslintrc.json
+.prettierrc
+.prettierrc.js
+.prettierrc.json
+.editorconfig
+
+# Git
+.gitignore
+.gitattributes

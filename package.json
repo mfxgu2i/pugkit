@@ -1,0 +1,19 @@
+{
+  "name": "pugkit-monorepo",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Monorepo for pugkit packages",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=pugkit",
+    "build": "npm run build --workspace=pugkit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mfxgu2i/pugkit.git"
+  },
+  "author": "mfxgu2i <mfxgu2i@gmail.com>",
+  "license": "MIT"
+}

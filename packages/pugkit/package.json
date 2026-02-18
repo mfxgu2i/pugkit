@@ -1,0 +1,55 @@
+{
+  "name": "pugkit",
+  "version": "0.0.1",
+  "description": "A static site generator for Pug-based projects",
+  "type": "module",
+  "license": "MIT",
+  "author": "mfxgu2i <mfxgu2i@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mfxgu2i/pugkit.git",
+    "directory": "packages/pugkit"
+  },
+  "bugs": "https://github.com/mfxgu2i/pugkit/issues",
+  "homepage": "https://github.com/mfxgu2i/pugkit#readme",
+  "bin": {
+    "pugkit": "./cli/index.mjs"
+  },
+  "keywords": [
+    "pug",
+    "ssg",
+    "static-site-generator",
+    "frontend-tooling"
+  ],
+  "exports": {
+    ".": "./index.mjs",
+    "./config": "./config/index.mjs"
+  },
+  "files": [
+    "cli",
+    "config",
+    "core",
+    "generate",
+    "index.mjs",
+    "tasks",
+    "transform",
+    "utils"
+  ],
+  "dependencies": {
+    "autoprefixer": "^10.4.21",
+    "browser-sync": "^3.0.4",
+    "cac": "^6.7.14",
+    "chokidar": "^4.0.3",
+    "cssnano": "^7.1.1",
+    "esbuild": "^0.25.5",
+    "glob": "^10.3.10",
+    "image-size": "^2.0.2",
+    "picocolors": "^1.1.1",
+    "postcss": "^8.4.49",
+    "prettier": "^3.8.0",
+    "pug": "^3.0.3",
+    "sass": "^1.89.2",
+    "sharp": "^0.34.2",
+    "svgo": "^4.0.0"
+  }
+}
