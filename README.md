@@ -1,30 +1,22 @@
 # pugkit
 
-A modern static site generator for Pug-based projects.
+## About
+
+pugkitは静的サイト制作に特化したビルドツールです。
+納品向きの綺麗なHTMLと自由度の高いアセットを出力します。
 
 ## Packages
 
-This is a monorepo containing the following packages:
+| Package                     | Version |
+| --------------------------- | ------- |
+| [pugkit](./packages/pugkit) | 0.0.1   |
 
-- **[pugkit](./packages/pugkit)** - Core static site generator
-
-## Getting Started
+<!-- ## Quick Start
 
 ```bash
-# Install dependencies
-npm install
-
-# Development
-npm run dev
-
-# Build
-npm run build
-```
-
-## Documentation
-
-See the [pugkit documentation](./packages/pugkit/README.md) for more information.
+npm create pugkit@latest
+``` -->
 
 ## License
 
-MIT © mfxgu2i
+MIT
