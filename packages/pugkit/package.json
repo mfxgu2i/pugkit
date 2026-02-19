@@ -1,7 +1,7 @@
 {
   "name": "pugkit",
   "version": "0.0.1",
-  "description": "A static site generator for Pug-based projects",
+  "description": "A build tool for Pug-based projects",
   "type": "module",
   "license": "MIT",
   "author": "mfxgu2i <mfxgu2i@gmail.com>",
