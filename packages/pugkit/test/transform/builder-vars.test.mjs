@@ -105,3 +105,18 @@ describe('createBuilderVars', () => {
     expect(result.url.href).toBe('/')
   })
 })
+
+describe('createBuilderVars - Windows path normalization', () => {
+  it('should normalize backslashes in relativePath for depth calculation', () => {
+    const paths = { src: '/project/src' }
+    const config = { siteUrl: 'https://example.com', subdir: '' }
+
+    const testPath1 = '/project/src/page.pug'
+    const result1 = createBuilderVars(testPath1, paths, config)
+    expect(result1.url.pathname).toBe('/page.html')
+
+    const testPath2 = '/project/src/nested/page.pug'
+    const result2 = createBuilderVars(testPath2, paths, config)
+    expect(result2.dir).toBe('../')
+  })
+})

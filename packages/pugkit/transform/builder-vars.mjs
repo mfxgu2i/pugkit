@@ -2,10 +2,11 @@ import { relative } from 'node:path'
 
 export function createBuilderVars(filePath, paths, config) {
   const relativePath = relative(paths.src, filePath)
-  const depth = relativePath.split('/').length - 1
+  const normalizedPath = relativePath.replace(/\\/g, '/')
+  const depth = normalizedPath.split('/').length - 1
   const autoDir = depth === 0 ? './' : '../'.repeat(depth)
 
-  let autoPageUrl = relativePath.replace(/\\/g, '/')
+  let autoPageUrl = normalizedPath
 
   if (autoPageUrl.endsWith('index.pug')) {
     autoPageUrl = autoPageUrl.replace(/index\.pug$/, '')

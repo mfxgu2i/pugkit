@@ -185,7 +185,9 @@ class FileWatcher {
 
     const handleSvgChange = async path => {
       // .svgファイルのみ処理（iconsディレクトリは除外）
-      if (!path.endsWith('.svg') || path.includes('/icons/')) {
+      // Windows対応: パスセパレータを正規化
+      const normalizedPath = path.replace(/\\/g, '/')
+      if (!path.endsWith('.svg') || normalizedPath.includes('/icons/')) {
         return
       }
       const relPath = relative(basePath, path)
