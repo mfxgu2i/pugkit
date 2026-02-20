@@ -7,7 +7,7 @@
   "author": "mfxgu2i <mfxgu2i@gmail.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mfxgu2i/pugkit.git",
+    "url": "git+https://github.com/mfxgu2i/pugkit.git",
     "directory": "packages/create-pugkit"
   },
   "bugs": "https://github.com/mfxgu2i/pugkit/issues",
@@ -16,7 +16,7 @@
     "access": "public"
   },
   "bin": {
-    "create-pugkit": "./cli/index.mjs"
+    "create-pugkit": "cli/index.mjs"
   },
   "files": [
     "cli",
