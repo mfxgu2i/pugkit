@@ -1,0 +1,35 @@
+{
+  "name": "create-pugkit",
+  "version": "1.0.0-beta.1",
+  "description": "Scaffolding for pugkit projects",
+  "type": "module",
+  "bin": {
+    "create-pugkit": "./cli/index.mjs"
+  },
+  "files": [
+    "cli",
+    "template"
+  ],
+  "keywords": [
+    "pugkit",
+    "pug",
+    "sass",
+    "static-site-generator",
+    "scaffold"
+  ],
+  "author": "mfxgu2i <mfxgu2i@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "cac": "^6.7.14",
+    "fs-extra": "^11.2.0",
+    "picocolors": "^1.1.1",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/prompts": "^2.4.9"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
