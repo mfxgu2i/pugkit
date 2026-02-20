@@ -13,7 +13,7 @@ export class BuildContext {
     this.paths = {
       root: config.root,
       src: resolve(config.root, 'src'),
-      dist: resolve(config.root, 'dist', config.subdir || ''),
+      dist: resolve(config.root, config.outDir, config.subdir || ''),
       public: resolve(config.root, 'public')
     }
 

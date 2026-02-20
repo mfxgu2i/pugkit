@@ -20,6 +20,7 @@ function mergeConfig(defaults, user) {
   return {
     siteUrl: user.siteUrl || defaults.siteUrl,
     subdir: user.subdir || defaults.subdir,
+    outDir: user.outDir || defaults.outDir,
     debug: user.debug !== undefined ? user.debug : defaults.debug,
     server: { ...defaults.server, ...(user.server || {}) },
     build: {

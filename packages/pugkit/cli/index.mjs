@@ -23,32 +23,39 @@ cli
   .command('[root]', 'Start development mode with file watching')
   .alias('dev')
   .alias('watch')
+  .option('--out-dir <dir>', 'Output directory')
   .action(async (root, options) => {
     try {
-      await develop({ root: root || process.cwd() })
+      await develop({ root: root || process.cwd(), outDir: options.outDir })
     } catch (err) {
       console.error(err)
       process.exit(1)
     }
   })
 
-cli.command('build [root]', 'Production build').action(async root => {
-  try {
-    await build({ root: root || process.cwd() })
-  } catch (err) {
-    console.error(err)
-    process.exit(1)
-  }
-})
+cli
+  .command('build [root]', 'Production build')
+  .option('--out-dir <dir>', 'Output directory')
+  .action(async (root, options) => {
+    try {
+      await build({ root: root || process.cwd(), outDir: options.outDir })
+    } catch (err) {
+      console.error(err)
+      process.exit(1)
+    }
+  })
 
-cli.command('sprite [root]', 'Generate SVG sprite').action(async root => {
-  try {
-    await sprite({ root: root || process.cwd() })
-  } catch (err) {
-    console.error(err)
-    process.exit(1)
-  }
-})
+cli
+  .command('sprite [root]', 'Generate SVG sprite')
+  .option('--out-dir <dir>', 'Output directory')
+  .action(async (root, options) => {
+    try {
+      await sprite({ root: root || process.cwd(), outDir: options.outDir })
+    } catch (err) {
+      console.error(err)
+      process.exit(1)
+    }
+  })
 
 cli.help()
 cli.version(pkgVersion())
