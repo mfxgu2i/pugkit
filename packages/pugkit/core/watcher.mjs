@@ -299,7 +299,7 @@ class FileWatcher {
   injectCSS() {
     if (this.context.server) {
       setTimeout(() => {
-        this.context.server.reload('*.css')
+        this.context.server.reloadCSS()
       }, 100)
     }
   }
