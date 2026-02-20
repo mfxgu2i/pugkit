@@ -1,0 +1,9 @@
+header.c-header
+  #{Builder.url.pathname === '/' ? 'h1' : 'div'}.c-header__logo
+    a.c-header__logo-link(href=Builder.dir)= metaData.siteTitle
+  nav.c-header__nav
+    ul.c-header__nav-list
+      li.c-header__nav-item
+        a.c-header__nav-link(href=Builder.dir) Home
+      li.c-header__nav-item
+        a.c-header__nav-link(href=`${Builder.dir}about/`) About

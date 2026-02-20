@@ -1,0 +1,80 @@
+# ビルド出力 - 差分抽出・公開・デプロイ要件がある場合は除外
+dist/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.fseventsd
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.stackdump
+*.lnk
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# 依存パッケージ
+node_modules/
+.pnp
+.pnp.js
+.yarn/
+
+# ログ・デバッグ
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+logs
+/coverage/
+.nyc_output
+*.tsbuildinfo
+
+# 環境変数（機密情報）
+*.env
+.env
+.env*.local
+!.env.example
+!.env.template
+
+# IDE・エディタ
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/snippets.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# ツール・キャッシュ
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+.turbo/
+.vercel
+.temp/
+
+# Docker
+/docker/data
+/data/db
+
+# その他
+*.pid
+*.pid.lock
+*.seed
+*.tgz

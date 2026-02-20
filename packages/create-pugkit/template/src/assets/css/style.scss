@@ -1,0 +1,258 @@
+// ========================================
+// Reset & Base
+// ========================================
+:root {
+  --color-primary: #a86454;
+  --color-primary-dark: #8a4f42;
+  --color-text: #2d1f1c;
+  --color-bg: #fff;
+  --color-bg-muted: #fdf5f3;
+  --color-border: #e8cfc9;
+  --font-family: -apple-system, 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  padding: 0;
+  margin: 0;
+  font-family: var(--font-family);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+
+// ========================================
+// Layout
+// ========================================
+.c-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  padding: 1rem;
+  margin: 0 auto;
+  background-color: var(--color-bg);
+
+  &__logo {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+
+  &__logo-link {
+    font-weight: 700;
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  &__nav-list {
+    display: flex;
+    gap: 2rem;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+
+  &__nav-link {
+    font-weight: 500;
+    color: var(--color-text);
+  }
+}
+
+main {
+  min-height: calc(100svh - 200px);
+}
+
+.c-footer {
+  padding: 2rem 1rem;
+  margin-top: 4rem;
+  text-align: center;
+
+  &__copyright {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-primary-dark);
+  }
+}
+
+// ========================================
+// Components
+// ========================================
+.hero {
+  padding: 4rem 0;
+  color: #fff;
+  text-align: center;
+  background-color: var(--color-primary);
+
+  &__inner {
+    max-width: 800px;
+    padding: 0 1rem;
+    margin: 0 auto;
+  }
+
+  &__title {
+    margin: 0 0 1rem;
+    font-size: 3rem;
+    font-weight: 700;
+  }
+
+  &__text {
+    margin: 0 0 2rem;
+    font-size: 1.25rem;
+    opacity: 0.9;
+  }
+
+  &__button {
+    display: inline-block;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    background-color: #fff;
+    border-radius: 4px;
+  }
+}
+
+.features {
+  padding: 4rem 0;
+
+  &__inner {
+    max-width: 1200px;
+    padding: 0 1rem;
+    margin: 0 auto;
+  }
+
+  &__title {
+    margin: 0 0 3rem;
+    font-size: 2rem;
+    text-align: center;
+  }
+
+  &__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2rem;
+  }
+
+  &__item {
+    padding: 2rem;
+    border: 2px solid var(--color-border);
+    border-radius: 8px;
+  }
+
+  &__item-title {
+    margin: 0 0 1rem;
+    font-size: 1.25rem;
+  }
+
+  &__item-text {
+    margin: 0;
+    color: var(--color-primary-dark);
+  }
+}
+
+.page {
+  padding: 4rem 0;
+
+  &__inner {
+    max-width: 800px;
+    padding: 0 1rem;
+    margin: 0 auto;
+  }
+
+  &__title {
+    padding-bottom: 0.5rem;
+    margin: 0 0 2rem;
+    font-size: 2.5rem;
+  }
+
+  &__content {
+    line-height: 1.8;
+  }
+
+  &__text {
+    margin: 0 0 1.5rem;
+  }
+
+  &__heading {
+    margin: 2rem 0 1rem;
+    font-size: 1.5rem;
+    color: var(--color-primary);
+  }
+
+  &__list {
+    padding-left: 1.5rem;
+    margin: 0 0 1.5rem;
+  }
+
+  &__list-item {
+    margin: 0.5rem 0;
+  }
+
+  &__code {
+    padding: 1rem;
+    overflow-x: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    background-color: var(--color-bg-muted);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+  }
+
+  &__buttons {
+    margin-top: 3rem;
+    text-align: center;
+  }
+
+  &__button {
+    display: inline-block;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    color: #fff;
+    background-color: var(--color-primary);
+    border-radius: 4px;
+  }
+}
+
+// ========================================
+// Responsive
+// ========================================
+@media (width <= 768px) {
+  .hero {
+    &__title {
+      font-size: 2rem;
+    }
+
+    &__text {
+      font-size: 1rem;
+    }
+  }
+
+  .c-header {
+    &__nav-list {
+      gap: 1rem;
+    }
+  }
+
+  .features {
+    &__list {
+      grid-template-columns: 1fr;
+    }
+  }
+}

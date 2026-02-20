@@ -1,0 +1,30 @@
+
+extends /_templates/_layout
+
+block append vars
+  - 
+    metaData.pageTitle = ''
+    metaData.pageDescription = '静的サイト制作に特化したビルドツール。納品向きの綺麗なHTMLと、構成に制約のないアセット出力が可能です。'
+    metaData.pageType = 'website'
+
+block contents
+  section.hero
+    .hero__inner
+      p.hero__text 静的サイト制作に特化したビルドツール。
+        br
+        | 納品向きの綺麗なHTMLと、構成に制約のないアセット出力が可能です。
+      a.hero__button(href=`${Builder.dir}about/`) 詳細を見る
+
+  section.features
+    .features__inner
+      h2.features__title Features
+      .features__list
+        .features__item
+          h3.features__item-title 綺麗なHTML出力
+          p.features__item-text 納品・保守に適した、サーバーに依存しないクリーンなコードを出力します。
+        .features__item
+          h3.features__item-title 制約のないアセット出力
+          p.features__item-text CSS・JS・画像のディレクトリ構成やファイル数に制約なし。要件に合わせて自由に組み立てられます。
+        .features__item
+          h3.features__item-title 柔軟な設定
+          p.features__item-text pugkit.config.mjsで開発サーバーのポートやサブディレクトリ、画像最適化の方式などを制御できます。
