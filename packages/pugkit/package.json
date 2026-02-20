@@ -43,12 +43,11 @@
   ],
   "dependencies": {
     "autoprefixer": "^10.4.21",
-    "browser-sync": "^3.0.4",
     "cac": "^6.7.14",
     "chokidar": "^4.0.3",
     "cssnano": "^7.1.1",
     "esbuild": "^0.25.5",
-    "glob": "^10.3.10",
+    "glob": "^13.0.6",
     "image-size": "^2.0.2",
     "picocolors": "^1.1.1",
     "postcss": "^8.4.49",
@@ -56,6 +55,7 @@
     "pug": "^3.0.3",
     "sass": "^1.89.2",
     "sharp": "^0.34.2",
+    "sirv": "^3.0.2",
     "svgo": "^4.0.0"
   }
 }

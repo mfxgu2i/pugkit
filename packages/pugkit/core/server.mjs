@@ -1,77 +1,142 @@
-import browser from 'browser-sync'
-import { resolve } from 'node:path'
-import { existsSync } from 'node:fs'
+import http from 'node:http'
+import path from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
+import sirv from 'sirv'
 import { logger } from '../utils/logger.mjs'
 
+const SSE_PATH = '/__pugkit_sse'
+
 /**
- * 開発サーバータスク
+ * HTMLに挿入するライブリロードクライアントスクリプト。
+ */
+const liveReloadScript = `<script>
+(function() {
+  var es = new EventSource('${SSE_PATH}');
+  es.addEventListener('reload', function() {
+    location.reload();
+  });
+  es.addEventListener('css-update', function() {
+    document.querySelectorAll('link[rel="stylesheet"]').forEach(function(link) {
+      var url = new URL(link.href);
+      url.searchParams.set('t', Date.now());
+      link.href = url.toString();
+    });
+  });
+  es.onerror = function() {
+    es.close();
+    setTimeout(function() { location.reload(); }, 1000);
+  };
+})();
+</script>`
+
+/**
+ * 開発サーバータスク（SSE + sirv）
  */
 export async function serverTask(context, options = {}) {
   const { paths, config } = context
-  const distRoot = paths.dist
 
-  // distディレクトリの確認
-  if (!existsSync(distRoot)) {
-    await mkdir(distRoot, { recursive: true })
+  if (!existsSync(paths.dist)) {
+    await mkdir(paths.dist, { recursive: true })
   }
 
-  // BrowserSyncインスタンス作成
-  const bs = browser.create()
-  context.server = bs
-
+  const port = config.server?.port ?? 3000
+  const host = config.server?.host ?? 'localhost'
   const subdir = config.subdir ? '/' + config.subdir.replace(/^\/|\/$/g, '') : ''
-  const startPath = (config.server.startPath || '/').replace(/^\//, '')
+  const startPath = (config.server?.startPath || '/').replace(/^\//, '')
   const fullStartPath = subdir ? `${subdir}/${startPath}` : `/${startPath}`
 
-  return new Promise((resolve, reject) => {
-    bs.init(
-      {
-        notify: false,
-        server: {
-          baseDir: distRoot,
-          serveStaticOptions: {
-            extensions: ['html'],
-            setHeaders: (res, path) => {
-              if (path.endsWith('.css') || path.endsWith('.js')) {
-                res.setHeader('Cache-Control', 'no-cache')
-              }
-            }
-          }
-        },
-        open: false,
-        scrollProportionally: false,
-        ghostMode: false,
-        ui: false,
-        startPath: fullStartPath,
-        port: config.server.port,
-        host: config.server.host,
-        socket: {
-          namespace: '/browser-sync'
-        },
-        logLevel: 'silent',
-        logFileChanges: false,
-        logConnections: false,
-        minify: false,
-        timestamps: false,
-        codeSync: true,
-        online: false,
-        files: false, // 手動でリロード制御
-        injectChanges: true,
-        reloadDelay: 0,
-        reloadDebounce: 50
-      },
-      err => {
-        if (err) {
-          logger.error('server', err.message)
-          reject(err)
-        } else {
-          const urls = bs.getOption('urls')
-          logger.success('server', `Running at ${urls.get('local')}`)
-          resolve()
-        }
+  const clients = new Set()
+
+  const staticServe = sirv(paths.dist, {
+    dev: true,
+    extensions: ['html'],
+    setHeaders(res, filePath) {
+      if (filePath.endsWith('.css') || filePath.endsWith('.js')) {
+        res.setHeader('Cache-Control', 'no-cache')
       }
-    )
+    }
+  })
+
+  const httpServer = http.createServer((req, res) => {
+    const urlPath = req.url?.split('?')[0] ?? '/'
+
+    // ── SSE エンドポイント ──────────────────────────────
+    if (urlPath === SSE_PATH) {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no'
+      })
+      res.write('retry: 1000\n\n')
+      clients.add(res)
+      req.on('close', () => clients.delete(res))
+      return
+    }
+
+    // ── HTML へのライブリロードスクリプト注入 ───────────
+    const decoded = decodeURIComponent(urlPath)
+    const candidates = [
+      path.join(paths.dist, decoded === '/' ? 'index.html' : decoded.replace(/\/$/, '') + '/index.html'),
+      path.join(paths.dist, decoded === '/' ? 'index.html' : decoded + '.html'),
+      path.join(paths.dist, decoded)
+    ]
+    const htmlFile = candidates.find(p => p.endsWith('.html') && existsSync(p))
+
+    if (htmlFile) {
+      try {
+        let html = readFileSync(htmlFile, 'utf-8')
+        html = html.includes('</body>')
+          ? html.replace('</body>', liveReloadScript + '</body>')
+          : html + liveReloadScript
+        const buf = Buffer.from(html, 'utf-8')
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Length': buf.length,
+          'Cache-Control': 'no-cache'
+        })
+        res.end(buf)
+        return
+      } catch {
+        // 読み込み失敗時は sirv にフォールスルー
+      }
+    }
+
+    // ── sirv で静的ファイルを配信 ───────────────────────
+    staticServe(req, res, () => {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end('404 Not Found')
+    })
+  })
+
+  function broadcast(event, data = '') {
+    const msg = `event: ${event}\ndata: ${data}\n\n`
+    for (const res of clients) {
+      res.write(msg)
+    }
+  }
+
+  context.server = {
+    reload() {
+      broadcast('reload')
+    },
+    reloadCSS() {
+      broadcast('css-update')
+    },
+    close() {
+      for (const res of clients) res.end()
+      clients.clear()
+      httpServer.close()
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    httpServer.listen(port, host, () => {
+      logger.success('server', `Running at http://${host}:${port}${fullStartPath}`)
+      resolve()
+    })
+    httpServer.on('error', reject)
   })
 }
 
