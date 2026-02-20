@@ -50,6 +50,7 @@ pugkit sprite
 export default {
   siteUrl: 'https://example.com/',
   subdir: 'subdirectory',
+  outDir: 'dist',
   debug: false,
   server: {
     port: 5555,
@@ -80,6 +81,7 @@ export default {
 
 | Option                    | Description                      | Default       |
 | ------------------------- | -------------------------------- | ------------- |
+| `outDir`                  | Output directory name or path    | `'dist'`      |
 | `debug`                   | デバッグモード（開発時のみ有効） | `false`       |
 | `server.port`             | 開発サーバーのポート番号         | `5555`        |
 | `server.host`             | 開発サーバーのホスト             | `'localhost'` |
@@ -151,7 +153,7 @@ project-root/
 ├── public/           # 静的ファイル
 │   ├── ogp.jpg
 │   └── favicon.ico
-├── dist/             # ビルド出力先
+├── dist/             # Build output (configurable with outDir)
 └── pugkit.config.mjs # ビルド設定ファイル
 ```
 

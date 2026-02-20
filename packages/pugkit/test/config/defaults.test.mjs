@@ -5,6 +5,7 @@ describe('defaultConfig', () => {
   it('should have correct default values', () => {
     expect(defaultConfig.siteUrl).toBe('')
     expect(defaultConfig.subdir).toBe('')
+    expect(defaultConfig.outDir).toBe('dist')
     expect(defaultConfig.debug).toBe(false)
   })
 
