@@ -19,8 +19,7 @@
     "create-pugkit": "cli/index.mjs"
   },
   "files": [
-    "cli",
-    "template"
+    "cli"
   ],
   "keywords": [
     "pugkit",
@@ -31,12 +30,11 @@
   ],
   "dependencies": {
     "cac": "^6.7.14",
-    "fs-extra": "^11.2.0",
+    "degit": "^2.8.4",
     "picocolors": "^1.1.1",
     "prompts": "^2.4.2"
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
     "@types/prompts": "^2.4.9"
   },
   "engines": {

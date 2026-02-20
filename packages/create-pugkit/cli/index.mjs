@@ -3,13 +3,16 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import fs from 'fs-extra'
+import fs from 'node:fs'
 import pc from 'picocolors'
 import { cac } from 'cac'
 import prompts from 'prompts'
+import degit from 'degit'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+const REPO = 'mfxgu2i/pugkit/packages/create-pugkit/template'
 
 function pkgVersion() {
   const pkgPath = path.join(__dirname, '../package.json')
@@ -32,7 +35,7 @@ function mkdirp(dir) {
 
 async function main(root, options) {
   const cwd = path.resolve(process.cwd(), root || '.')
-  const current = root === '.'
+  const current = !root || root === '.'
   const projectName = current ? path.basename(process.cwd()) : root
 
   const questions = {
@@ -59,22 +62,15 @@ async function main(root, options) {
   try {
     log('copying project files...')
 
-    // Copy template files from the package
-    const templateDir = path.join(__dirname, '../template')
-    await fs.copy(templateDir, cwd, {
-      overwrite: true,
-      filter: src => {
-        // Skip node_modules and dist directories
-        return !src.includes('node_modules') && !src.includes('dist')
-      }
-    })
+    const emitter = degit(REPO, { cache: false, force: true, verbose: false })
+    await emitter.clone(cwd)
 
     // Update package.json with project name
     const pkgPath = path.join(cwd, 'package.json')
     if (fs.existsSync(pkgPath)) {
-      const pkg = await fs.readJson(pkgPath)
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
       pkg.name = projectName
-      await fs.writeJson(pkgPath, pkg, { spaces: 2 })
+      fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
     }
   } catch (err) {
     console.error(`${pc.cyan(pc.bold('CREATE-PUGKIT'))} ${pc.dim(`v${pkgVersion()}`)} ${pc.red(err.message)}`)
