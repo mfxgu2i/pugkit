@@ -164,7 +164,8 @@ project-root/
 - [Sharp](https://sharp.pixelplumbing.com/) - 画像最適化
 - [SVGO](https://svgo.dev/) - SVG最適化
 - [Chokidar](https://github.com/paulmillr/chokidar) - ファイル監視
-- [BrowserSync](https://browsersync.io/) - 開発サーバー
+- [sirv](https://github.com/lukeed/sirv) - 開発サーバー
+- SSE（Server-Sent Events） - ライブリロード
 - [Prettier](https://prettier.io/) - HTML整形
 
 ## License
