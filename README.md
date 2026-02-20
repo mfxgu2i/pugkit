@@ -10,7 +10,7 @@ pugkitは静的サイト制作に特化したビルドツールです。
 | Package                                   | Version      |
 | ----------------------------------------- | ------------ |
 | [pugkit](./packages/pugkit)               | 1.0.0-beta.2 |
-| [create-pugkit](./packages/create-pugkit) | 1.0.0-beta.1 |
+| [create-pugkit](./packages/create-pugkit) | 1.0.0-beta.2 |
 
 ## Quick Start
 
