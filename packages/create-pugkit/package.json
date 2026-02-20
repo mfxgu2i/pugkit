@@ -3,6 +3,18 @@
   "version": "1.0.0-beta.1",
   "description": "Scaffolding for pugkit projects",
   "type": "module",
+  "license": "MIT",
+  "author": "mfxgu2i <mfxgu2i@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mfxgu2i/pugkit.git",
+    "directory": "packages/create-pugkit"
+  },
+  "bugs": "https://github.com/mfxgu2i/pugkit/issues",
+  "homepage": "https://github.com/mfxgu2i/pugkit#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "create-pugkit": "./cli/index.mjs"
   },
@@ -17,8 +29,6 @@
     "static-site-generator",
     "scaffold"
   ],
-  "author": "mfxgu2i <mfxgu2i@gmail.com>",
-  "license": "MIT",
   "dependencies": {
     "cac": "^6.7.14",
     "fs-extra": "^11.2.0",
