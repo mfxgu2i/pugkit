@@ -2,7 +2,7 @@
 
 ## About
 
-[pugkit](https://github.com/a_tokuhara/pugkit) を使用した静的サイト制作のスターターキットです。
+[pugkit](https://github.com/mfxgu2i/pugkit)を使った静的サイト制作環境をセットアップします。
 
 ## Usage
 
@@ -33,9 +33,9 @@ npm create pugkit@latest .
 プロジェクト作成後の手順：
 
 ```sh
-cd my-pugkit-project
+cd my-site
 npm install
-npm build
+npm run build
 npm run dev
 ```
 

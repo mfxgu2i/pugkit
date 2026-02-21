@@ -4,7 +4,7 @@ extends /_templates/_layout
 block append vars
   - 
     metaData.pageTitle = ''
-    metaData.pageDescription = '静的サイト制作に特化したビルドツール。納品向きの綺麗なHTMLと、構成に制約のないアセット出力が可能です。'
+    metaData.pageDescription = '静的サイト制作に特化したビルドツール。納品向きの綺麗なHTMLと、ファイル構成に制約のないアセットファイルを出力可能です。'
     metaData.pageType = 'website'
 
 block contents
@@ -12,7 +12,7 @@ block contents
     .hero__inner
       p.hero__text 静的サイト制作に特化したビルドツール。
         br
-        | 納品向きの綺麗なHTMLと、構成に制約のないアセット出力が可能です。
+        | 納品向きの綺麗なHTMLと、ファイル構成に制約のないアセットファイルを出力可能です。
       a.hero__button(href=`${Builder.dir}about/`) 詳細を見る
 
   section.features

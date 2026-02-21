@@ -17,8 +17,10 @@ const liveReloadScript = `<script>
     location.reload();
   });
   es.addEventListener('css-update', function() {
+    // 同一オリジンの <link rel="stylesheet"> のみ再読み込み（外部フォント等は除外）
     document.querySelectorAll('link[rel="stylesheet"]').forEach(function(link) {
       var url = new URL(link.href);
+      if (url.origin !== location.origin) return;
       url.searchParams.set('t', Date.now());
       link.href = url.toString();
     });

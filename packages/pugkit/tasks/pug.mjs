@@ -3,7 +3,7 @@ import { basename } from 'node:path'
 import { compilePugFile } from '../transform/pug.mjs'
 import { formatHtml } from '../transform/html.mjs'
 import { createBuilderVars } from '../transform/builder-vars.mjs'
-import { createImageSizeHelper } from '../transform/image-size.mjs'
+import { createImageSizeHelper, createImageInfoHelper } from '../transform/image-size.mjs'
 import { generatePage } from '../generate/page.mjs'
 import { logger } from '../utils/logger.mjs'
 
@@ -68,8 +68,9 @@ async function processFile(filePath, context) {
 
     const builderVars = createBuilderVars(filePath, paths, config)
     const imageSize = createImageSizeHelper(filePath, paths, logger)
+    const imageInfo = createImageInfoHelper(filePath, paths, logger, config)
 
-    const html = template({ Builder: builderVars, imageSize })
+    const html = template({ Builder: builderVars, imageSize, imageInfo })
     const formatted = await formatHtml(html)
     await generatePage(filePath, formatted, paths)
   } catch (error) {
