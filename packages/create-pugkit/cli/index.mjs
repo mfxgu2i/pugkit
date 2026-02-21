@@ -82,14 +82,9 @@ async function main(root, options) {
 
   let step = 1
 
-  const relative = path.relative(process.cwd(), cwd)
-  if (relative !== '') {
-    console.log(`  ${step++}: ${pc.bold(pc.cyan(`cd ${relative}`))}`)
-  }
-
-  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm install'))}`)
-  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm run build'))}`)
-  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm run dev'))}`)
+  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm install'))}`);
+  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm run build'))}`);
+  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm run start'))}`);
   console.log(`\nTo close the dev server, hit ${pc.bold(pc.cyan('Ctrl + C'))}`)
 }
 

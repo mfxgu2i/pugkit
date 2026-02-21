@@ -33,10 +33,9 @@ npm create pugkit@latest .
 プロジェクト作成後の手順：
 
 ```sh
-cd my-site
 npm install
 npm run build
-npm run dev
+npm run start
 ```
 
 ## License
