@@ -111,7 +111,7 @@ class FileWatcher {
       ignoreInitial: true,
       ignored: [/(^|[\/\\])\../, /node_modules/, /\.git/],
       persistent: true,
-      awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
+      awaitWriteFinish: { stabilityThreshold: 50, pollInterval: 25 }
     })
 
     watcher.on('change', async path => {
@@ -299,9 +299,7 @@ class FileWatcher {
    */
   injectCSS() {
     if (this.context.server) {
-      setTimeout(() => {
-        this.context.server.reloadCSS()
-      }, 100)
+      this.context.server.reloadCSS()
     }
   }
 

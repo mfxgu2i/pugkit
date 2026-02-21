@@ -1,7 +1,7 @@
 import http from 'node:http'
 import path from 'node:path'
-import { existsSync, readFileSync } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdir, readFile } from 'node:fs/promises'
 import sirv from 'sirv'
 import { logger } from '../utils/logger.mjs'
 
@@ -17,7 +17,6 @@ const liveReloadScript = `<script>
     location.reload();
   });
   es.addEventListener('css-update', function() {
-    // 同一オリジンの <link rel="stylesheet"> のみ再読み込み（外部フォント等は除外）
     document.querySelectorAll('link[rel="stylesheet"]').forEach(function(link) {
       var url = new URL(link.href);
       if (url.origin !== location.origin) return;
@@ -29,6 +28,9 @@ const liveReloadScript = `<script>
     es.close();
     setTimeout(function() { location.reload(); }, 1000);
   };
+  window.addEventListener('beforeunload', function() {
+    es.close();
+  });
 })();
 </script>`
 
@@ -73,7 +75,11 @@ export async function serverTask(context, options = {}) {
       })
       res.write('retry: 1000\n\n')
       clients.add(res)
-      req.on('close', () => clients.delete(res))
+
+      const cleanup = () => clients.delete(res)
+      req.on('close', cleanup)
+      req.socket.on('close', cleanup)
+      res.on('error', cleanup)
       return
     }
 
@@ -87,22 +93,26 @@ export async function serverTask(context, options = {}) {
     const htmlFile = candidates.find(p => p.endsWith('.html') && existsSync(p))
 
     if (htmlFile) {
-      try {
-        let html = readFileSync(htmlFile, 'utf-8')
-        html = html.includes('</body>')
-          ? html.replace('</body>', liveReloadScript + '</body>')
-          : html + liveReloadScript
-        const buf = Buffer.from(html, 'utf-8')
-        res.writeHead(200, {
-          'Content-Type': 'text/html; charset=utf-8',
-          'Content-Length': buf.length,
-          'Cache-Control': 'no-cache'
+      readFile(htmlFile, 'utf-8')
+        .then(html => {
+          html = html.includes('</body>')
+            ? html.replace('</body>', liveReloadScript + '</body>')
+            : html + liveReloadScript
+          const buf = Buffer.from(html, 'utf-8')
+          res.writeHead(200, {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Content-Length': buf.length,
+            'Cache-Control': 'no-cache'
+          })
+          res.end(buf)
         })
-        res.end(buf)
-        return
-      } catch {
-        // 読み込み失敗時は sirv にフォールスルー
-      }
+        .catch(() => {
+          staticServe(req, res, () => {
+            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+            res.end('404 Not Found')
+          })
+        })
+      return
     }
 
     // ── sirv で静的ファイルを配信 ───────────────────────
@@ -115,7 +125,11 @@ export async function serverTask(context, options = {}) {
   function broadcast(event, data = '') {
     const msg = `event: ${event}\ndata: ${data}\n\n`
     for (const res of clients) {
-      res.write(msg)
+      try {
+        res.write(msg)
+      } catch {
+        clients.delete(res)
+      }
     }
   }
 
