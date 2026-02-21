@@ -92,7 +92,7 @@ export default {
 
 ### Pug Templates
 
-Pugテンプレート内では、`Builder`オブジェクトと`imageSize()`関数が使用できます。
+Pugテンプレート内では、`Builder` オブジェクトと `imageInfo()` 関数が使用できます。
 
 #### Builder Object
 
@@ -113,14 +113,49 @@ meta(property='og:url', content=Builder.url.href)
 | `Builder.url.pathname` | 現在のページのパス                 | `/about/`                                 |
 | `Builder.url.href`     | 完全なURL                          | `https://example.com/subdirectory/about/` |
 
-#### imageSize() Function
+#### imageInfo() Function
 
-画像ファイルのサイズを自動取得し、CLSを防ぎます。
+`src/` 配下の画像のメタデータ・パスを自動解決します。`imageOptimization` の設定に応じて `src` が自動的に最適化後のパスに変換されます。`basename@2x.ext` / `basename_sp.ext` が存在する場合は retina・SP 情報も自動取得します。
 
 ```pug
-- const size = imageSize('/assets/img/photo.jpg')
-img(src='/assets/img/photo.jpg', width=size.width, height=size.height, alt='')
+- const info = imageInfo('/assets/img/hero.jpg')
+img(src=info.src width=info.width height=info.height alt='')
 ```
+
+**返り値**
+
+| Property       | Type                             | Description                                             |
+| -------------- | -------------------------------- | ------------------------------------------------------- |
+| `src`          | `string`                         | 最適化設定に応じたパス（webpモード時は `.webp` パス）   |
+| `width`        | `number \| undefined`            | 画像の幅（px）                                          |
+| `height`       | `number \| undefined`            | 画像の高さ（px）                                        |
+| `format`       | `string \| undefined`            | 画像フォーマット（`'jpg'` / `'png'` / `'svg'` など）   |
+| `isSvg`        | `boolean`                        | SVG かどうか                                            |
+| `retina`       | `{ src: string } \| null`        | `@2x` 画像が存在する場合に自動検出                      |
+| `sp`           | `{ src, width, height } \| null` | `_sp` 画像が存在する場合に自動検出                      |
+
+**使用例**
+
+```pug
+- const info = imageInfo('/assets/img/hero.jpg')
+
+//- retina 対応
+img(
+  src=info.src
+  srcset=info.retina ? `${info.src} 1x, ${info.retina.src} 2x` : undefined
+  width=info.width
+  height=info.height
+  alt=''
+)
+
+//- SP 画像対応
+picture
+  if info.sp
+    source(media='(max-width: 767px)' srcset=info.sp.src width=info.sp.width height=info.sp.height)
+  img(src=info.src width=info.width height=info.height alt='')
+```
+
+> **Note:** `imageInfo()` は `src/` 配下の画像のみ対応しています。`public/` 配下の画像は非対応です。
 
 ### Image Optimization
 
