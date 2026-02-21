@@ -161,10 +161,6 @@ dist/
 #### 使い方
 
 ```html
-<!-- インラインで読み込む（推奨） -->
-<svg style="display:none">...</svg>
-
-<!-- アイコンを参照 -->
 <svg><use href="assets/icons.svg#arrow"></use></svg>
 ```
 
