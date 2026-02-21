@@ -136,6 +136,42 @@ img(src=info.src width=info.width height=info.height alt='')
 
 > **Note:** `imageInfo()`は`src/`配下の画像のみ対応しています。`public/`配下の画像は非対応です。
 
+### SVG Sprite
+
+`src/` 配下の `icons/` ディレクトリに配置した SVG ファイルを1つのスプライトにまとめます。
+
+#### ディレクトリ構成
+
+```
+src/
+└── assets/
+    └── icons/       # ここに SVG を配置
+        ├── arrow.svg
+        └── close.svg
+```
+
+#### 出力
+
+```
+dist/
+└── assets/
+    └── icons.svg    # 自動生成されるスプライト
+```
+
+#### 使い方
+
+```html
+<!-- インラインで読み込む（推奨） -->
+<svg style="display:none">...</svg>
+
+<!-- アイコンを参照 -->
+<svg><use href="assets/icons.svg#arrow"></use></svg>
+```
+
+- `icons/` ディレクトリは `src/` 配下の任意の場所に配置できます
+- SVG ファイル名がそのまま `<symbol id>` になります
+- `fill` / `stroke` は自動的に `currentColor` に変換されます（SVGの色をCSSで制御可能）
+
 ### Image Optimization
 
 ビルド時に自動的に画像を最適化します。
