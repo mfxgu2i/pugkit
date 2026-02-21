@@ -9,6 +9,6 @@
     "sprite": "pugkit sprite"
   },
   "devDependencies": {
-    "pugkit": "^1.0.0"
+    "pugkit": "^1.0.1"
   }
 }
