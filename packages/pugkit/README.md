@@ -27,7 +27,7 @@ pugkit watch
 
 ### Production Build
 
-最適化されたファイルを生成します。
+製品用ファイルを生成します。
 
 ```bash
 pugkit build
