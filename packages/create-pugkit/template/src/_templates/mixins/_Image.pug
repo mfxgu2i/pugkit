@@ -1,103 +1,49 @@
 //- ============================================================
-//- Image mixin 
+//- Image mixin
 //- ============================================================
+//- imageInfoヘルパーを使用して画像のメタデータ・パスを自動解決します。
+//- ※ src/配下の画像のみ対応。public/配下の画像は非対応。
+//-
 //- 引数
-//-   path  {string}  img/ 以下の画像パス（必須）
-//-   args  {object}  オプション
-//-     alt           {string}  代替テキスト（デフォルト: ''）
-//-     lazy          {boolean} 遅延読み込み（デフォルト: true）
-//-     webp          {boolean} WebP source を出力するか（デフォルト: true）
-//-     class         {string}  picture 要素のクラス
-
-//- 使用例
-//-   +Image('hero.jpg')
-//-   +Image('hero.jpg', { alt: 'ヒーロー画像', lazy: false })
-mixin Image(path, args = {})
-  -
-    const src   = `${Builder.dir}assets/img/${path}`;
-    const ext   = src.slice(src.lastIndexOf('.'));
-    const isSvg = ext === '.svg';
-
-    const base = src.substring(0, src.lastIndexOf('.'));
-    const webpPath   = `${base}.webp`;
-    const retinaWebp = `${base}@2x.webp 2x`;
-
-    const alt           = args.alt || '';
-    const loading       = args.lazy !== false ? 'lazy' : undefined;
-    const fetchpriority = args.lazy === false ? 'high' : undefined;
-    const width  = imageSize(src).width;
-    const height = imageSize(src).height;
-
-    // SVG は retina 不要のため 1x のみ。ラスター画像は 1x + 2x
-    const webpSrcset = isSvg ? webpPath : `${webpPath} 1x, ${retinaWebp}`;
-
-  picture(class=args.class)
-    if !isSvg && args.webp !== false
-      source(type='image/webp' srcset=webpSrcset)
-    img(
-      src=isSvg ? src : webpPath
-      alt=alt
-      width=width
-      height=height
-      loading=loading
-      fetchpriority=fetchpriority
-    )
-
-//- ============================================================
-//- ResponsiveImage mixin — レスポンシブ対応画像
-//- ============================================================
-//- 引数 ※ SVG は非対応。ラスター画像（jpg / png / webp 等）のみ使用可
-//-   path  {string}  img/ 以下の画像パス（必須）。SP 画像は `basename_sp.ext` を自動参照
+//-   path  {string}  img/配下の画像パス
 //-   args  {object}  オプション
 //-     alt           {string}  代替テキスト（デフォルト: ''）
 //-     media         {string}  SP 用ブレークポイントキー 'sm' | 'md' | 'lg'（デフォルト: 'md'）
 //-     lazy          {boolean} 遅延読み込み（デフォルト: true）
-//-     webp          {boolean} WebP source を出力するか（デフォルト: true）
-//-     class         {string}  picture 要素のクラス
-
+//-     class         {string}  img / picture 要素のクラス
+//-
 //- 使用例
-//-   +ResponsiveImage('hero.jpg')
-//-   +ResponsiveImage('hero.jpg', { media: 'sm', alt: 'ヒーロー画像' })
-mixin ResponsiveImage(path, args = {})
+//-   +Image('hero.jpg', { alt: '', media: 'md', lazy: true, class: '' })
+
+mixin Image(path, args = {})
   -
-    const src  = `${Builder.dir}assets/img/${path}`;
-    const ext  = src.slice(src.lastIndexOf('.'));
+    const info          = imageInfo(`${Builder.dir}assets/img/${path}`)
+    const alt           = args.alt || ''
+    const media         = BREAK_POINTS[args.media] || BREAK_POINTS.md
+    const loading       = args.lazy !== false ? 'lazy' : undefined
+    const fetchpriority = args.lazy === false ? 'high' : undefined
 
-    const base       = src.substring(0, src.lastIndexOf('.'));
-    const webpPath   = `${base}.webp`;
-    const retinaWebp = `${base}@2x.webp 2x`;
-    const spWebp     = `${base}_sp.webp`;
-    const spPath     = `${base}_sp${ext}`;
-
-    const alt           = args.alt || '';
-    const media         = BREAK_POINTS[args.media] || BREAK_POINTS.md;
-    const loading       = args.lazy !== false ? 'lazy' : undefined;
-    const fetchpriority = args.lazy === false ? 'high' : undefined;
-    const webpSrcset    = `${webpPath} 1x, ${retinaWebp}`;
-
-    const width    = imageSize(src).width;
-    const height   = imageSize(src).height;
-    const spWidth  = imageSize(spPath).width;
-    const spHeight = imageSize(spPath).height;
+    // 2x画像が存在する場合のみsrcsetに含める
+    const imgSrcset = (!info.isSvg && info.retina)
+      ? `${info.src} 1x, ${info.retina.src} 2x`
+      : undefined
 
   picture(class=args.class)
-    //- SP 用 source（メディアクエリ付き）
-    if args.webp !== false
+
+    //- _sp画像が存在する場合のみ出力
+    if info.sp && !info.isSvg
       source(
-        type='image/webp'
         media=media
-        srcset=spWebp
-        width=spWidth
-        height=spHeight
+        srcset=info.sp.src
+        width=info.sp.width
+        height=info.sp.height
       )
-    //- PC 用 source
-    if args.webp !== false
-      source(type='image/webp' srcset=webpSrcset)
     img(
-      src=webpPath
+      src=info.src
+      srcset=imgSrcset
       alt=alt
-      width=width
-      height=height
+      width=info.width
+      height=info.height
       loading=loading
       fetchpriority=fetchpriority
     )

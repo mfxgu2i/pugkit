@@ -35,7 +35,7 @@ npm create pugkit@latest .
 ```sh
 cd my-site
 npm install
-npm build
+npm run build
 npm run dev
 ```
 

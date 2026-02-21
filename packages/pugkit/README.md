@@ -92,7 +92,7 @@ export default {
 
 ### Pug Templates
 
-Pugテンプレート内では、`Builder`オブジェクトと`imageSize()`関数が使用できます。
+Pugテンプレート内では、`Builder` オブジェクトと `imageInfo()` 関数が使用できます。
 
 #### Builder Object
 
@@ -113,14 +113,28 @@ meta(property='og:url', content=Builder.url.href)
 | `Builder.url.pathname` | 現在のページのパス                 | `/about/`                                 |
 | `Builder.url.href`     | 完全なURL                          | `https://example.com/subdirectory/about/` |
 
-#### imageSize() Function
+#### imageInfo()
 
-画像ファイルのサイズを自動取得し、CLSを防ぎます。
+`src/` 配下の画像のメタデータを取得します。`imageOptimization` の設定に応じて `src` が最適化後のパスに変換され、`@2x`/`_sp` 画像が存在する場合も自動的に解決されます。
 
 ```pug
-- const size = imageSize('/assets/img/photo.jpg')
-img(src='/assets/img/photo.jpg', width=size.width, height=size.height, alt='')
+- const info = imageInfo('/assets/img/hero.jpg')
+img(src=info.src width=info.width height=info.height alt='')
 ```
+
+**返り値**
+
+| Property | Type                             | Description                                           |
+| -------- | -------------------------------- | ----------------------------------------------------- |
+| `src`    | `string`                         | 最適化設定に応じたパス（webpモード時は `.webp` パス） |
+| `width`  | `number \| undefined`            | 画像の幅（px）                                        |
+| `height` | `number \| undefined`            | 画像の高さ（px）                                      |
+| `format` | `string \| undefined`            | 画像フォーマット（`'jpg'` / `'png'` / `'svg'` など）  |
+| `isSvg`  | `boolean`                        | SVG かどうか                                          |
+| `retina` | `{ src: string } \| null`        | `@2x` 画像が存在する場合に自動検出                    |
+| `sp`     | `{ src, width, height } \| null` | `_sp` 画像が存在する場合に自動検出                    |
+
+> **Note:** `imageInfo()`は`src/`配下の画像のみ対応しています。`public/`配下の画像は非対応です。
 
 ### Image Optimization
 
@@ -132,7 +146,7 @@ img(src='/assets/img/photo.jpg', width=size.width, height=size.height, alt='')
 
 ### File Naming Rules
 
-- `_`（アンダースコア）で始まるファイルは部分テンプレートとして扱われます
+- `_`（アンダースコア）で始まるファイルはテンプレートとして扱われます
 - `_`で始まるディレクトリ内のファイルもビルド対象外です
 - 通常のファイル名のみがビルドされます
 

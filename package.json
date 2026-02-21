@@ -11,8 +11,8 @@
     "build": "npm run build --workspace=pugkit",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "publish:beta": "cd packages/pugkit && npm publish --tag beta",
-    "publish:latest": "cd packages/pugkit && npm publish"
+    "publish:pugkit": "cd packages/pugkit && npm publish",
+    "publish:create-pugkit": "cd packages/create-pugkit && npm publish"
   },
   "repository": {
     "type": "git",
