@@ -23,8 +23,8 @@ pugkitが生成するHTMLは、納品案件、WordPressやMovableTypeなどのCM
 
 | Package                                   | Version      |
 | ----------------------------------------- | ------------ |
-| [pugkit](./packages/pugkit)               | 1.0.0-beta.2 |
-| [create-pugkit](./packages/create-pugkit) | 1.0.0-beta.2 |
+| [pugkit](./packages/pugkit)               | 1.0.0 |
+| [create-pugkit](./packages/create-pugkit) | 1.0.0 |
 
 ## Quick Start
 
