@@ -23,12 +23,7 @@ export class BuildContext {
   }
 
   async runTask(taskName, taskFn, options = {}) {
-    try {
-      await taskFn(this, options)
-    } catch (error) {
-      console.error(`Task failed: ${taskName}`)
-      throw error
-    }
+    await taskFn(this, options)
   }
 
   async runParallel(tasks) {
