@@ -1,55 +1,55 @@
 # pugkit
 
+<p>
+  <a aria-label="NPM version" href="https://www.npmjs.com/package/pugkit">
+    <img alt="" src="https://img.shields.io/npm/v/pugkit.svg?style=for-the-badge&labelColor=212121">
+  </a>
+  <a aria-label="License" href="https://github.com/mfxgu2i/pugkit/blob/main/LICENSE">
+    <img alt="" src="https://img.shields.io/npm/l/pugkit.svg?style=for-the-badge&labelColor=212121">
+  </a>
+</p>
+
 ## About
 
 pugkitは静的サイト制作に特化したビルドツールです。
 納品向きの綺麗なHTMLと、ファイル構成に制約のないアセットファイルを出力可能です。
 
-## Installation
+## How To Use
 
-```bash
-npm install pugkit
+```sh
+$ npm install --save-dev pugkit
+$ touch ./src/index.pug
 ```
 
-## Usage
+`package.json` にスクリプトを追加します。
 
-### Development Mode
-
-ファイルの変更を監視し、ブラウザの自動リロードを行います。
-
-```bash
-pugkit
-# or
-pugkit dev
-# or
-pugkit watch
+```json
+"scripts": {
+  "start": "pugkit",
+  "build": "pugkit build",
+  "sprite": "pugkit sprite"
+}
 ```
 
-### Production Build
+## Commands
 
-製品用ファイルを生成します。
-
-```bash
-pugkit build
-```
-
-### SVG Sprite Generation
-
-アイコン用のSVGスプライトを生成します。
-
-```bash
-pugkit sprite
-```
+| コマンド        | 内容                          |
+| --------------- | ----------------------------- |
+| `pugkit`        | 開発モード（Ctrl + C で停止） |
+| `pugkit build`  | 本番ビルド                    |
+| `pugkit sprite` | SVGスプライト生成             |
 
 ## Configuration
 
-プロジェクトのルートに `pugkit.config.mjs` を配置することで、ビルド設定をカスタマイズできます。
+プロジェクトルートに`pugkit.config.mjs`を配置することで、ビルド設定をカスタマイズできます。
 
 ```js
 // pugkit.config.mjs
-export default {
+import { defineConfig } from 'pugkit'
+
+export default defineConfig({
   siteUrl: 'https://example.com/',
-  subdir: 'subdirectory',
+  subdir: '',
   debug: false,
   server: {
     port: 5555,
@@ -57,42 +57,30 @@ export default {
     startPath: '/'
   },
   build: {
-    imageOptimization: 'webp', // 'webp' | 'compress' | false
-    imageOptions: {
-      webp: {
-        quality: 90,
-        effort: 6
-      },
-      jpeg: {
-        quality: 75,
-        progressive: true
-      },
-      png: {
-        quality: 85,
-        compressionLevel: 6
-      }
-    }
+    imageOptimization: 'webp'
   }
-}
+})
 ```
 
-### Configuration Options
-
-| Option                    | Description                      | Default       |
-| ------------------------- | -------------------------------- | ------------- |
-| `debug`                   | デバッグモード（開発時のみ有効） | `false`       |
-| `server.port`             | 開発サーバーのポート番号         | `5555`        |
-| `server.host`             | 開発サーバーのホスト             | `'localhost'` |
-| `server.startPath`        | サーバー起動時に開くパス         | `'/'`         |
-| `server.open`             | サーバー起動時にブラウザを開く   | `false`       |
-| `build.imageOptimization` | 画像最適化の方式                 | `'webp'`      |
-| `build.imageOptions`      | 画像最適化の詳細設定             | -             |
+| Option                    | Description                                                                                 | Type / Values                       | Default       |
+| ------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------- | ------------- |
+| `siteUrl`                 | サイトのベースURL（`Builder.url` に使用）                                                   | `string`                            | `''`          |
+| `subdir`                  | サブディレクトリのパス                                                                      | `string`                            | `''`          |
+| `debug`                   | デバッグモード（開発時のみ有効）                                                            | `boolean`                           | `false`       |
+| `server.port`             | 開発サーバーのポート番号                                                                    | `number`                            | `5555`        |
+| `server.host`             | 開発サーバーのホスト                                                                        | `string`                            | `'localhost'` |
+| `server.startPath`        | サーバー起動時に開くパス                                                                    | `string`                            | `'/'`         |
+| `server.open`             | サーバー起動時にブラウザを開く                                                              | `boolean`                           | `false`       |
+| `build.imageOptimization` | 画像最適化の方式                                                                            | `'webp'` \| `'compress'` \| `false` | `'webp'`      |
+| `build.imageOptions.webp` | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)） | `object`                            | -             |
+| `build.imageOptions.jpeg` | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)） | `object`                            | -             |
+| `build.imageOptions.png`  | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）    | `object`                            | -             |
 
 ## Features
 
 ### Pug Templates
 
-Pugテンプレート内では、`Builder` オブジェクトと `imageInfo()` 関数が使用できます。
+Pugテンプレート内では `Builder` オブジェクトと `imageInfo()` 関数が使用できます。
 
 #### Builder Object
 
@@ -122,8 +110,6 @@ meta(property='og:url', content=Builder.url.href)
 img(src=info.src width=info.width height=info.height alt='')
 ```
 
-**返り値**
-
 | Property | Type                             | Description                                           |
 | -------- | -------------------------------- | ----------------------------------------------------- |
 | `src`    | `string`                         | 最適化設定に応じたパス（webpモード時は `.webp` パス） |
@@ -134,53 +120,102 @@ img(src=info.src width=info.width height=info.height alt='')
 | `retina` | `{ src: string } \| null`        | `@2x` 画像が存在する場合に自動検出                    |
 | `sp`     | `{ src, width, height } \| null` | `_sp` 画像が存在する場合に自動検出                    |
 
-> **Note:** `imageInfo()`は`src/`配下の画像のみ対応しています。`public/`配下の画像は非対応です。
+> `imageInfo()` は `src/` 配下の画像のみ対応しています。`public/` 配下の画像は非対応です。
+
+### Sass
+
+`src/` 配下の `.scss` ファイルをコンパイルして出力します。ベンダープレフィックスの自動付与と圧縮も行われます。
+
+> ブラウザターゲットを指定する場合は、プロジェクトルートに `.browserslistrc` を配置してください。
+
+### JavaScript / TypeScript
+
+`src/` 配下の `.js` / `.ts` ファイルをバンドルして出力します。
+
+esbuild がTypeScriptをネイティブ処理するため、`tsconfig.json` は不要です。ただし型チェックは行わずトランスパイルのみ行います。
+
+#### TypeScript 型チェックを追加する（オプション）
+
+型チェックが必要な場合は`typescript`を追加し、`tsc --noEmit`を組み合わせて使用します。
+
+```sh
+npm install --save-dev typescript
+```
+
+`tsconfig.json`をプロジェクトルートに作成します。
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}
+```
+
+`package.json` にスクリプトを追加します。
+
+```json
+"scripts": {
+  "start": "pugkit",
+  "build": "tsc --noEmit && pugkit build",
+  "sprite": "pugkit sprite",
+}
+```
+
+### Image Optimization
+
+ビルド時に `src/` 配下の画像（JPEG・PNG）を自動的に最適化します。
+
+- `'webp'` - PNG/JPEGをWebPに変換
+- `'compress'` - 元の形式を維持したまま圧縮
+- `false` - 最適化を無効化
 
 ### SVG Sprite
 
-`src/` 配下の `icons/` ディレクトリに配置した SVG ファイルを1つのスプライトにまとめます。
-
-#### ディレクトリ構成
+`src/` 配下の `icons/` ディレクトリに配置したSVGを1つのスプライトファイルにまとめます。
 
 ```
-src/
-└── assets/
-    └── icons/       # ここに SVG を配置
-        ├── arrow.svg
-        └── close.svg
+src/assets/icons/arrow.svg  →  dist/assets/icons.svg#arrow
 ```
-
-#### 出力
-
-```
-dist/
-└── assets/
-    └── icons.svg    # 自動生成されるスプライト
-```
-
-#### 使い方
 
 ```html
 <svg><use href="assets/icons.svg#arrow"></use></svg>
 ```
 
-- `icons/` ディレクトリは `src/` 配下の任意の場所に配置できます
 - SVG ファイル名がそのまま `<symbol id>` になります
-- `fill` / `stroke` は自動的に `currentColor` に変換されます（SVGの色をCSSで制御可能）
+- `fill` / `stroke` は自動的に `currentColor` に変換されます
 
-### Image Optimization
+### SVG Optimization
 
-ビルド時に自動的に画像を最適化します。
+`icons/` 以外に配置した SVG ファイルは SVGO で自動最適化されて出力されます。
 
-- `imageOptimization: 'webp'` - PNG/JPEGをWebP形式に変換
-- `imageOptimization: 'compress'` - 元の形式を維持したまま圧縮
-- `imageOptimization: false` - 最適化を無効化
+### Public Directory
+
+`public/` に置いたファイルはそのまま `dist/` のルートにコピーされます。faviconやOGP画像など最適化不要なファイルの置き場として使用します。
+
+### Debug Mode
+
+`debug: true` のとき、開発モードでのみ以下の出力に切り替わります。
+
+| 対象 | 通常                         | debug: true                    |
+| ---- | ---------------------------- | ------------------------------ |
+| CSS  | minify済み                   | expanded + ソースマップ        |
+| JS   | minify済み・`console.*` 削除 | ソースマップ・`console.*` 保持 |
 
 ### File Naming Rules
 
-- `_`（アンダースコア）で始まるファイルはテンプレートとして扱われます
-- `_`で始まるディレクトリ内のファイルもビルド対象外です
-- 通常のファイル名のみがビルドされます
+`_`（アンダースコア）で始まるファイル・ディレクトリはビルド対象外です。それ以外のファイルは `src/` 配下のディレクトリ構成を維持したまま `dist/` に出力されます。
+
+```
+src/foo/style.scss →  dist/foo/style.css
+src/foo/bar/script.js  →  dist/foo/bar/script.js
+```
 
 ## Directory Structure
 
@@ -210,10 +245,4 @@ project-root/
 - [Sharp](https://sharp.pixelplumbing.com/) - 画像最適化
 - [SVGO](https://svgo.dev/) - SVG最適化
 - [Chokidar](https://github.com/paulmillr/chokidar) - ファイル監視
-- [sirv](https://github.com/lukeed/sirv) - 開発サーバー
-- SSE（Server-Sent Events） - ライブリロード
-- [Prettier](https://prettier.io/) - HTML整形
-
-## License
-
-MIT
+- [sirv](https://github.com/lukeed/sirv) + SSE（Server-Sent Events） - 開発サーバー

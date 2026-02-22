@@ -1,5 +1,11 @@
 # pugkit
 
+<p>
+  <a aria-label="License" href="https://github.com/mfxgu2i/pugkit/blob/main/LICENSE">
+    <img alt="" src="https://img.shields.io/npm/l/pugkit.svg?style=for-the-badge&labelColor=212121">
+  </a>
+</p>
+
 ## About
 
 pugkitは静的サイト制作に特化したビルドツールです。
@@ -7,9 +13,9 @@ pugkitは静的サイト制作に特化したビルドツールです。
 
 ## Philosophy
 
-### レガシーWebサイト制作を想定した出力
+### 100%静的出力
 
-pugkitが生成するHTMLは、納品案件、WordPressやMovableTypeなどのCMSテンプレートに組み込むことを前提としています。不要なコードを含まない、クリーンな出力を重視しています。
+pugkitが生成するHTMLは、納品案件・WordPressやMovableTypeなどのCMSテンプレートに組み込むことを前提としています。不要なコードを含まない、クリーンな出力を重視しています。
 
 ### プロジェクトに合わせた柔軟な構成
 
@@ -21,17 +27,13 @@ pugkitが生成するHTMLは、納品案件、WordPressやMovableTypeなどのCM
 
 ## Packages
 
-| Package                                   | Version |
-| ----------------------------------------- | ------- |
-| [pugkit](./packages/pugkit)               | 1.0.1   |
-| [create-pugkit](./packages/create-pugkit) | 1.0.0   |
+| Package                                   | Version                                                                                                                                   |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| [pugkit](./packages/pugkit)               | [![npm](https://img.shields.io/npm/v/pugkit.svg?style=flat-square&labelColor=212121)](https://www.npmjs.com/package/pugkit)               |
+| [create-pugkit](./packages/create-pugkit) | [![npm](https://img.shields.io/npm/v/create-pugkit.svg?style=flat-square&labelColor=212121)](https://www.npmjs.com/package/create-pugkit) |
 
 ## Quick Start
 
 ```bash
 npm create pugkit@latest
 ```
-
-## License
-
-MIT
