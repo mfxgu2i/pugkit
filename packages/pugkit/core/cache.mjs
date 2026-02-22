@@ -83,8 +83,8 @@ export class CacheManager {
       const [stats, content] = await Promise.all([stat(filePath), readFile(filePath)])
 
       return createHash('md5').update(content).update(stats.mtime.toISOString()).digest('hex')
-    } catch (error) {
-      return null
+    } catch {
+      return `error-${Math.random()}`
     }
   }
 

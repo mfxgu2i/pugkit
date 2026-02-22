@@ -57,10 +57,8 @@ async function processFile(filePath, context) {
     if (!template) {
       const result = await compilePugFile(filePath, { basedir: paths.src })
 
-      if (result.dependencies.length > 0) {
-        graph.clearDependencies(filePath)
-        result.dependencies.forEach(dep => graph.addDependency(filePath, dep))
-      }
+      graph.clearDependencies(filePath)
+      result.dependencies.forEach(dep => graph.addDependency(filePath, dep))
 
       template = result.template
       cache.setPugTemplate(filePath, template)
