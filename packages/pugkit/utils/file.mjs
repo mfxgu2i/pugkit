@@ -1,5 +1,4 @@
 import { mkdir, rm } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 /**
@@ -10,9 +9,7 @@ import { dirname } from 'node:path'
  * ディレクトリを作成（再帰的）
  */
 export async function ensureDir(dirPath) {
-  if (!existsSync(dirPath)) {
-    await mkdir(dirPath, { recursive: true })
-  }
+  await mkdir(dirPath, { recursive: true })
 }
 
 /**
@@ -26,9 +23,7 @@ export async function ensureFileDir(filePath) {
  * ディレクトリをクリーンアップ
  */
 export async function cleanDir(dirPath) {
-  if (existsSync(dirPath)) {
-    await rm(dirPath, { recursive: true, force: true })
-  }
+  await rm(dirPath, { recursive: true, force: true })
   await mkdir(dirPath, { recursive: true })
 }
 
