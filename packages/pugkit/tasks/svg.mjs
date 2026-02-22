@@ -52,13 +52,7 @@ async function optimizeSvg(filePath, context) {
     // SVGOで最適化
     const result = optimize(content, {
       path: filePath,
-      plugins: [
-        'preset-default',
-        {
-          name: 'removeViewBox',
-          active: false
-        }
-      ]
+      plugins: ['preset-default']
     })
 
     // 出力
