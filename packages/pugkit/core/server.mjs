@@ -50,9 +50,11 @@ export async function serverTask(context, options = {}) {
   const startPath = (config.server?.startPath || '/').replace(/^\//, '')
   const fullStartPath = subdir ? `${subdir}/${startPath}` : `/${startPath}`
 
+  const serveRoot = path.resolve(config.root, 'dist')
+
   const clients = new Set()
 
-  const staticServe = sirv(paths.dist, {
+  const staticServe = sirv(serveRoot, {
     dev: true,
     extensions: ['html'],
     setHeaders(res, filePath) {
@@ -86,9 +88,9 @@ export async function serverTask(context, options = {}) {
     // ── HTML へのライブリロードスクリプト注入 ───────────
     const decoded = decodeURIComponent(urlPath)
     const candidates = [
-      path.join(paths.dist, decoded === '/' ? 'index.html' : decoded.replace(/\/$/, '') + '/index.html'),
-      path.join(paths.dist, decoded === '/' ? 'index.html' : decoded + '.html'),
-      path.join(paths.dist, decoded)
+      path.join(serveRoot, decoded === '/' ? 'index.html' : decoded.replace(/\/$/, '') + '/index.html'),
+      path.join(serveRoot, decoded === '/' ? 'index.html' : decoded + '.html'),
+      path.join(serveRoot, decoded)
     ]
     const htmlFile = candidates.find(p => p.endsWith('.html') && existsSync(p))
 
