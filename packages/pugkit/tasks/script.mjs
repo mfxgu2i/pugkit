@@ -29,7 +29,7 @@ export async function scriptTask(context, options = {}) {
 
   try {
     // 2. esbuild設定
-    const config = {
+    const esbuildConfig = {
       entryPoints: scriptFiles,
       outdir: paths.dist,
       outbase: paths.src,
@@ -54,12 +54,12 @@ export async function scriptTask(context, options = {}) {
 
     // debugモードでない場合はconsole/debuggerを削除
     if (!isDebugMode) {
-      config.drop = ['console', 'debugger']
+      esbuildConfig.drop = ['console', 'debugger']
     }
 
     // 3. ビルド実行
     await ensureDir(paths.dist)
-    const result = await esbuild.build(config)
+    const result = await esbuild.build(esbuildConfig)
 
     if (result.errors && result.errors.length > 0) {
       throw new Error(`esbuild errors: ${result.errors.length}`)
