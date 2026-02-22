@@ -128,9 +128,7 @@ class FileWatcher {
           await this.context.taskRegistry.sass(this.context)
         }
 
-        // CSSはインジェクション
-        const cssUrlPath = '/' + relPath.replace(/\\/g, '/').replace(/\.scss$/, '.css')
-        this.injectCSS(cssUrlPath)
+        this.injectCSS()
       } catch (error) {
         logger.error('watch', `Sass build failed: ${error.message}`)
       }
