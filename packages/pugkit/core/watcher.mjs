@@ -1,5 +1,6 @@
 import chokidar from 'chokidar'
-import { relative } from 'node:path'
+import { rm } from 'node:fs/promises'
+import { relative, resolve, basename, extname } from 'node:path'
 import { logger } from '../utils/logger.mjs'
 
 /**
@@ -100,6 +101,22 @@ class FileWatcher {
       }
     })
 
+    watcher.on('unlink', async path => {
+      if (!path.endsWith('.pug')) return
+      const relPath = relative(basePath, path)
+
+      // キャッシュとグラフをクリア
+      this.context.cache.invalidatePugTemplate(path)
+      this.context.graph.clearDependencies(path)
+
+      if (basename(path).startsWith('_')) {
+        logger.info('unlink', relPath)
+        return
+      }
+      const distPath = resolve(this.context.paths.dist, relPath.replace(/\.pug$/, '.html'))
+      await this.deleteDistFile(distPath, relPath)
+    })
+
     this.watchers.push(watcher)
   }
 
@@ -132,6 +149,17 @@ class FileWatcher {
       } catch (error) {
         logger.error('watch', `Sass build failed: ${error.message}`)
       }
+    })
+
+    watcher.on('unlink', async path => {
+      if (!path.endsWith('.scss')) return
+      const relPath = relative(basePath, path)
+      if (basename(path).startsWith('_')) {
+        logger.info('unlink', relPath)
+        return
+      }
+      const distPath = resolve(this.context.paths.dist, relPath.replace(/\.scss$/, '.css'))
+      await this.deleteDistFile(distPath, relPath)
     })
 
     this.watchers.push(watcher)
@@ -168,6 +196,17 @@ class FileWatcher {
       }
     })
 
+    watcher.on('unlink', async path => {
+      if (!(path.endsWith('.ts') || path.endsWith('.js')) || path.endsWith('.d.ts')) return
+      const relPath = relative(basePath, path)
+      if (basename(path).startsWith('_')) {
+        logger.info('unlink', relPath)
+        return
+      }
+      const distPath = resolve(this.context.paths.dist, relPath.replace(/\.ts$/, '.js'))
+      await this.deleteDistFile(distPath, relPath)
+    })
+
     this.watchers.push(watcher)
   }
 
@@ -182,7 +221,7 @@ class FileWatcher {
       awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
     })
 
-    const handleSvgChange = async path => {
+    const handleSvgChange = async (path, event) => {
       // .svgファイルのみ処理（iconsディレクトリは除外）
       // Windows対応: パスセパレータを正規化
       const normalizedPath = path.replace(/\\/g, '/')
@@ -190,7 +229,7 @@ class FileWatcher {
         return
       }
       const relPath = relative(basePath, path)
-      logger.info('change', `svg: ${relPath}`)
+      logger.info(event, `svg: ${relPath}`)
 
       try {
         // SVGタスクを実行（変更されたファイルのみ）
@@ -206,8 +245,16 @@ class FileWatcher {
       }
     }
 
-    watcher.on('change', handleSvgChange)
-    watcher.on('add', handleSvgChange)
+    watcher.on('change', path => handleSvgChange(path, 'change'))
+    watcher.on('add', path => handleSvgChange(path, 'add'))
+
+    watcher.on('unlink', async path => {
+      const normalizedPath = path.replace(/\\/g, '/')
+      if (!path.endsWith('.svg') || normalizedPath.includes('/icons/')) return
+      const relPath = relative(basePath, path)
+      const distPath = resolve(this.context.paths.dist, relPath)
+      await this.deleteDistFile(distPath, relPath)
+    })
 
     this.watchers.push(watcher)
   }
@@ -223,13 +270,13 @@ class FileWatcher {
       awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
     })
 
-    const handleImageChange = async path => {
+    const handleImageChange = async (path, event) => {
       // 画像ファイルのみ処理
       if (!/\.(jpg|jpeg|png|gif)$/i.test(path)) {
         return
       }
       const relPath = relative(basePath, path)
-      logger.info('change', `image: ${relPath}`)
+      logger.info(event, `image: ${relPath}`)
 
       try {
         // 追加・変更時: 画像を処理
@@ -245,8 +292,18 @@ class FileWatcher {
       }
     }
 
-    watcher.on('change', handleImageChange)
-    watcher.on('add', handleImageChange)
+    watcher.on('change', path => handleImageChange(path, 'change'))
+    watcher.on('add', path => handleImageChange(path, 'add'))
+
+    watcher.on('unlink', async path => {
+      if (!/\.(jpg|jpeg|png|gif)$/i.test(path)) return
+      const relPath = relative(basePath, path)
+      const useWebp = this.context.config.build.imageOptimization === 'webp'
+      const ext = extname(path)
+      const destRelPath = useWebp ? relPath.replace(new RegExp(`\\${ext}$`, 'i'), '.webp') : relPath
+      const distPath = resolve(this.context.paths.dist, destRelPath)
+      await this.deleteDistFile(distPath, relPath)
+    })
 
     this.watchers.push(watcher)
   }
@@ -262,9 +319,9 @@ class FileWatcher {
       awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
     })
 
-    const handlePublicChange = async path => {
+    const handlePublicChange = async (path, event) => {
       const relPath = relative(basePath, path)
-      logger.info('change', `public: ${relPath}`)
+      logger.info(event, `public: ${relPath}`)
 
       try {
         // Copyタスクを実行
@@ -278,8 +335,14 @@ class FileWatcher {
       }
     }
 
-    watcher.on('change', handlePublicChange)
-    watcher.on('add', handlePublicChange)
+    watcher.on('change', path => handlePublicChange(path, 'change'))
+    watcher.on('add', path => handlePublicChange(path, 'add'))
+
+    watcher.on('unlink', async path => {
+      const relPath = relative(basePath, path)
+      const distPath = resolve(this.context.paths.dist, relPath)
+      await this.deleteDistFile(distPath, relPath)
+    })
 
     this.watchers.push(watcher)
   }
@@ -292,6 +355,19 @@ class FileWatcher {
       setTimeout(() => {
         this.context.server.reload()
       }, 100)
+    }
+  }
+
+  /**
+   * dist内のファイルを削除してブラウザをリロード
+   */
+  async deleteDistFile(distPath, relPath) {
+    try {
+      await rm(distPath, { force: true })
+      logger.info('unlink', relPath)
+      this.reload()
+    } catch (error) {
+      logger.error('watch', `Failed to delete ${relPath}: ${error.message}`)
     }
   }
 

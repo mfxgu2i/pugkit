@@ -44,7 +44,7 @@ export async function serverTask(context, options = {}) {
     await mkdir(paths.dist, { recursive: true })
   }
 
-  const port = config.server?.port ?? 3000
+  const port = config.server?.port ?? 5555
   const host = config.server?.host ?? 'localhost'
   const subdir = config.subdir ? '/' + config.subdir.replace(/^\/|\/$/g, '') : ''
   const startPath = (config.server?.startPath || '/').replace(/^\//, '')
