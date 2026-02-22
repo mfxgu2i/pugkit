@@ -262,7 +262,7 @@ class FileWatcher {
       awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
     })
 
-    watcher.on('change', async path => {
+    const handlePublicChange = async path => {
       const relPath = relative(basePath, path)
       logger.info('change', `public: ${relPath}`)
 
@@ -276,7 +276,10 @@ class FileWatcher {
       } catch (error) {
         logger.error('watch', `Copy failed: ${error.message}`)
       }
-    })
+    }
+
+    watcher.on('change', handlePublicChange)
+    watcher.on('add', handlePublicChange)
 
     this.watchers.push(watcher)
   }
