@@ -70,7 +70,6 @@ export default defineConfig({
 | `server.port`             | 開発サーバーのポート番号                                                                    | `number`                            | `5555`        |
 | `server.host`             | 開発サーバーのホスト                                                                        | `string`                            | `'localhost'` |
 | `server.startPath`        | サーバー起動時に開くパス                                                                    | `string`                            | `'/'`         |
-| `server.open`             | サーバー起動時にブラウザを開く                                                              | `boolean`                           | `false`       |
 | `build.imageOptimization` | 画像最適化の方式                                                                            | `'webp'` \| `'compress'` \| `false` | `'webp'`      |
 | `build.imageOptions.webp` | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)） | `object`                            | -             |
 | `build.imageOptions.jpeg` | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)） | `object`                            | -             |
