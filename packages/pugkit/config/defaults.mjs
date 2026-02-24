@@ -5,8 +5,7 @@ export const defaultConfig = {
   server: {
     port: 5555,
     host: 'localhost',
-    startPath: '/',
-    open: false
+    startPath: '/'
   },
   build: {
     imageOptimization: 'webp',

@@ -13,7 +13,6 @@ describe('defaultConfig', () => {
     expect(defaultConfig.server.port).toBe(5555)
     expect(defaultConfig.server.host).toBe('localhost')
     expect(defaultConfig.server.startPath).toBe('/')
-    expect(defaultConfig.server.open).toBe(false)
   })
 
   it('should have build configuration', () => {

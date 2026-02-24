@@ -2,7 +2,7 @@ import { createBuilder } from '../index.mjs'
 import { logger } from './logger.mjs'
 
 export async function develop(options = {}) {
-  const { root = process.cwd(), port, host, open } = options
+  const { root = process.cwd(), port, host } = options
 
   logger.info('pugkit', 'starting dev server...')
 
@@ -10,7 +10,6 @@ export async function develop(options = {}) {
 
   if (port) builder.context.config.server.port = port
   if (host) builder.context.config.server.host = host
-  if (open) builder.context.config.server.open = open
 
   await builder.watch()
 }
