@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { stat, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 
 /**
@@ -76,13 +76,12 @@ export class CacheManager {
   }
 
   /**
-   * ハッシュ計算（ファイル内容 + 更新日時）
+   * ハッシュ計算（ファイル内容のみ）
    */
   async computeHash(filePath) {
     try {
-      const [stats, content] = await Promise.all([stat(filePath), readFile(filePath)])
-
-      return createHash('md5').update(content).update(stats.mtime.toISOString()).digest('hex')
+      const content = await readFile(filePath)
+      return createHash('md5').update(content).digest('hex')
     } catch {
       return `error-${Math.random()}`
     }
