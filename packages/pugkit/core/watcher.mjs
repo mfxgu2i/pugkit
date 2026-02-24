@@ -17,7 +17,7 @@ export async function watcherTask(context, options = {}) {
 class FileWatcher {
   constructor(context) {
     this.context = context
-    this.watchers = []
+    this.watcher = null
   }
 
   async start() {
@@ -29,327 +29,208 @@ class FileWatcher {
       await this.context.taskRegistry.pug(this.context)
     }
 
-    // Pug監視
-    this.watchPug(paths.src)
-
-    // Sass監視
-    this.watchSass(paths.src)
-
-    // Script監視
-    this.watchScript(paths.src)
-
-    // SVG監視
-    this.watchSvg(paths.src)
-
-    // 画像監視
-    this.watchImages(paths.src)
-
-    // Public監視
-    this.watchPublic(paths.public)
+    this.watcher = chokidar
+      .watch([paths.src, paths.public], {
+        ignoreInitial: true,
+        ignored: [/(^|[\/\\])\./, /node_modules/, /\.git/],
+        persistent: true,
+        awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
+      })
+      .on('change', filePath => this.handleChange(filePath))
+      .on('add', filePath => this.handleAdd(filePath))
+      .on('unlink', filePath => this.handleUnlink(filePath))
 
     logger.info('watch', 'File watching started')
   }
 
-  /**
-   * Pug監視（依存関係を考慮）
-   */
-  watchPug(basePath) {
-    const watcher = chokidar.watch(basePath, {
-      ignoreInitial: true,
-      ignored: [
-        /(^|[\/\\])\../, // 隠しファイル
-        /node_modules/,
-        /\.git/
-      ],
-      persistent: true,
-      awaitWriteFinish: {
-        stabilityThreshold: 100,
-        pollInterval: 50
-      }
-    })
-
-    watcher.on('change', async path => {
-      // .pugファイルのみ処理
-      if (!path.endsWith('.pug')) {
-        return
-      }
-      const relPath = relative(basePath, path)
-      logger.info('change', `pug: ${relPath}`)
-
-      try {
-        // パーシャルの場合、依存する親ファイルも再ビルド
-        const affectedFiles = this.context.graph.getAffectedParents(path)
-
-        if (affectedFiles.length > 0) {
-          logger.info('pug', `Rebuilding ${affectedFiles.length} affected file(s)`)
-        }
-
-        // キャッシュ無効化
-        this.context.cache.invalidatePugTemplate(path)
-        affectedFiles.forEach(f => this.context.cache.invalidatePugTemplate(f))
-
-        // Pugタスクを実行（変更されたファイルのみ）
-        if (this.context.taskRegistry?.pug) {
-          await this.context.taskRegistry.pug(this.context, {
-            files: [path, ...affectedFiles]
-          })
-        }
-
-        this.reload()
-      } catch (error) {
-        logger.error('watch', `Pug build failed: ${error.message}`)
-      }
-    })
-
-    watcher.on('unlink', async path => {
-      if (!path.endsWith('.pug')) return
-      const relPath = relative(basePath, path)
-
-      // キャッシュとグラフをクリア
-      this.context.cache.invalidatePugTemplate(path)
-      this.context.graph.clearDependencies(path)
-
-      if (basename(path).startsWith('_')) {
-        logger.info('unlink', relPath)
-        return
-      }
-      const distPath = resolve(this.context.paths.dist, relPath.replace(/\.pug$/, '.html'))
-      await this.deleteDistFile(distPath, relPath)
-    })
-
-    this.watchers.push(watcher)
+  // ---- ルーティング ----
+  handleChange(filePath) {
+    if (this.isPublic(filePath)) return this.onPublicChange(filePath, 'change')
+    if (filePath.endsWith('.pug')) return this.onPugChange(filePath)
+    if (filePath.endsWith('.scss')) return this.onSassChange(filePath)
+    if (this.isScript(filePath)) return this.onScriptChange(filePath)
+    if (filePath.endsWith('.svg') && !this.isIcons(filePath)) return this.onSvgChange(filePath, 'change')
+    if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageChange(filePath, 'change')
   }
 
-  /**
-   * Sass監視
-   */
-  watchSass(basePath) {
-    const watcher = chokidar.watch(basePath, {
-      ignoreInitial: true,
-      ignored: [/(^|[\/\\])\../, /node_modules/, /\.git/],
-      persistent: true,
-      awaitWriteFinish: { stabilityThreshold: 50, pollInterval: 25 }
-    })
-
-    watcher.on('change', async path => {
-      // .scssファイルのみ処理
-      if (!path.endsWith('.scss')) {
-        return
-      }
-      const relPath = relative(basePath, path)
-      logger.info('change', `sass: ${relPath}`)
-
-      try {
-        // Sassタスクを実行
-        if (this.context.taskRegistry?.sass) {
-          await this.context.taskRegistry.sass(this.context)
-        }
-
-        this.injectCSS()
-      } catch (error) {
-        logger.error('watch', `Sass build failed: ${error.message}`)
-      }
-    })
-
-    watcher.on('unlink', async path => {
-      if (!path.endsWith('.scss')) return
-      const relPath = relative(basePath, path)
-      if (basename(path).startsWith('_')) {
-        logger.info('unlink', relPath)
-        return
-      }
-      const distPath = resolve(this.context.paths.dist, relPath.replace(/\.scss$/, '.css'))
-      await this.deleteDistFile(distPath, relPath)
-    })
-
-    this.watchers.push(watcher)
+  handleAdd(filePath) {
+    if (this.isPublic(filePath)) return this.onPublicChange(filePath, 'add')
+    if (filePath.endsWith('.svg') && !this.isIcons(filePath)) return this.onSvgChange(filePath, 'add')
+    if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageChange(filePath, 'add')
   }
 
-  /**
-   * Script監視
-   */
-  watchScript(basePath) {
-    const watcher = chokidar.watch(basePath, {
-      ignoreInitial: true,
-      ignored: [/(^|[\/\\])\../, /node_modules/, /\.git/, /\.d\.ts$/],
-      persistent: true,
-      awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
-    })
-
-    watcher.on('change', async path => {
-      // .ts/.jsファイルのみ処理（.d.tsを除く）
-      if (!(path.endsWith('.ts') || path.endsWith('.js')) || path.endsWith('.d.ts')) {
-        return
-      }
-      const relPath = relative(basePath, path)
-      logger.info('change', `script: ${relPath}`)
-
-      try {
-        // Scriptタスクを実行
-        if (this.context.taskRegistry?.script) {
-          await this.context.taskRegistry.script(this.context)
-        }
-
-        this.reload()
-      } catch (error) {
-        logger.error('watch', `Script build failed: ${error.message}`)
-      }
-    })
-
-    watcher.on('unlink', async path => {
-      if (!(path.endsWith('.ts') || path.endsWith('.js')) || path.endsWith('.d.ts')) return
-      const relPath = relative(basePath, path)
-      if (basename(path).startsWith('_')) {
-        logger.info('unlink', relPath)
-        return
-      }
-      const distPath = resolve(this.context.paths.dist, relPath.replace(/\.ts$/, '.js'))
-      await this.deleteDistFile(distPath, relPath)
-    })
-
-    this.watchers.push(watcher)
+  handleUnlink(filePath) {
+    if (this.isPublic(filePath)) return this.onPublicUnlink(filePath)
+    if (filePath.endsWith('.pug')) return this.onPugUnlink(filePath)
+    if (filePath.endsWith('.scss')) return this.onSassUnlink(filePath)
+    if (this.isScript(filePath)) return this.onScriptUnlink(filePath)
+    if (filePath.endsWith('.svg') && !this.isIcons(filePath)) return this.onSvgUnlink(filePath)
+    if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageUnlink(filePath)
   }
 
-  /**
-   * SVG監視
-   */
-  watchSvg(basePath) {
-    const watcher = chokidar.watch(basePath, {
-      ignoreInitial: true,
-      ignored: [/(^|[\/\\])\../, /node_modules/, /\.git/, /icons/], // iconsはスプライト用なので除外
-      persistent: true,
-      awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
-    })
+  // ---- 判定ヘルパー ----
 
-    const handleSvgChange = async (path, event) => {
-      // .svgファイルのみ処理（iconsディレクトリは除外）
-      // Windows対応: パスセパレータを正規化
-      const normalizedPath = path.replace(/\\/g, '/')
-      if (!path.endsWith('.svg') || normalizedPath.includes('/icons/')) {
-        return
+  isPublic(filePath) {
+    return filePath.startsWith(this.context.paths.public)
+  }
+
+  isScript(filePath) {
+    return (filePath.endsWith('.ts') || filePath.endsWith('.js')) && !filePath.endsWith('.d.ts')
+  }
+
+  isIcons(filePath) {
+    // Windows 対応: セパレータを正規化
+    return filePath.replace(/\\/g, '/').includes('/icons/')
+  }
+
+  // ---- Pug ----
+
+  async onPugChange(filePath) {
+    const { paths, graph, cache, taskRegistry } = this.context
+    const relPath = relative(paths.src, filePath)
+    logger.info('change', `pug: ${relPath}`)
+    try {
+      const affectedFiles = graph.getAffectedParents(filePath)
+      if (affectedFiles.length > 0) logger.info('pug', `Rebuilding ${affectedFiles.length} affected file(s)`)
+      cache.invalidatePugTemplate(filePath)
+      affectedFiles.forEach(f => cache.invalidatePugTemplate(f))
+      if (taskRegistry?.pug) {
+        await taskRegistry.pug(this.context, { files: [filePath, ...affectedFiles] })
       }
-      const relPath = relative(basePath, path)
-      logger.info(event, `svg: ${relPath}`)
-
-      try {
-        // SVGタスクを実行（変更されたファイルのみ）
-        if (this.context.taskRegistry?.svg) {
-          await this.context.taskRegistry.svg(this.context, {
-            files: [path]
-          })
-        }
-
-        this.reload()
-      } catch (error) {
-        logger.error('watch', `SVG processing failed: ${error.message}`)
-      }
+      this.reload()
+    } catch (error) {
+      logger.error('watch', `Pug build failed: ${error.message}`)
     }
-
-    watcher.on('change', path => handleSvgChange(path, 'change'))
-    watcher.on('add', path => handleSvgChange(path, 'add'))
-
-    watcher.on('unlink', async path => {
-      const normalizedPath = path.replace(/\\/g, '/')
-      if (!path.endsWith('.svg') || normalizedPath.includes('/icons/')) return
-      const relPath = relative(basePath, path)
-      const distPath = resolve(this.context.paths.dist, relPath)
-      await this.deleteDistFile(distPath, relPath)
-    })
-
-    this.watchers.push(watcher)
   }
 
-  /**
-   * 画像監視
-   */
-  watchImages(basePath) {
-    const watcher = chokidar.watch(basePath, {
-      ignoreInitial: true,
-      ignored: [/(^|[\/\\])\../, /node_modules/, /\.git/],
-      persistent: true,
-      awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
-    })
-
-    const handleImageChange = async (path, event) => {
-      // 画像ファイルのみ処理
-      if (!/\.(jpg|jpeg|png|gif)$/i.test(path)) {
-        return
-      }
-      const relPath = relative(basePath, path)
-      logger.info(event, `image: ${relPath}`)
-
-      try {
-        // 追加・変更時: 画像を処理
-        if (this.context.taskRegistry?.image) {
-          await this.context.taskRegistry.image(this.context, {
-            files: [path]
-          })
-        }
-
-        this.reload()
-      } catch (error) {
-        logger.error('watch', `Image processing failed: ${error.message}`)
-      }
+  async onPugUnlink(filePath) {
+    const { paths, cache, graph } = this.context
+    const relPath = relative(paths.src, filePath)
+    cache.invalidatePugTemplate(filePath)
+    graph.clearDependencies(filePath)
+    if (basename(filePath).startsWith('_')) {
+      logger.info('unlink', relPath)
+      return
     }
-
-    watcher.on('change', path => handleImageChange(path, 'change'))
-    watcher.on('add', path => handleImageChange(path, 'add'))
-
-    watcher.on('unlink', async path => {
-      if (!/\.(jpg|jpeg|png|gif)$/i.test(path)) return
-      const relPath = relative(basePath, path)
-      const useWebp = this.context.config.build.imageOptimization === 'webp'
-      const ext = extname(path)
-      const destRelPath = useWebp ? relPath.replace(new RegExp(`\\${ext}$`, 'i'), '.webp') : relPath
-      const distPath = resolve(this.context.paths.dist, destRelPath)
-      await this.deleteDistFile(distPath, relPath)
-    })
-
-    this.watchers.push(watcher)
+    const distPath = resolve(paths.dist, relPath.replace(/\.pug$/, '.html'))
+    await this.deleteDistFile(distPath, relPath)
   }
 
-  /**
-   * Public監視
-   */
-  watchPublic(basePath) {
-    const watcher = chokidar.watch(basePath, {
-      ignoreInitial: true,
-      ignored: [/(^|[\/\\])\../, /node_modules/, /\.git/],
-      persistent: true,
-      awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
-    })
+  // ---- Sass ----
 
-    const handlePublicChange = async (path, event) => {
-      const relPath = relative(basePath, path)
-      logger.info(event, `public: ${relPath}`)
-
-      try {
-        // Copyタスクを実行
-        if (this.context.taskRegistry?.copy) {
-          await this.context.taskRegistry.copy(this.context)
-        }
-
-        this.reload()
-      } catch (error) {
-        logger.error('watch', `Copy failed: ${error.message}`)
-      }
+  async onSassChange(filePath) {
+    const relPath = relative(this.context.paths.src, filePath)
+    logger.info('change', `sass: ${relPath}`)
+    try {
+      if (this.context.taskRegistry?.sass) await this.context.taskRegistry.sass(this.context)
+      this.injectCSS()
+    } catch (error) {
+      logger.error('watch', `Sass build failed: ${error.message}`)
     }
-
-    watcher.on('change', path => handlePublicChange(path, 'change'))
-    watcher.on('add', path => handlePublicChange(path, 'add'))
-
-    watcher.on('unlink', async path => {
-      const relPath = relative(basePath, path)
-      const distPath = resolve(this.context.paths.dist, relPath)
-      await this.deleteDistFile(distPath, relPath)
-    })
-
-    this.watchers.push(watcher)
   }
 
-  /**
-   * ブラウザリロード
-   */
+  async onSassUnlink(filePath) {
+    const { paths } = this.context
+    const relPath = relative(paths.src, filePath)
+    if (basename(filePath).startsWith('_')) {
+      logger.info('unlink', relPath)
+      return
+    }
+    const distPath = resolve(paths.dist, relPath.replace(/\.scss$/, '.css'))
+    await this.deleteDistFile(distPath, relPath)
+  }
+
+  // ---- Script ----
+
+  async onScriptChange(filePath) {
+    const relPath = relative(this.context.paths.src, filePath)
+    logger.info('change', `script: ${relPath}`)
+    try {
+      if (this.context.taskRegistry?.script) await this.context.taskRegistry.script(this.context)
+      this.reload()
+    } catch (error) {
+      logger.error('watch', `Script build failed: ${error.message}`)
+    }
+  }
+
+  async onScriptUnlink(filePath) {
+    const { paths } = this.context
+    const relPath = relative(paths.src, filePath)
+    if (basename(filePath).startsWith('_')) {
+      logger.info('unlink', relPath)
+      return
+    }
+    const distPath = resolve(paths.dist, relPath.replace(/\.ts$/, '.js'))
+    await this.deleteDistFile(distPath, relPath)
+  }
+
+  // ---- SVG ----
+
+  async onSvgChange(filePath, event) {
+    const relPath = relative(this.context.paths.src, filePath)
+    logger.info(event, `svg: ${relPath}`)
+    try {
+      if (this.context.taskRegistry?.svg) {
+        await this.context.taskRegistry.svg(this.context, { files: [filePath] })
+      }
+      this.reload()
+    } catch (error) {
+      logger.error('watch', `SVG processing failed: ${error.message}`)
+    }
+  }
+
+  async onSvgUnlink(filePath) {
+    const relPath = relative(this.context.paths.src, filePath)
+    const distPath = resolve(this.context.paths.dist, relPath)
+    await this.deleteDistFile(distPath, relPath)
+  }
+
+  // ---- Image ----
+
+  async onImageChange(filePath, event) {
+    const relPath = relative(this.context.paths.src, filePath)
+    logger.info(event, `image: ${relPath}`)
+    try {
+      if (this.context.taskRegistry?.image) {
+        await this.context.taskRegistry.image(this.context, { files: [filePath] })
+      }
+      this.reload()
+    } catch (error) {
+      logger.error('watch', `Image processing failed: ${error.message}`)
+    }
+  }
+
+  async onImageUnlink(filePath) {
+    const { paths, config } = this.context
+    const relPath = relative(paths.src, filePath)
+    const useWebp = config.build.imageOptimization === 'webp'
+    const ext = extname(filePath)
+    const destRelPath = useWebp ? relPath.replace(new RegExp(`\\${ext}$`, 'i'), '.webp') : relPath
+    const distPath = resolve(paths.dist, destRelPath)
+    await this.deleteDistFile(distPath, relPath)
+  }
+
+  // ---- Public ----
+
+  async onPublicChange(filePath, event) {
+    const relPath = relative(this.context.paths.public, filePath)
+    logger.info(event, `public: ${relPath}`)
+    try {
+      if (this.context.taskRegistry?.copy) await this.context.taskRegistry.copy(this.context)
+      this.reload()
+    } catch (error) {
+      logger.error('watch', `Copy failed: ${error.message}`)
+    }
+  }
+
+  async onPublicUnlink(filePath) {
+    const relPath = relative(this.context.paths.public, filePath)
+    const distPath = resolve(this.context.paths.dist, relPath)
+    await this.deleteDistFile(distPath, relPath)
+  }
+
+  // ---- 共通ヘルパー ----
+
   reload() {
     if (this.context.server) {
       setTimeout(() => {
@@ -358,9 +239,6 @@ class FileWatcher {
     }
   }
 
-  /**
-   * dist内のファイルを削除してブラウザをリロード
-   */
   async deleteDistFile(distPath, relPath) {
     try {
       await rm(distPath, { force: true })
@@ -371,20 +249,14 @@ class FileWatcher {
     }
   }
 
-  /**
-   * CSSインジェクション
-   */
   injectCSS() {
     if (this.context.server) {
       this.context.server.reloadCSS()
     }
   }
 
-  /**
-   * 監視停止
-   */
   async stop() {
-    await Promise.all(this.watchers.map(w => w.close()))
+    if (this.watcher) await this.watcher.close()
     logger.info('watch', 'File watching stopped')
   }
 }
