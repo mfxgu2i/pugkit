@@ -216,7 +216,7 @@ class FileWatcher {
     const relPath = relative(this.context.paths.public, filePath)
     logger.info(event, `public: ${relPath}`)
     try {
-      if (this.context.taskRegistry?.copy) await this.context.taskRegistry.copy(this.context)
+      if (this.context.taskRegistry?.copy) await this.context.taskRegistry.copy(this.context, { files: [filePath] })
       this.reload()
     } catch (error) {
       logger.error('watch', `Copy failed: ${error.message}`)
