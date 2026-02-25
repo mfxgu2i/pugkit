@@ -39,6 +39,34 @@ $ touch ./src/index.pug
 | `pugkit build`  | 本番ビルド                    |
 | `pugkit sprite` | SVGスプライト生成             |
 
+## Directory Structure
+
+```
+project-root/
+├── src/              # ソースファイル
+│   ├── *.pug
+│   ├── *.scss
+│   ├── *.ts
+│   ├── *.js
+│   ├── *.jpg
+│   ├── *.png
+│   └── *.svg
+├── public/           # 静的ファイル
+│   ├── ogp.jpg
+│   └── favicon.ico
+├── dist/             # ビルド出力先
+└── pugkit.config.mjs # ビルド設定ファイル
+```
+
+### File Naming Rules
+
+`_`（アンダースコア）で始まるファイル・ディレクトリはビルド対象外です。それ以外のファイルは `src/` 配下のディレクトリ構成を維持したまま `dist/` に出力されます。
+
+```
+src/foo/style.scss →  dist/foo/style.css
+src/foo/bar/script.js  →  dist/foo/bar/script.js
+```
+
 ## Configuration
 
 プロジェクトルートに`pugkit.config.mjs`を配置することで、ビルド設定をカスタマイズできます。
@@ -175,9 +203,13 @@ npm install --save-dev typescript
 - `'compress'` - 元の形式を維持したまま圧縮
 - `false` - 最適化を無効化
 
+### SVG Optimization
+
+`icons/`以外に配置した SVG ファイルはSVGOで自動最適化されて出力されます。
+
 ### SVG Sprite
 
-`src/` 配下の `icons/` ディレクトリに配置したSVGを1つのスプライトファイルにまとめます。
+`src/`配下の`icons/`ディレクトリに配置したSVGを1つのスプライトファイルにまとめます。
 
 ```
 src/assets/icons/arrow.svg  →  dist/assets/icons.svg#arrow
@@ -189,10 +221,6 @@ src/assets/icons/arrow.svg  →  dist/assets/icons.svg#arrow
 
 - SVG ファイル名がそのまま `<symbol id>` になります
 - `fill` / `stroke` は自動的に `currentColor` に変換されます
-
-### SVG Optimization
-
-`icons/` 以外に配置した SVG ファイルは SVGO で自動最適化されて出力されます。
 
 ### Public Directory
 
@@ -206,34 +234,6 @@ src/assets/icons/arrow.svg  →  dist/assets/icons.svg#arrow
 | ---- | ---------------------------- | ------------------------------ |
 | CSS  | minify済み                   | expanded + ソースマップ        |
 | JS   | minify済み・`console.*` 削除 | ソースマップ・`console.*` 保持 |
-
-### File Naming Rules
-
-`_`（アンダースコア）で始まるファイル・ディレクトリはビルド対象外です。それ以外のファイルは `src/` 配下のディレクトリ構成を維持したまま `dist/` に出力されます。
-
-```
-src/foo/style.scss →  dist/foo/style.css
-src/foo/bar/script.js  →  dist/foo/bar/script.js
-```
-
-## Directory Structure
-
-```
-project-root/
-├── src/              # ソースファイル
-│   ├── *.pug
-│   ├── *.scss
-│   ├── *.ts
-│   ├── *.js
-│   ├── *.jpg
-│   ├── *.png
-│   └── *.svg
-├── public/           # 静的ファイル
-│   ├── ogp.jpg
-│   └── favicon.ico
-├── dist/             # ビルド出力先
-└── pugkit.config.mjs # ビルド設定ファイル
-```
 
 ## Tech Stack
 

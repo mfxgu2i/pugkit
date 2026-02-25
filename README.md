@@ -6,6 +6,10 @@
   </a>
 </p>
 
+## Documentation
+
+https://github.com/mfxgu2i/pugkit/blob/main/packages/pugkit/README.md
+
 ## About
 
 pugkitは静的サイト制作に特化したビルドツールです。
