@@ -25,6 +25,7 @@ function mergeConfig(defaults, user) {
     build: {
       ...defaults.build,
       ...(user.build || {}),
+      clean: user.build?.clean !== undefined ? user.build.clean : defaults.build.clean,
       imageOptions: {
         webp: { ...defaults.build.imageOptions.webp, ...(user.build?.imageOptions?.webp || {}) },
         jpeg: { ...defaults.build.imageOptions.jpeg, ...(user.build?.imageOptions?.jpeg || {}) },

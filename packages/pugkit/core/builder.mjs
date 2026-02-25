@@ -34,11 +34,17 @@ export class Builder {
     const { context } = this
     const startTime = Date.now()
 
+    const shouldClean = context.config.build.clean
+
     logger.info('build', `Building in ${context.mode} mode`)
 
     try {
       // 1. クリーンアップ
-      await this.clean()
+      if (shouldClean) {
+        await this.clean()
+      } else {
+        logger.info('build', 'Skipping clean (clean: false)')
+      }
 
       // 2. 並列ビルド（軽量タスク + スプライト）
       const parallelTasks = []

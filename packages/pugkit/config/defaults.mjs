@@ -8,6 +8,7 @@ export const defaultConfig = {
     startPath: '/'
   },
   build: {
+    clean: true,
     imageOptimization: 'webp',
     imageOptions: {
       webp: {
