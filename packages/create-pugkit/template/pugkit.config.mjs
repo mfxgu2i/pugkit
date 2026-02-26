@@ -1,6 +1,6 @@
 import { defineConfig } from 'pugkit'
 
-// See: https://github.com/mfxgu2i/pugkit#configuration
+// See: https://github.com/mfxgu2i/pugkit/blob/main/packages/pugkit/README.md#configuration
 export default defineConfig({
   siteUrl: 'https://example.com/',
   subdir: '',
