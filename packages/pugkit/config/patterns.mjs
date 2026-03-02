@@ -11,20 +11,11 @@ export function createGlobPatterns(srcPath) {
       ignore: ['**/*.d.ts', '**/node_modules/**']
     },
     images: {
-      optimize: [
-        `${srcPath}/**/*.{png,jpg,jpeg}`,
-        `!${srcPath}/**/sprites_*/*`,
-        `!${srcPath}/**/_inline*/*`,
-        `!${srcPath}/**/icons*/*`
-      ],
-      webp: {
-        src: [`${srcPath}/**/*.{png,jpg,jpeg,gif}`],
-        ignore: [`!${srcPath}/**/favicons/*`, `!${srcPath}/**/ogp.{png,jpg}`]
-      }
+      optimize: [`${srcPath}/**/*.{png,jpg,jpeg}`, `!${srcPath}/**/icons/*`],
+      webp: [`${srcPath}/**/*.{png,jpg,jpeg,gif}`, `!${srcPath}/**/icons/*`]
     },
     svg: {
-      src: [`${srcPath}/**/*.svg`],
-      ignore: [`!${srcPath}/**/sprites_*/*`, `!${srcPath}/**/_inline*/*`, `!${srcPath}/**/icons*/*`]
+      src: [`${srcPath}/**/*.svg`, `!${srcPath}/**/icons/*`]
     }
   }
 }
