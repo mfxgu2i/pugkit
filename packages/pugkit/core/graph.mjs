@@ -1,6 +1,6 @@
 /**
  * 依存関係グラフ
- * Pugのパーシャル依存を管理
+ * Pug・Sass・Script のパーシャル依存を管理
  */
 export class DependencyGraph {
   constructor() {
