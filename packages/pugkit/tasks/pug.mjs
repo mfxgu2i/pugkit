@@ -69,7 +69,7 @@ async function processFile(filePath, context) {
     const imageInfo = createImageInfoHelper(filePath, paths, logger, config)
 
     const html = template({ Builder: builderVars, imageSize, imageInfo })
-    const formatted = await formatHtml(html)
+    const formatted = formatHtml(html)
     await generatePage(filePath, formatted, paths)
   } catch (error) {
     logger.error('pug', `Failed: ${basename(filePath)} - ${error.message}`)
