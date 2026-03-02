@@ -55,7 +55,7 @@ project-root/
 
 ### File Naming Rules
 
-`_`（アンダースコア）で始まるファイル・ディレクトリはビルド対象外です。それ以外のファイルは `src/` 配下のディレクトリ構成を維持したまま `dist/` に出力されます。
+`_`（アンダースコア）で始まるファイル・ディレクトリはビルド対象外です。それ以外のファイルは `src/` 配下のディレクトリ構成を維持したまま `outDir`（デフォルト: `dist/`）に出力されます。
 
 ```
 src/foo/style.scss →  dist/foo/style.css
@@ -73,6 +73,7 @@ import { defineConfig } from 'pugkit'
 export default defineConfig({
   siteUrl: 'https://example.com/',
   subdir: '',
+  outDir: 'dist',
   debug: false,
   server: {
     port: 5555,
@@ -85,19 +86,20 @@ export default defineConfig({
 })
 ```
 
-| Option                    | Description                                                                                 | Type / Values                       | Default       |
-| ------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------- | ------------- |
-| `siteUrl`                 | サイトのベースURL（`Builder.url` に使用）                                                   | `string`                            | `''`          |
-| `subdir`                  | サブディレクトリのパス                                                                      | `string`                            | `''`          |
-| `debug`                   | デバッグモード（開発時のみ有効）                                                            | `boolean`                           | `false`       |
-| `server.port`             | 開発サーバーのポート番号                                                                    | `number`                            | `5555`        |
-| `server.host`             | 開発サーバーのホスト                                                                        | `string`                            | `'localhost'` |
-| `server.startPath`        | サーバー起動時に開くパス                                                                    | `string`                            | `'/'`         |
-| `build.clean`             | ビルド前に `dist/` をクリーンするか（`false` にすると他リソースと共存可能）                 | `boolean`                           | `true`        |
-| `build.imageOptimization` | 画像最適化の方式                                                                            | `'webp'` \| `'compress'` \| `false` | `'webp'`      |
-| `build.imageOptions.webp` | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)） | `object`                            | -             |
-| `build.imageOptions.jpeg` | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)） | `object`                            | -             |
-| `build.imageOptions.png`  | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）    | `object`                            | -             |
+| Option                    | Description                                                                                  | Type / Values                       | Default       |
+| ------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------- | ------------- |
+| `siteUrl`                 | サイトのベースURL（`Builder.url` に使用）                                                    | `string`                            | `''`          |
+| `subdir`                  | サブディレクトリのパス                                                                       | `string`                            | `''`          |
+| `outDir`                  | ビルド出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可 | `string`                            | `'dist'`      |
+| `debug`                   | デバッグモード（開発時のみ有効）                                                             | `boolean`                           | `false`       |
+| `server.port`             | 開発サーバーのポート番号                                                                     | `number`                            | `5555`        |
+| `server.host`             | 開発サーバーのホスト                                                                         | `string`                            | `'localhost'` |
+| `server.startPath`        | サーバー起動時に開くパス                                                                     | `string`                            | `'/'`         |
+| `build.clean`             | ビルド前に `outDir` をクリーンするか（`false` にすると他リソースと共存可能）                 | `boolean`                           | `true`        |
+| `build.imageOptimization` | 画像最適化の方式                                                                             | `'webp'` \| `'compress'` \| `false` | `'webp'`      |
+| `build.imageOptions.webp` | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）  | `object`                            | -             |
+| `build.imageOptions.jpeg` | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）  | `object`                            | -             |
+| `build.imageOptions.png`  | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）     | `object`                            | -             |
 
 ## Features
 
@@ -208,7 +210,7 @@ npm install --save-dev typescript
 `src/`配下の`icons/`ディレクトリに配置したSVGを1つのスプライトファイルにまとめます。
 
 ```
-src/assets/icons/arrow.svg  →  dist/assets/icons.svg#arrow
+`src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow`
 ```
 
 ```html
@@ -220,7 +222,7 @@ src/assets/icons/arrow.svg  →  dist/assets/icons.svg#arrow
 
 ### Public Directory
 
-`public/` に置いたファイルはそのまま `dist/` のルートにコピーされます。faviconやOGP画像など最適化不要なファイルの置き場として使用します。
+`public/` に置いたファイルはそのまま `outDir` のルートにコピーされます。faviconやOGP画像など最適化不要なファイルの置き場として使用します。
 
 ### Debug Mode
 
