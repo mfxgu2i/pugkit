@@ -1,6 +1,7 @@
 import { glob } from 'glob'
 import { readFile, writeFile } from 'node:fs/promises'
 import { relative, resolve, basename, extname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import * as sass from 'sass'
 import postcss from 'postcss'
 import autoprefixer from 'autoprefixer'
@@ -12,36 +13,64 @@ import { ensureFileDir } from '../utils/file.mjs'
  * Sassビルドタスク
  */
 export async function sassTask(context, options = {}) {
-  const { paths, config, isProduction } = context
+  const { paths, config, isProduction, isDevelopment, sassGraph, cache } = context
 
   // debugモードはdevモード時のみ有効
   const isDebugMode = !isProduction && config.debug
 
-  // 1. ビルド対象ファイルの取得
-  const scssFiles = await glob('**/[^_]*.scss', {
+  // 1. ビルド対象ファイルの取得（非パーシャル）
+  const allEntryFiles = await glob('**/[^_]*.scss', {
     cwd: paths.src,
     absolute: true,
     ignore: ['**/_*.scss']
   })
 
-  if (scssFiles.length === 0) {
+  if (allEntryFiles.length === 0) {
     logger.skip('sass', 'No files to build')
     return
   }
 
-  logger.info('sass', `Building ${scssFiles.length} file(s)`)
+  // 2. dev モードでのインクリメンタルビルド
+  let filesToBuild = allEntryFiles
 
-  // 2. 並列コンパイル
-  await Promise.all(scssFiles.map(file => compileSassFile(file, context, isDebugMode)))
+  if (isDevelopment && options.files?.length > 0) {
+    const changedFile = options.files[0]
+    const isPartial = basename(changedFile).startsWith('_')
 
-  logger.success('sass', `Built ${scssFiles.length} file(s)`)
+    if (isPartial) {
+      // パーシャル変更 → 依存グラフから影響を受けるエントリファイルを特定
+      const affected = sassGraph.getAffectedParents(changedFile)
+      filesToBuild = affected.filter(f => allEntryFiles.includes(f))
+
+      if (filesToBuild.length === 0) {
+        // グラフにまだ情報がない場合はフルビルド
+        filesToBuild = allEntryFiles
+      } else {
+        logger.info('sass', `Partial changed, rebuilding ${filesToBuild.length} affected file(s)`)
+      }
+    } else {
+      // 非パーシャル変更 → そのファイルだけリビルド
+      filesToBuild = allEntryFiles.filter(f => f === changedFile)
+      if (filesToBuild.length === 0) {
+        logger.skip('sass', 'Changed file is not a build target')
+        return
+      }
+    }
+  }
+
+  logger.info('sass', `Building ${filesToBuild.length} file(s)`)
+
+  // 3. 並列コンパイル
+  await Promise.all(filesToBuild.map(file => compileSassFile(file, context, isDebugMode)))
+
+  logger.success('sass', `Built ${filesToBuild.length} file(s)`)
 }
 
 /**
  * 個別Sassファイルのコンパイル
  */
 async function compileSassFile(filePath, context, isDebugMode) {
-  const { paths, config, isProduction } = context
+  const { paths, config, isProduction, sassGraph } = context
 
   try {
     // Sassコンパイル
@@ -54,6 +83,19 @@ async function compileSassFile(filePath, context, isDebugMode) {
       sourceMap: isDebugMode,
       sourceMapIncludeSources: isDebugMode
     })
+
+    // 依存グラフを更新（loadedUrls からパーシャルの依存関係を構築）
+    sassGraph.clearDependencies(filePath)
+    if (result.loadedUrls) {
+      for (const url of result.loadedUrls) {
+        if (url.protocol === 'file:') {
+          const depPath = fileURLToPath(url)
+          if (depPath !== filePath) {
+            sassGraph.addDependency(filePath, depPath)
+          }
+        }
+      }
+    }
 
     let css = result.css
 

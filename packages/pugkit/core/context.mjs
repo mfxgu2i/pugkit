@@ -9,6 +9,8 @@ export class BuildContext {
     this.mode = mode
     this.cache = new CacheManager(mode)
     this.graph = new DependencyGraph()
+    this.sassGraph = new DependencyGraph()
+    this.scriptGraph = new DependencyGraph()
 
     this.paths = {
       root: config.root,

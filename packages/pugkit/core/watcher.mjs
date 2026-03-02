@@ -25,9 +25,18 @@ class FileWatcher {
 
     // 初回ビルド（依存関係グラフ構築のため）
     logger.info('watch', 'Building initial dependency graph...')
+
+    const initialTasks = []
     if (this.context.taskRegistry?.pug) {
-      await this.context.taskRegistry.pug(this.context)
+      initialTasks.push(this.context.taskRegistry.pug(this.context))
     }
+    if (this.context.taskRegistry?.sass) {
+      initialTasks.push(this.context.taskRegistry.sass(this.context))
+    }
+    if (this.context.taskRegistry?.script) {
+      initialTasks.push(this.context.taskRegistry.script(this.context))
+    }
+    await Promise.all(initialTasks)
 
     this.watcher = chokidar
       .watch([paths.src, paths.public], {
@@ -55,6 +64,9 @@ class FileWatcher {
 
   handleAdd(filePath) {
     if (this.isPublic(filePath)) return this.onPublicChange(filePath, 'add')
+    if (filePath.endsWith('.pug')) return this.onPugChange(filePath)
+    if (filePath.endsWith('.scss')) return this.onSassChange(filePath)
+    if (this.isScript(filePath)) return this.onScriptChange(filePath)
     if (filePath.endsWith('.svg') && !this.isIcons(filePath)) return this.onSvgChange(filePath, 'add')
     if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageChange(filePath, 'add')
   }
@@ -122,7 +134,7 @@ class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     logger.info('change', `sass: ${relPath}`)
     try {
-      if (this.context.taskRegistry?.sass) await this.context.taskRegistry.sass(this.context)
+      if (this.context.taskRegistry?.sass) await this.context.taskRegistry.sass(this.context, { files: [filePath] })
       this.injectCSS()
     } catch (error) {
       logger.error('watch', `Sass build failed: ${error.message}`)
@@ -130,8 +142,9 @@ class FileWatcher {
   }
 
   async onSassUnlink(filePath) {
-    const { paths } = this.context
+    const { paths, sassGraph } = this.context
     const relPath = relative(paths.src, filePath)
+    sassGraph.clearDependencies(filePath)
     if (basename(filePath).startsWith('_')) {
       logger.info('unlink', relPath)
       return
@@ -146,7 +159,7 @@ class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     logger.info('change', `script: ${relPath}`)
     try {
-      if (this.context.taskRegistry?.script) await this.context.taskRegistry.script(this.context)
+      if (this.context.taskRegistry?.script) await this.context.taskRegistry.script(this.context, { files: [filePath] })
       this.reload()
     } catch (error) {
       logger.error('watch', `Script build failed: ${error.message}`)
@@ -154,8 +167,9 @@ class FileWatcher {
   }
 
   async onScriptUnlink(filePath) {
-    const { paths } = this.context
+    const { paths, scriptGraph } = this.context
     const relPath = relative(paths.src, filePath)
+    scriptGraph.clearDependencies(filePath)
     if (basename(filePath).startsWith('_')) {
       logger.info('unlink', relPath)
       return
