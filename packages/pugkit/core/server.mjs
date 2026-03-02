@@ -50,7 +50,7 @@ export async function serverTask(context, options = {}) {
   const startPath = (config.server?.startPath || '/').replace(/^\//, '')
   const fullStartPath = subdir ? `${subdir}/${startPath}` : `/${startPath}`
 
-  const serveRoot = path.resolve(config.root, 'dist')
+  const serveRoot = paths.outDir
 
   const clients = new Set()
 

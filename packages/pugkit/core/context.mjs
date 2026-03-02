@@ -1,4 +1,4 @@
-import { resolve } from 'node:path'
+import { resolve, isAbsolute } from 'node:path'
 import { CacheManager } from './cache.mjs'
 import { DependencyGraph } from './graph.mjs'
 import { createGlobPatterns } from '../config/index.mjs'
@@ -10,10 +10,14 @@ export class BuildContext {
     this.cache = new CacheManager(mode)
     this.graph = new DependencyGraph()
 
+    const outDir = config.outDir ?? 'dist'
+    const resolvedOutDir = isAbsolute(outDir) ? outDir : resolve(config.root, outDir)
+
     this.paths = {
       root: config.root,
       src: resolve(config.root, 'src'),
-      dist: resolve(config.root, 'dist', config.subdir || ''),
+      outDir: resolvedOutDir,
+      dist: config.subdir ? resolve(resolvedOutDir, config.subdir) : resolvedOutDir,
       public: resolve(config.root, 'public')
     }
 

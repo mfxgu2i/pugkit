@@ -1,4 +1,4 @@
-import { resolve } from 'node:path'
+import { resolve, isAbsolute, relative } from 'node:path'
 import { existsSync } from 'node:fs'
 import { defaultConfig } from './defaults.mjs'
 
@@ -20,6 +20,7 @@ function mergeConfig(defaults, user) {
   return {
     siteUrl: user.siteUrl || defaults.siteUrl,
     subdir: user.subdir || defaults.subdir,
+    outDir: user.outDir !== undefined ? user.outDir : defaults.outDir,
     debug: user.debug !== undefined ? user.debug : defaults.debug,
     server: { ...defaults.server, ...(user.server || {}) },
     build: {
@@ -35,10 +36,32 @@ function mergeConfig(defaults, user) {
   }
 }
 
+function validateConfig(config) {
+  const root = config.root
+  const outDir = config.outDir
+  const resolvedOutDir = isAbsolute(outDir) ? outDir : resolve(root, outDir)
+
+  // Vite同様、outDirがrootと同一またはrootの親ディレクトリの場合に警告
+  // relative() を使うことでWindows（バックスラッシュ）でも正しく動作する
+  const isSameAsRoot = resolvedOutDir === root
+  const relToRoot = relative(resolvedOutDir, root)
+  const isParentOfRoot = relToRoot !== '' && !relToRoot.startsWith('..')
+
+  if (isSameAsRoot || isParentOfRoot) {
+    console.warn(
+      `[pugkit] outDir "${outDir}" はプロジェクトルートと同じか親ディレクトリです。` +
+        `ソースファイルが上書きされる可能性があるため、別のディレクトリを指定してください。`
+    )
+  }
+
+  return config
+}
+
 export async function loadConfig(root = process.cwd()) {
   const userConfig = await loadUserConfig(root)
   const config = mergeConfig(defaultConfig, userConfig)
   config.root = root
+  validateConfig(config)
   return config
 }
 
