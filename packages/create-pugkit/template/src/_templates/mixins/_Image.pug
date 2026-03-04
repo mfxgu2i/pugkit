@@ -30,13 +30,13 @@ mixin Image(path, args = {})
 
   picture(class=args.class)
 
-    //- _sp画像が存在する場合のみ出力
-    if info.sp && !info.isSvg
+    //- アートディレクション画像が存在する場合のみ出力
+    if info.variant
       source(
         media=media
-        srcset=info.sp.src
-        width=info.sp.width
-        height=info.sp.height
+        srcset=info.variant.src
+        width=info.variant.width
+        height=info.variant.height
       )
     img(
       src=info.src

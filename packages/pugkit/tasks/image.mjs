@@ -9,7 +9,7 @@ import { ensureFileDir } from '../utils/file.mjs'
  * 画像最適化タスク
  */
 export async function imageTask(context, options = {}) {
-  const { paths, config, isProduction, cache } = context
+  const { paths, config, isProduction } = context
 
   const optimization = config.build.imageOptimization
 
@@ -39,6 +39,19 @@ export async function imageTask(context, options = {}) {
   }
 
   logger.info('image', `Processing ${images.length} image(s)`)
+
+  if (optimization === 'avif' || optimization === 'webp') {
+    const outputMap = new Map()
+    for (const file of images) {
+      const rel = relative(paths.src, file)
+      const outPath = rel.replace(/\.(jpg|jpeg|png|gif)$/i, `.${optimization}`)
+      if (outputMap.has(outPath)) {
+        logger.warn('image', `Output conflict: "${outputMap.get(outPath)}" and "${rel}" both map to "${outPath}"`)
+      } else {
+        outputMap.set(outPath, rel)
+      }
+    }
+  }
 
   // 並列処理
   await Promise.all(images.map(file => processImage(file, context, optimization, isProduction)))
