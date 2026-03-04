@@ -12,14 +12,19 @@ export default defineConfig({
     startPath: '/'
   },
   build: {
+    // 'avif' | 'webp' | 'compress' | false
     imageOptimization: 'webp',
     imageOptions: {
+      avif: {
+        quality: 70,
+        lossless: false,
+        effort: 4,
+        chromaSubsampling: '4:4:4'
+      },
       webp: {
-        quality: 90,
-        effort: 6,
+        quality: 80,
+        effort: 4,
         smartSubsample: true,
-        method: 6,
-        reductionEffort: 6,
         alphaQuality: 100,
         lossless: false
       },

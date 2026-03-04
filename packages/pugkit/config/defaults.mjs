@@ -13,11 +13,9 @@ export const defaultConfig = {
     imageOptimization: 'webp',
     imageOptions: {
       webp: {
-        quality: 90,
-        effort: 6,
+        quality: 80,
+        effort: 4,
         smartSubsample: true,
-        method: 6,
-        reductionEffort: 6,
         alphaQuality: 100,
         lossless: false
       },
@@ -31,6 +29,12 @@ export const defaultConfig = {
         compressionLevel: 6,
         adaptiveFiltering: true,
         palette: true
+      },
+      avif: {
+        quality: 70,
+        lossless: false,
+        effort: 4,
+        chromaSubsampling: '4:4:4'
       }
     }
   }

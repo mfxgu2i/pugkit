@@ -217,9 +217,10 @@ class FileWatcher {
   async onImageUnlink(filePath) {
     const { paths, config } = this.context
     const relPath = relative(paths.src, filePath)
-    const useWebp = config.build.imageOptimization === 'webp'
+    const optimization = config.build.imageOptimization
     const ext = extname(filePath)
-    const destRelPath = useWebp ? relPath.replace(new RegExp(`\\${ext}$`, 'i'), '.webp') : relPath
+    const newExt = optimization === 'avif' || optimization === 'webp' ? `.${optimization}` : ext
+    const destRelPath = relPath.replace(new RegExp(`\\${ext}$`, 'i'), newExt)
     const distPath = resolve(paths.dist, destRelPath)
     await this.deleteDistFile(distPath, relPath)
   }

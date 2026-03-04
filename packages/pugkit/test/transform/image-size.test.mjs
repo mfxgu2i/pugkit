@@ -18,6 +18,7 @@ const paths = {
   public: resolve(testDataDir, 'public')
 }
 
+const avifConfig = { build: { imageOptimization: 'avif' } }
 const webpConfig = { build: { imageOptimization: 'webp' } }
 const compressConfig = { build: { imageOptimization: 'compress' } }
 const noOptConfig = { build: { imageOptimization: false } }
@@ -73,6 +74,12 @@ describe('createImageInfoHelper', () => {
   })
 
   describe('src のパス解決', () => {
+    it('imageOptimization: avif のとき src が .avif パスになる', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, avifConfig)
+      const result = imageInfo('/images/hero.jpg')
+      expect(result.src).toBe('/images/hero.avif')
+    })
+
     it('imageOptimization: webp のとき src が .webp パスになる', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
       const result = imageInfo('/images/hero.jpg')
@@ -93,6 +100,13 @@ describe('createImageInfoHelper', () => {
   })
 
   describe('retina 自動検出', () => {
+    it('hero@2x.jpg が存在する場合 retina.src が avif パスになる (avif モード)', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, avifConfig)
+      const result = imageInfo('/images/hero.jpg')
+      expect(result.retina).not.toBeNull()
+      expect(result.retina.src).toBe('/images/hero@2x.avif')
+    })
+
     it('hero@2x.jpg が存在する場合 retina.src が webp パスになる (webp モード)', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
       const result = imageInfo('/images/hero.jpg')
@@ -115,6 +129,15 @@ describe('createImageInfoHelper', () => {
   })
 
   describe('SP 画像自動検出', () => {
+    it('responsive_sp.jpg が存在する場合 sp.src が avif パスになる (avif モード)', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, avifConfig)
+      const result = imageInfo('/images/responsive.jpg')
+      expect(result.sp).not.toBeNull()
+      expect(result.sp.src).toBe('/images/responsive_sp.avif')
+      expect(result.sp.width).toBe(375)
+      expect(result.sp.height).toBe(300)
+    })
+
     it('responsive_sp.jpg が存在する場合 sp.src が webp パスになる (webp モード)', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
       const result = imageInfo('/images/responsive.jpg')

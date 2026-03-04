@@ -38,7 +38,8 @@ export function createImageSizeHelper(filePath, paths, logger) {
 }
 
 export function createImageInfoHelper(filePath, paths, logger, config) {
-  const useWebp = config?.build?.imageOptimization === 'webp'
+  const optimization = config?.build?.imageOptimization
+  const newExt = optimization === 'avif' || optimization === 'webp' ? `.${optimization}` : null
   return src => {
     const resolveImagePath = (imageSrc, baseDir) => {
       if (imageSrc.startsWith('/')) {
@@ -78,8 +79,8 @@ export function createImageInfoHelper(filePath, paths, logger, config) {
       const ext = extname(src)
       const isSvg = ext.toLowerCase() === '.svg'
       const base = src.slice(0, -ext.length)
-      // webp モード時は src 自体を .webp パスに変換（SVG は除外）
-      const resolvedSrc = useWebp && !isSvg ? `${base}.webp` : src
+      // avif/webp モード時は src 自体を変換後のパスに変換（SVG は除外）
+      const resolvedSrc = !isSvg && newExt ? `${base}${newExt}` : src
 
       // 2x retina 画像の自動検出
       let retina = null
@@ -88,7 +89,7 @@ export function createImageInfoHelper(filePath, paths, logger, config) {
         const retinaResolvedPath = resolveImagePath(retinaSrc, pageDir)
         const retinaFoundPath = findImageFile(retinaResolvedPath)
         if (retinaFoundPath) {
-          retina = { src: useWebp ? `${base}@2x.webp` : retinaSrc }
+          retina = { src: newExt ? `${base}@2x${newExt}` : retinaSrc }
         }
       }
 
@@ -102,7 +103,7 @@ export function createImageInfoHelper(filePath, paths, logger, config) {
           const spBuffer = readFileSync(spFoundPath)
           const { width: spWidth, height: spHeight } = sizeOf(spBuffer)
           sp = {
-            src: useWebp ? `${base}_sp.webp` : spSrc,
+            src: newExt ? `${base}_sp${newExt}` : spSrc,
             width: spWidth,
             height: spHeight
           }

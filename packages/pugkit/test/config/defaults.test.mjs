@@ -25,8 +25,8 @@ describe('defaultConfig', () => {
 
   it('should have webp image options', () => {
     const webpOptions = defaultConfig.build.imageOptions.webp
-    expect(webpOptions.quality).toBe(90)
-    expect(webpOptions.effort).toBe(6)
+    expect(webpOptions.quality).toBe(80)
+    expect(webpOptions.effort).toBe(4)
     expect(webpOptions.smartSubsample).toBe(true)
     expect(webpOptions.lossless).toBe(false)
   })
@@ -44,6 +44,15 @@ describe('defaultConfig', () => {
     expect(pngOptions.compressionLevel).toBe(6)
     expect(pngOptions.adaptiveFiltering).toBe(true)
     expect(pngOptions.palette).toBe(true)
+  })
+
+  it('should have avif image options', () => {
+    const avifOptions = defaultConfig.build.imageOptions.avif
+    expect(avifOptions).toBeDefined()
+    expect(avifOptions.quality).toBe(70)
+    expect(avifOptions.lossless).toBe(false)
+    expect(avifOptions.effort).toBe(4)
+    expect(avifOptions.chromaSubsampling).toBe('4:4:4')
   })
 
   it('should be an object', () => {

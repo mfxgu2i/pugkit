@@ -1,6 +1,6 @@
 import { glob } from 'glob'
 import { readFile, writeFile } from 'node:fs/promises'
-import { relative, resolve, dirname, extname } from 'node:path'
+import { relative, resolve, extname } from 'node:path'
 import sharp from 'sharp'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
@@ -56,12 +56,15 @@ async function processImage(filePath, context, optimization, isProduction) {
 
   try {
     const image = sharp(filePath)
-    const metadata = await image.metadata()
 
     let outputPath
     let outputImage
 
-    if (optimization === 'webp') {
+    if (optimization === 'avif') {
+      // AVIF変換
+      outputPath = resolve(paths.dist, relativePath.replace(/\.(jpg|jpeg|png|gif)$/i, '.avif'))
+      outputImage = image.avif(config.build.imageOptions.avif)
+    } else if (optimization === 'webp') {
       // WebP変換
       outputPath = resolve(paths.dist, relativePath.replace(/\.(jpg|jpeg|png|gif)$/i, '.webp'))
       outputImage = image.webp(config.build.imageOptions.webp)
