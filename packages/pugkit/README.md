@@ -86,20 +86,21 @@ export default defineConfig({
 })
 ```
 
-| Option                    | Description                                                                                  | Type / Values                       | Default       |
-| ------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------- | ------------- |
-| `siteUrl`                 | サイトのベースURL（`Builder.url` に使用）                                                    | `string`                            | `''`          |
-| `subdir`                  | サブディレクトリのパス                                                                       | `string`                            | `''`          |
-| `outDir`                  | ビルド出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可 | `string`                            | `'dist'`      |
-| `debug`                   | デバッグモード（開発時のみ有効）                                                             | `boolean`                           | `false`       |
-| `server.port`             | 開発サーバーのポート番号                                                                     | `number`                            | `5555`        |
-| `server.host`             | 開発サーバーのホスト                                                                         | `string`                            | `'localhost'` |
-| `server.startPath`        | サーバー起動時に開くパス                                                                     | `string`                            | `'/'`         |
-| `build.clean`             | ビルド前に `outDir` をクリーンするか（`false` にすると他リソースと共存可能）                 | `boolean`                           | `true`        |
-| `build.imageOptimization` | 画像最適化の方式                                                                             | `'webp'` \| `'compress'` \| `false` | `'webp'`      |
-| `build.imageOptions.webp` | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）  | `object`                            | -             |
-| `build.imageOptions.jpeg` | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）  | `object`                            | -             |
-| `build.imageOptions.png`  | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）     | `object`                            | -             |
+| Option                               | Description                                                                                  | Type / Values                       | Default       |
+| ------------------------------------ | -------------------------------------------------------------------------------------------- | ----------------------------------- | ------------- |
+| `siteUrl`                            | サイトのベースURL（`Builder.url` に使用）                                                    | `string`                            | `''`          |
+| `subdir`                             | サブディレクトリのパス                                                                       | `string`                            | `''`          |
+| `outDir`                             | ビルド出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可 | `string`                            | `'dist'`      |
+| `debug`                              | デバッグモード（開発時のみ有効）                                                             | `boolean`                           | `false`       |
+| `server.port`                        | 開発サーバーのポート番号                                                                     | `number`                            | `5555`        |
+| `server.host`                        | 開発サーバーのホスト                                                                         | `string`                            | `'localhost'` |
+| `server.startPath`                   | サーバー起動時に開くパス                                                                     | `string`                            | `'/'`         |
+| `build.clean`                        | ビルド前に `outDir` をクリーンするか（`false` にすると他リソースと共存可能）                 | `boolean`                           | `true`        |
+| `build.imageOptimization`            | 画像最適化の方式                                                                             | `'webp'` \| `'compress'` \| `false` | `'webp'`      |
+| `build.imageOptions.webp`            | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）  | `object`                            | -             |
+| `build.imageOptions.jpeg`            | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）  | `object`                            | -             |
+| `build.imageOptions.png`             | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）     | `object`                            | -             |
+| `build.imageInfo.artDirectionSuffix` | アートディレクション用画像のサフィックス（`_sp`, `_tb`, `_pc` など）                         | `string`                            | `'_sp'`       |
 
 ## Features
 
@@ -128,22 +129,31 @@ meta(property='og:url', content=Builder.url.href)
 
 #### imageInfo()
 
-`src/` 配下の画像のメタデータを取得します。`imageOptimization` の設定に応じて `src` が最適化後のパスに変換され、`@2x`/`_sp` 画像が存在する場合も自動的に解決されます。
+`src/` 配下の画像のメタデータを取得します。`imageOptimization` の設定に応じて `src` が最適化後のパスに変換され、retina / アートディレクション画像が存在する場合も自動的に解決されます。
 
 ```pug
 - const info = imageInfo('/assets/img/hero.jpg')
 img(src=info.src width=info.width height=info.height alt='')
 ```
 
-| Property | Type                             | Description                                           |
-| -------- | -------------------------------- | ----------------------------------------------------- |
-| `src`    | `string`                         | 最適化設定に応じたパス（webpモード時は `.webp` パス） |
-| `width`  | `number \| undefined`            | 画像の幅（px）                                        |
-| `height` | `number \| undefined`            | 画像の高さ（px）                                      |
-| `format` | `string \| undefined`            | 画像フォーマット（`'jpg'` / `'png'` / `'svg'` など）  |
-| `isSvg`  | `boolean`                        | SVG かどうか                                          |
-| `retina` | `{ src: string } \| null`        | `@2x` 画像が存在する場合に自動検出                    |
-| `sp`     | `{ src, width, height } \| null` | `_sp` 画像が存在する場合に自動検出                    |
+| Property  | Type                                                     | Description                                                             |
+| --------- | -------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `src`     | `string`                                                 | 最適化設定に応じたパス（webpモード時は `.webp` パス）                   |
+| `width`   | `number \| undefined`                                    | 画像の幅（px）                                                          |
+| `height`  | `number \| undefined`                                    | 画像の高さ（px）                                                        |
+| `format`  | `string \| undefined`                                    | 画像フォーマット（`'jpg'` / `'png'` / `'svg'` など）                    |
+| `isSvg`   | `boolean`                                                | SVG かどうか                                                            |
+| `retina`  | `{ src: string, width: number, height: number } \| null` | `@2x` 画像が存在する場合に自動検出                                      |
+| `variant` | `{ src: string, width: number, height: number } \| null` | `imageInfo.artDirectionSuffix` に応じて検出したアートディレクション画像 |
+
+```pug
+- const info = imageInfo('/assets/img/hero.jpg')
+//- retina srcset
+- const srcset = info.retina ? `${info.src} 1x, ${info.retina.src} 2x` : undefined
+//- アートディレクション
+if info.variant
+  source(media='(max-width: 767px)' srcset=info.variant.src width=info.variant.width height=info.variant.height)
+```
 
 > `imageInfo()` は `src/` 配下の画像のみ対応しています。`public/` 配下の画像は非対応です。
 

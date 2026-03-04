@@ -39,6 +39,8 @@ export function createImageSizeHelper(filePath, paths, logger) {
 
 export function createImageInfoHelper(filePath, paths, logger, config) {
   const useWebp = config?.build?.imageOptimization === 'webp'
+  const artDirectionSuffix = config?.build?.imageInfo?.artDirectionSuffix ?? '_sp'
+
   return src => {
     const resolveImagePath = (imageSrc, baseDir) => {
       if (imageSrc.startsWith('/')) {
@@ -59,7 +61,7 @@ export function createImageInfoHelper(filePath, paths, logger, config) {
       format: undefined,
       isSvg: false,
       retina: null,
-      sp: null
+      variant: null
     }
 
     try {
@@ -81,35 +83,41 @@ export function createImageInfoHelper(filePath, paths, logger, config) {
       // webp モード時は src 自体を .webp パスに変換（SVG は除外）
       const resolvedSrc = useWebp && !isSvg ? `${base}.webp` : src
 
-      // 2x retina 画像の自動検出
+      // @2x retina 画像の自動検出
       let retina = null
       if (!isSvg) {
         const retinaSrc = `${base}@2x${ext}`
         const retinaResolvedPath = resolveImagePath(retinaSrc, pageDir)
         const retinaFoundPath = findImageFile(retinaResolvedPath)
         if (retinaFoundPath) {
-          retina = { src: useWebp ? `${base}@2x.webp` : retinaSrc }
-        }
-      }
-
-      // SP 画像の自動検出
-      let sp = null
-      if (!isSvg) {
-        const spSrc = `${base}_sp${ext}`
-        const spResolvedPath = resolveImagePath(spSrc, pageDir)
-        const spFoundPath = findImageFile(spResolvedPath)
-        if (spFoundPath) {
-          const spBuffer = readFileSync(spFoundPath)
-          const { width: spWidth, height: spHeight } = sizeOf(spBuffer)
-          sp = {
-            src: useWebp ? `${base}_sp.webp` : spSrc,
-            width: spWidth,
-            height: spHeight
+          const retinaBuffer = readFileSync(retinaFoundPath)
+          const { width: rWidth, height: rHeight } = sizeOf(retinaBuffer)
+          retina = {
+            src: useWebp ? `${base}@2x.webp` : retinaSrc,
+            width: rWidth,
+            height: rHeight
           }
         }
       }
 
-      return { src: resolvedSrc, width, height, format, isSvg, retina, sp }
+      // アートディレクション画像の自動検出
+      let variant = null
+      if (!isSvg) {
+        const variantSrc = `${base}${artDirectionSuffix}${ext}`
+        const variantResolvedPath = resolveImagePath(variantSrc, pageDir)
+        const variantFoundPath = findImageFile(variantResolvedPath)
+        if (variantFoundPath) {
+          const variantBuffer = readFileSync(variantFoundPath)
+          const { width: vWidth, height: vHeight } = sizeOf(variantBuffer)
+          variant = {
+            src: useWebp ? `${base}${artDirectionSuffix}.webp` : variantSrc,
+            width: vWidth,
+            height: vHeight
+          }
+        }
+      }
+
+      return { src: resolvedSrc, width, height, format, isSvg, retina, variant }
     } catch {
       logger?.warn('pug', `Failed to get image info: ${basename(src)}`)
       return fallback

@@ -11,6 +11,9 @@ export const defaultConfig = {
   build: {
     clean: true,
     imageOptimization: 'webp',
+    imageInfo: {
+      artDirectionSuffix: '_sp'
+    },
     imageOptions: {
       webp: {
         quality: 90,

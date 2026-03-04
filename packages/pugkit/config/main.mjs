@@ -31,6 +31,10 @@ function mergeConfig(defaults, user) {
         webp: { ...defaults.build.imageOptions.webp, ...(user.build?.imageOptions?.webp || {}) },
         jpeg: { ...defaults.build.imageOptions.jpeg, ...(user.build?.imageOptions?.jpeg || {}) },
         png: { ...defaults.build.imageOptions.png, ...(user.build?.imageOptions?.png || {}) }
+      },
+      imageInfo: {
+        ...defaults.build.imageInfo,
+        ...(user.build?.imageInfo || {})
       }
     }
   }
