@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs'
-import { resolve, dirname, basename, extname } from 'node:path'
+import { resolve, relative, dirname, basename, extname } from 'node:path'
 import sizeOf from 'image-size'
 
 export function createImageSizeHelper(filePath, paths, logger) {
@@ -28,10 +28,10 @@ export function createImageSizeHelper(filePath, paths, logger) {
         return sizeOf(buffer)
       }
 
-      logger?.warn('pug', `Image not found: ${basename(resolvedPath)}`)
+      logger?.warn('pug', `Image not found "${src}" in ${relative(paths.src, filePath)}`)
       return { width: undefined, height: undefined }
     } catch {
-      logger?.warn('pug', `Failed to get image size: ${basename(src)}`)
+      logger?.warn('pug', `Failed to read "${src}" in ${relative(paths.src, filePath)}`)
       return { width: undefined, height: undefined }
     }
   }
@@ -70,7 +70,7 @@ export function createImageInfoHelper(filePath, paths, logger, config) {
       const foundPath = findImageFile(resolvedPath)
 
       if (!foundPath) {
-        logger?.warn('pug', `Image not found: ${basename(resolvedPath)}`)
+        logger?.warn('pug', `Image not found "${src}" in ${relative(paths.src, filePath)}`)
         return fallback
       }
 
@@ -119,7 +119,7 @@ export function createImageInfoHelper(filePath, paths, logger, config) {
 
       return { src: resolvedSrc, width, height, format, isSvg, retina, variant }
     } catch {
-      logger?.warn('pug', `Failed to get image info: ${basename(src)}`)
+      logger?.warn('pug', `Failed to read "${src}" in ${relative(paths.src, filePath)}`)
       return fallback
     }
   }

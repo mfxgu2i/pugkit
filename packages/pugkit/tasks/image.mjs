@@ -40,6 +40,19 @@ export async function imageTask(context, options = {}) {
 
   logger.info('image', `Processing ${images.length} image(s)`)
 
+  if (optimization === 'webp') {
+    const outputMap = new Map()
+    for (const file of images) {
+      const rel = relative(paths.src, file)
+      const outPath = rel.replace(/\.(jpg|jpeg|png|gif)$/i, '.webp')
+      if (outputMap.has(outPath)) {
+        logger.warn('image', `Output conflict: "${outputMap.get(outPath)}" and "${rel}" both map to "${outPath}"`)
+      } else {
+        outputMap.set(outPath, rel)
+      }
+    }
+  }
+
   // 並列処理
   await Promise.all(images.map(file => processImage(file, context, optimization, isProduction)))
 
@@ -56,7 +69,6 @@ async function processImage(filePath, context, optimization, isProduction) {
 
   try {
     const image = sharp(filePath)
-    const metadata = await image.metadata()
 
     let outputPath
     let outputImage
