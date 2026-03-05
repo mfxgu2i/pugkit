@@ -41,5 +41,13 @@ export const defaultConfig = {
         chromaSubsampling: '4:4:4'
       }
     }
+  },
+  benchmark: {
+    image: {
+      threshold: '300KB',
+      qualityMin: 40,
+      qualityMax: 90,
+      qualityStep: 10
+    }
   }
 }

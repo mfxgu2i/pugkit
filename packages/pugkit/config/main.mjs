@@ -41,6 +41,12 @@ function mergeConfig(defaults, user) {
         ...defaults.build.imageOverrides,
         ...(user.build?.imageOverrides || {})
       }
+    },
+    benchmark: {
+      image: {
+        ...defaults.benchmark.image,
+        ...(user.benchmark?.image || {})
+      }
     }
   }
 }

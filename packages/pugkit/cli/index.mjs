@@ -7,6 +7,7 @@ import { cac } from 'cac'
 import { develop } from './develop.mjs'
 import { build } from './build.mjs'
 import { sprite } from './sprite.mjs'
+import { benchImage } from './bench.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -44,6 +45,15 @@ cli.command('build [root]', 'Production build').action(async root => {
 cli.command('sprite [root]', 'Generate SVG sprite').action(async root => {
   try {
     await sprite({ root: root || process.cwd() })
+  } catch (err) {
+    console.error(err)
+    process.exit(1)
+  }
+})
+
+cli.command('bench [target]', 'Benchmark images in src/ against pugkit.config.mjs').action(async target => {
+  try {
+    await benchImage({ root: process.cwd(), target })
   } catch (err) {
     console.error(err)
     process.exit(1)
