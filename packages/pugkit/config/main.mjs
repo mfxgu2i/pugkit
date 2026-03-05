@@ -36,6 +36,10 @@ function mergeConfig(defaults, user) {
       imageInfo: {
         ...defaults.build.imageInfo,
         ...(user.build?.imageInfo || {})
+      },
+      imageOverrides: {
+        ...defaults.build.imageOverrides,
+        ...(user.build?.imageOverrides || {})
       }
     }
   }

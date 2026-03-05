@@ -66,6 +66,8 @@ async function processImage(filePath, context, optimization, isProduction) {
   const { paths, config } = context
   const ext = extname(filePath).toLowerCase()
   const relativePath = relative(paths.src, filePath)
+  const overrideKey = relativePath.replace(/\\/g, '/')
+  const overrides = config.build.imageOverrides?.[overrideKey] ?? {}
 
   try {
     const image = sharp(filePath)
@@ -76,19 +78,19 @@ async function processImage(filePath, context, optimization, isProduction) {
     if (optimization === 'avif') {
       // AVIF変換
       outputPath = resolve(paths.dist, relativePath.replace(/\.(jpg|jpeg|png|gif)$/i, '.avif'))
-      outputImage = image.avif(config.build.imageOptions.avif)
+      outputImage = image.avif({ ...config.build.imageOptions.avif, ...overrides })
     } else if (optimization === 'webp') {
       // WebP変換
       outputPath = resolve(paths.dist, relativePath.replace(/\.(jpg|jpeg|png|gif)$/i, '.webp'))
-      outputImage = image.webp(config.build.imageOptions.webp)
+      outputImage = image.webp({ ...config.build.imageOptions.webp, ...overrides })
     } else {
       // 元の形式で圧縮
       outputPath = resolve(paths.dist, relativePath)
 
       if (ext === '.jpg' || ext === '.jpeg') {
-        outputImage = image.jpeg(config.build.imageOptions.jpeg)
+        outputImage = image.jpeg({ ...config.build.imageOptions.jpeg, ...overrides })
       } else if (ext === '.png') {
-        outputImage = image.png(config.build.imageOptions.png)
+        outputImage = image.png({ ...config.build.imageOptions.png, ...overrides })
       } else {
         // GIFなどはそのままコピー
         const buffer = await readFile(filePath)

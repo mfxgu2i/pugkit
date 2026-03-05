@@ -55,6 +55,12 @@ describe('defaultConfig', () => {
     expect(avifOptions.chromaSubsampling).toBe('4:4:4')
   })
 
+  it('should have empty imageOverrides by default', () => {
+    expect(defaultConfig.build.imageOverrides).toBeDefined()
+    expect(typeof defaultConfig.build.imageOverrides).toBe('object')
+    expect(Object.keys(defaultConfig.build.imageOverrides)).toHaveLength(0)
+  })
+
   it('should be an object', () => {
     expect(typeof defaultConfig).toBe('object')
     expect(defaultConfig).not.toBeNull()

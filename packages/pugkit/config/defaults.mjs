@@ -14,6 +14,7 @@ export const defaultConfig = {
     imageInfo: {
       artDirectionSuffix: '_sp'
     },
+    imageOverrides: {},
     imageOptions: {
       webp: {
         quality: 80,

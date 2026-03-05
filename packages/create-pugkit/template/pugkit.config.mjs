@@ -13,32 +13,6 @@ export default defineConfig({
   },
   build: {
     // 'avif' | 'webp' | 'compress' | false
-    imageOptimization: 'webp',
-    imageOptions: {
-      avif: {
-        quality: 70,
-        lossless: false,
-        effort: 4,
-        chromaSubsampling: '4:4:4'
-      },
-      webp: {
-        quality: 80,
-        effort: 4,
-        smartSubsample: true,
-        alphaQuality: 100,
-        lossless: false
-      },
-      jpeg: {
-        quality: 75,
-        progressive: true,
-        mozjpeg: false
-      },
-      png: {
-        quality: 85,
-        compressionLevel: 6,
-        adaptiveFiltering: true,
-        palette: true
-      }
-    }
+    imageOptimization: 'webp'
   }
 })

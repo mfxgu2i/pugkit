@@ -103,6 +103,7 @@ export default defineConfig({
 | `build.imageOptions.jpeg`            | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）  | `object`                                        | -             |
 | `build.imageOptions.png`             | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）     | `object`                                        | -             |
 | `build.imageInfo.artDirectionSuffix` | アートディレクション用画像のサフィックス（`_sp`, `_tb`, `_pc` など）                         | `string`                                        | `'_sp'`       |
+| `build.imageOverrides`               | 特定画像に個別のSharpオプションを適用（グローバルオプションに上書きマージ）                  | `Record<string, object>`                        | `{}`          |
 
 ## Features
 
@@ -213,6 +214,20 @@ npm install --save-dev typescript
 - `'webp'` - PNG/JPEGをWebPに変換
 - `'compress'` - 元の形式を維持したまま圧縮
 - `false` - 最適化を無効化
+
+#### 特定画像の個別オプション指定
+
+`build.imageOverrides` で特定の画像にのみ別の圧縮オプションを適用できます。キーは `src/` からの相対パス、値はグローバル設定に上書きマージされる [Sharp](https://sharp.pixelplumbing.com/api-output) オプションオブジェクトです。
+
+```js
+build: {
+  imageOptimization: 'webp',
+  imageOverrides: {
+    // 品質を上げたい画像
+    'assets/img/bg-hero.jpg': { quality: 100 },
+  }
+}
+```
 
 ### SVG Optimization
 
