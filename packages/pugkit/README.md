@@ -83,32 +83,37 @@ export default defineConfig({
   },
   build: {
     // 'avif' | 'webp' | 'compress' | false
-    imageOptimization: 'webp'
+    imageOptimization: 'webp',
+    html: {
+      indent_size: 2,
+      wrap_line_length: 0
+    }
   }
 })
 ```
 
-| Option                               | Description                                                                                  | Type / Values                                   | Default       |
-| ------------------------------------ | -------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------- |
-| `siteUrl`                            | サイトのベースURL（`Builder.url` に使用）                                                    | `string`                                        | `''`          |
-| `subdir`                             | サブディレクトリのパス                                                                       | `string`                                        | `''`          |
-| `outDir`                             | ビルド出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可 | `string`                                        | `'dist'`      |
-| `debug`                              | デバッグモード（開発時のみ有効）                                                             | `boolean`                                       | `false`       |
-| `server.port`                        | 開発サーバーのポート番号                                                                     | `number`                                        | `5555`        |
-| `server.host`                        | 開発サーバーのホスト                                                                         | `string`                                        | `'localhost'` |
-| `server.startPath`                   | サーバー起動時に開くパス                                                                     | `string`                                        | `'/'`         |
-| `build.clean`                        | ビルド前に `outDir` をクリーンするか（`false` にすると他リソースと共存可能）                 | `boolean`                                       | `true`        |
-| `build.imageOptimization`            | 画像最適化の方式                                                                             | `'avif'` \| `'webp'` \| `'compress'` \| `false` | `'webp'`      |
-| `build.imageOptions.avif`            | AVIF変換オプション（[Sharp AVIF options](https://sharp.pixelplumbing.com/api-output#avif)）  | `object`                                        | -             |
-| `build.imageOptions.webp`            | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）  | `object`                                        | -             |
-| `build.imageOptions.jpeg`            | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）  | `object`                                        | -             |
-| `build.imageOptions.png`             | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）     | `object`                                        | -             |
-| `build.imageInfo.artDirectionSuffix` | アートディレクション用画像のサフィックス（`_sp`, `_tb`, `_pc` など）                         | `string`                                        | `'_sp'`       |
-| `build.imageOverrides`               | 特定画像に個別のSharpオプションを適用（グローバルオプションに上書きマージ）                  | `Record<string, object>`                        | `{}`          |
-| `benchmark.image.threshold`          | `pugkit bench` で警告を出すファイルサイズ上限                                                | `string` (`'200KB'` / `'1MB'` など)             | `'300KB'`     |
-| `benchmark.image.qualityMin`         | シミュレーションの quality 最小値                                                            | `number`                                        | `40`          |
-| `benchmark.image.qualityMax`         | シミュレーションの quality 最大値                                                            | `number`                                        | `90`          |
-| `benchmark.image.qualityStep`        | シミュレーションの quality ステップ幅                                                        | `number`                                        | `10`          |
+| Option                               | Description                                                                                           | Type / Values                                   | Default       |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------- |
+| `siteUrl`                            | サイトのベースURL（`Builder.url` に使用）                                                             | `string`                                        | `''`          |
+| `subdir`                             | サブディレクトリのパス                                                                                | `string`                                        | `''`          |
+| `outDir`                             | ビルド出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可          | `string`                                        | `'dist'`      |
+| `debug`                              | デバッグモード（開発時のみ有効）                                                                      | `boolean`                                       | `false`       |
+| `server.port`                        | 開発サーバーのポート番号                                                                              | `number`                                        | `5555`        |
+| `server.host`                        | 開発サーバーのホスト                                                                                  | `string`                                        | `'localhost'` |
+| `server.startPath`                   | サーバー起動時に開くパス                                                                              | `string`                                        | `'/'`         |
+| `build.clean`                        | ビルド前に `outDir` をクリーンするか（`false` にすると他リソースと共存可能）                          | `boolean`                                       | `true`        |
+| `build.imageOptimization`            | 画像最適化の方式                                                                                      | `'avif'` \| `'webp'` \| `'compress'` \| `false` | `'webp'`      |
+| `build.imageOptions.avif`            | AVIF変換オプション（[Sharp AVIF options](https://sharp.pixelplumbing.com/api-output#avif)）           | `object`                                        | -             |
+| `build.imageOptions.webp`            | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）           | `object`                                        | -             |
+| `build.imageOptions.jpeg`            | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）           | `object`                                        | -             |
+| `build.imageOptions.png`             | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）              | `object`                                        | -             |
+| `build.imageInfo.artDirectionSuffix` | アートディレクション用画像のサフィックス（`_sp`, `_tb`, `_pc` など）                                  | `string`                                        | `'_sp'`       |
+| `build.imageOverrides`               | 特定画像に個別のSharpオプションを適用（グローバルオプションに上書きマージ）                           | `Record<string, object>`                        | `{}`          |
+| `build.html`                         | HTML整形オプション（[js-beautify html options](https://github.com/beautify-web/js-beautify#options)） | `object`                                        | see below     |
+| `benchmark.image.threshold`          | `pugkit bench` で警告を出すファイルサイズ上限                                                         | `string` (`'200KB'` / `'1MB'` など)             | `'300KB'`     |
+| `benchmark.image.qualityMin`         | シミュレーションの quality 最小値                                                                     | `number`                                        | `40`          |
+| `benchmark.image.qualityMax`         | シミュレーションの quality 最大値                                                                     | `number`                                        | `90`          |
+| `benchmark.image.qualityStep`        | シミュレーションの quality ステップ幅                                                                 | `number`                                        | `10`          |
 
 ## Features
 
@@ -285,6 +290,24 @@ export default defineConfig({
   }
 })
 ```
+
+### HTML Formatting
+
+ビルド時にPugから生成されたHTMLを[js-beautify](https://github.com/beautify-web/js-beautify)で整形します。`build.html` で js-beautify の設定をそのまま渡せます。
+
+```js
+build: {
+  html: {
+    indent_size: 2,
+    indent_with_tabs: false,
+    wrap_line_length: 0,
+    inline: [],
+    content_unformatted: ['script', 'style', 'pre']
+  }
+}
+```
+
+利用可能なオプションは [js-beautify のドキュメント](https://github.com/beautify-web/js-beautify#options)を参照してください。
 
 ### SVG Optimization
 

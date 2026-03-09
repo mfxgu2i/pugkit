@@ -40,6 +40,10 @@ function mergeConfig(defaults, user) {
       imageOverrides: {
         ...defaults.build.imageOverrides,
         ...(user.build?.imageOverrides || {})
+      },
+      html: {
+        ...defaults.build.html,
+        ...(user.build?.html || {})
       }
     },
     benchmark: {
