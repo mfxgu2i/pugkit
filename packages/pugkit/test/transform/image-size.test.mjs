@@ -9,7 +9,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const testDataDir = resolve(__dirname, '../_data')
 const imagesDir = resolve(testDataDir, 'images')
 
-// imageInfo の src 引数は pugファイルの処理時に渡す相対パス or /始まりパス
 // /始まりの場合は paths.src からの絶対解決になる
 const mockPugFile = resolve(testDataDir, 'index.pug')
 
@@ -18,6 +17,7 @@ const paths = {
   public: resolve(testDataDir, 'public')
 }
 
+const avifConfig = { build: { imageOptimization: 'avif' } }
 const webpConfig = { build: { imageOptimization: 'webp' } }
 const compressConfig = { build: { imageOptimization: 'compress' } }
 const noOptConfig = { build: { imageOptimization: false } }
@@ -34,11 +34,12 @@ beforeAll(async () => {
   await mkdir(imagesDir, { recursive: true })
   // 基本画像
   await createJpeg(resolve(imagesDir, 'hero.jpg'), 800, 600)
-  // retina
+  // retina @2x
   await createJpeg(resolve(imagesDir, 'hero@2x.jpg'), 1600, 1200)
-  // SP
+  // アートディレクション _sp / _tb
   await createJpeg(resolve(imagesDir, 'responsive.jpg'), 800, 600)
   await createJpeg(resolve(imagesDir, 'responsive_sp.jpg'), 375, 300)
+  await createJpeg(resolve(imagesDir, 'responsive_tb.jpg'), 768, 500)
   // SVG
   await writeFile(
     resolve(imagesDir, 'icon.svg'),
@@ -68,11 +69,17 @@ describe('createImageInfoHelper', () => {
       expect(result.width).toBeUndefined()
       expect(result.height).toBeUndefined()
       expect(result.retina).toBeNull()
-      expect(result.sp).toBeNull()
+      expect(result.variant).toBeNull()
     })
   })
 
   describe('src のパス解決', () => {
+    it('imageOptimization: avif のとき src が .avif パスになる', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, avifConfig)
+      const result = imageInfo('/images/hero.jpg')
+      expect(result.src).toBe('/images/hero.avif')
+    })
+
     it('imageOptimization: webp のとき src が .webp パスになる', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
       const result = imageInfo('/images/hero.jpg')
@@ -93,11 +100,22 @@ describe('createImageInfoHelper', () => {
   })
 
   describe('retina 自動検出', () => {
-    it('hero@2x.jpg が存在する場合 retina.src が webp パスになる (webp モード)', () => {
+    it('@2x が存在する場合 retina に src / width / height が入る (avif モード)', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, avifConfig)
+      const result = imageInfo('/images/hero.jpg')
+      expect(result.retina).not.toBeNull()
+      expect(result.retina.src).toBe('/images/hero@2x.avif')
+      expect(result.retina.width).toBe(1600)
+      expect(result.retina.height).toBe(1200)
+    })
+
+    it('@2x が存在する場合 retina に src / width / height が入る (webp モード)', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
       const result = imageInfo('/images/hero.jpg')
       expect(result.retina).not.toBeNull()
       expect(result.retina.src).toBe('/images/hero@2x.webp')
+      expect(result.retina.width).toBe(1600)
+      expect(result.retina.height).toBe(1200)
     })
 
     it('@2x が存在しない場合 retina は null', () => {
@@ -114,38 +132,56 @@ describe('createImageInfoHelper', () => {
     })
   })
 
-  describe('SP 画像自動検出', () => {
-    it('responsive_sp.jpg が存在する場合 sp.src が webp パスになる (webp モード)', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
+  describe('アートディレクション variant 自動検出', () => {
+    it('デフォルト（imageInfo.artDirectionSuffix: "_sp"）: avif モードで _sp が検出される', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, avifConfig)
       const result = imageInfo('/images/responsive.jpg')
-      expect(result.sp).not.toBeNull()
-      expect(result.sp.src).toBe('/images/responsive_sp.webp')
-      expect(result.sp.width).toBe(375)
-      expect(result.sp.height).toBe(300)
+      expect(result.variant).not.toBeNull()
+      expect(result.variant.src).toBe('/images/responsive_sp.avif')
+      expect(result.variant.width).toBe(375)
+      expect(result.variant.height).toBe(300)
     })
 
-    it('_sp が存在しない場合 sp は null', () => {
+    it('デフォルト（imageInfo.artDirectionSuffix: "_sp"）: _sp が検出される', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
+      const result = imageInfo('/images/responsive.jpg')
+      expect(result.variant).not.toBeNull()
+      expect(result.variant.src).toBe('/images/responsive_sp.webp')
+      expect(result.variant.width).toBe(375)
+      expect(result.variant.height).toBe(300)
+    })
+
+    it('imageInfo.artDirectionSuffix: "_tb" のとき _tb が検出される', () => {
+      const config = { build: { imageOptimization: 'webp', imageInfo: { artDirectionSuffix: '_tb' } } }
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config)
+      const result = imageInfo('/images/responsive.jpg')
+      expect(result.variant).not.toBeNull()
+      expect(result.variant.src).toBe('/images/responsive_tb.webp')
+      expect(result.variant.width).toBe(768)
+      expect(result.variant.height).toBe(500)
+    })
+
+    it('バリアント画像が存在しない場合は null', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
       const result = imageInfo('/images/hero.jpg')
-      expect(result.sp).toBeNull()
+      expect(result.variant).toBeNull()
     })
 
-    it('compress モードのとき sp.src は元パス', () => {
+    it('compress モードのとき variant.src は元パス', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, paths, null, compressConfig)
       const result = imageInfo('/images/responsive.jpg')
-      expect(result.sp).not.toBeNull()
-      expect(result.sp.src).toBe('/images/responsive_sp.jpg')
+      expect(result.variant.src).toBe('/images/responsive_sp.jpg')
     })
   })
 
   describe('SVG', () => {
-    it('isSvg: true / retina: null / sp: null、src は変換されない', () => {
+    it('isSvg: true / retina: null / variant: null、src は変換されない', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
       const result = imageInfo('/images/icon.svg')
       expect(result.isSvg).toBe(true)
       expect(result.src).toBe('/images/icon.svg')
       expect(result.retina).toBeNull()
-      expect(result.sp).toBeNull()
+      expect(result.variant).toBeNull()
     })
   })
 })

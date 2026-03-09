@@ -1,6 +1,6 @@
 import { glob } from 'glob'
 import { readFile, writeFile } from 'node:fs/promises'
-import { relative, resolve, dirname, extname } from 'node:path'
+import { relative, resolve, extname } from 'node:path'
 import sharp from 'sharp'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
@@ -9,7 +9,7 @@ import { ensureFileDir } from '../utils/file.mjs'
  * 画像最適化タスク
  */
 export async function imageTask(context, options = {}) {
-  const { paths, config, isProduction, cache } = context
+  const { paths, config, isProduction } = context
 
   const optimization = config.build.imageOptimization
 
@@ -40,6 +40,19 @@ export async function imageTask(context, options = {}) {
 
   logger.info('image', `Processing ${images.length} image(s)`)
 
+  if (optimization === 'avif' || optimization === 'webp') {
+    const outputMap = new Map()
+    for (const file of images) {
+      const rel = relative(paths.src, file)
+      const outPath = rel.replace(/\.(jpg|jpeg|png|gif)$/i, `.${optimization}`)
+      if (outputMap.has(outPath)) {
+        logger.warn('image', `Output conflict: "${outputMap.get(outPath)}" and "${rel}" both map to "${outPath}"`)
+      } else {
+        outputMap.set(outPath, rel)
+      }
+    }
+  }
+
   // 並列処理
   await Promise.all(images.map(file => processImage(file, context, optimization, isProduction)))
 
@@ -53,26 +66,31 @@ async function processImage(filePath, context, optimization, isProduction) {
   const { paths, config } = context
   const ext = extname(filePath).toLowerCase()
   const relativePath = relative(paths.src, filePath)
+  const overrideKey = relativePath.replace(/\\/g, '/')
+  const overrides = config.build.imageOverrides?.[overrideKey] ?? {}
 
   try {
     const image = sharp(filePath)
-    const metadata = await image.metadata()
 
     let outputPath
     let outputImage
 
-    if (optimization === 'webp') {
+    if (optimization === 'avif') {
+      // AVIF変換
+      outputPath = resolve(paths.dist, relativePath.replace(/\.(jpg|jpeg|png|gif)$/i, '.avif'))
+      outputImage = image.avif({ ...config.build.imageOptions.avif, ...overrides })
+    } else if (optimization === 'webp') {
       // WebP変換
       outputPath = resolve(paths.dist, relativePath.replace(/\.(jpg|jpeg|png|gif)$/i, '.webp'))
-      outputImage = image.webp(config.build.imageOptions.webp)
+      outputImage = image.webp({ ...config.build.imageOptions.webp, ...overrides })
     } else {
       // 元の形式で圧縮
       outputPath = resolve(paths.dist, relativePath)
 
       if (ext === '.jpg' || ext === '.jpeg') {
-        outputImage = image.jpeg(config.build.imageOptions.jpeg)
+        outputImage = image.jpeg({ ...config.build.imageOptions.jpeg, ...overrides })
       } else if (ext === '.png') {
-        outputImage = image.png(config.build.imageOptions.png)
+        outputImage = image.png({ ...config.build.imageOptions.png, ...overrides })
       } else {
         // GIFなどはそのままコピー
         const buffer = await readFile(filePath)

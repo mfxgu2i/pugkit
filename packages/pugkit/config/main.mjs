@@ -30,7 +30,26 @@ function mergeConfig(defaults, user) {
       imageOptions: {
         webp: { ...defaults.build.imageOptions.webp, ...(user.build?.imageOptions?.webp || {}) },
         jpeg: { ...defaults.build.imageOptions.jpeg, ...(user.build?.imageOptions?.jpeg || {}) },
-        png: { ...defaults.build.imageOptions.png, ...(user.build?.imageOptions?.png || {}) }
+        png: { ...defaults.build.imageOptions.png, ...(user.build?.imageOptions?.png || {}) },
+        avif: { ...defaults.build.imageOptions.avif, ...(user.build?.imageOptions?.avif || {}) }
+      },
+      imageInfo: {
+        ...defaults.build.imageInfo,
+        ...(user.build?.imageInfo || {})
+      },
+      imageOverrides: {
+        ...defaults.build.imageOverrides,
+        ...(user.build?.imageOverrides || {})
+      },
+      html: {
+        ...defaults.build.html,
+        ...(user.build?.html || {})
+      }
+    },
+    benchmark: {
+      image: {
+        ...defaults.benchmark.image,
+        ...(user.benchmark?.image || {})
       }
     }
   }
@@ -41,7 +60,6 @@ function validateConfig(config) {
   const outDir = config.outDir
   const resolvedOutDir = isAbsolute(outDir) ? outDir : resolve(root, outDir)
 
-  // Vite同様、outDirがrootと同一またはrootの親ディレクトリの場合に警告
   // relative() を使うことでWindows（バックスラッシュ）でも正しく動作する
   const isSameAsRoot = resolvedOutDir === root
   const relToRoot = relative(resolvedOutDir, root)
