@@ -2,7 +2,21 @@ import { readFileSync, existsSync } from 'node:fs'
 import { resolve, relative, dirname, basename, extname } from 'node:path'
 import sizeOf from 'image-size'
 
-export function createImageSizeHelper(filePath, paths, logger) {
+// ビルドセッション内で画像ファイルの内容をキャッシュし、同じファイルの重複読み込みを防ぐ
+const _imageBufferCache = new Map()
+
+function readImageCached(filePath) {
+  if (_imageBufferCache.has(filePath)) return _imageBufferCache.get(filePath)
+  const buf = readFileSync(filePath)
+  _imageBufferCache.set(filePath, buf)
+  return buf
+}
+
+export function clearImageSizeCache() {
+  _imageBufferCache.clear()
+}
+
+export function createImageSizeHelper(filePath, paths, logger, { onAccess } = {}) {
   return src => {
     const resolveImagePath = (imageSrc, baseDir) => {
       if (imageSrc.startsWith('/')) {
@@ -24,7 +38,8 @@ export function createImageSizeHelper(filePath, paths, logger) {
       const foundPath = findImageFile(resolvedPath)
 
       if (foundPath) {
-        const buffer = readFileSync(foundPath)
+        onAccess?.(foundPath)
+        const buffer = readImageCached(foundPath)
         return sizeOf(buffer)
       }
 
@@ -37,7 +52,7 @@ export function createImageSizeHelper(filePath, paths, logger) {
   }
 }
 
-export function createImageInfoHelper(filePath, paths, logger, config) {
+export function createImageInfoHelper(filePath, paths, logger, config, { onAccess } = {}) {
   const optimization = config?.build?.imageOptimization
   const newExt = optimization === 'avif' || optimization === 'webp' ? `.${optimization}` : null
   const artDirectionSuffix = config?.build?.imageInfo?.artDirectionSuffix ?? '_sp'
@@ -75,7 +90,8 @@ export function createImageInfoHelper(filePath, paths, logger, config) {
         return fallback
       }
 
-      const buffer = readFileSync(foundPath)
+      const buffer = readImageCached(foundPath)
+      onAccess?.(foundPath)
       const { width, height, type: format } = sizeOf(buffer)
 
       const ext = extname(src)
@@ -91,7 +107,8 @@ export function createImageInfoHelper(filePath, paths, logger, config) {
         const retinaResolvedPath = resolveImagePath(retinaSrc, pageDir)
         const retinaFoundPath = findImageFile(retinaResolvedPath)
         if (retinaFoundPath) {
-          const retinaBuffer = readFileSync(retinaFoundPath)
+          const retinaBuffer = readImageCached(retinaFoundPath)
+          onAccess?.(retinaFoundPath)
           const { width: rWidth, height: rHeight } = sizeOf(retinaBuffer)
           retina = {
             src: newExt ? `${base}@2x${newExt}` : retinaSrc,
@@ -108,7 +125,8 @@ export function createImageInfoHelper(filePath, paths, logger, config) {
         const variantResolvedPath = resolveImagePath(variantSrc, pageDir)
         const variantFoundPath = findImageFile(variantResolvedPath)
         if (variantFoundPath) {
-          const variantBuffer = readFileSync(variantFoundPath)
+          const variantBuffer = readImageCached(variantFoundPath)
+          onAccess?.(variantFoundPath)
           const { width: vWidth, height: vHeight } = sizeOf(variantBuffer)
           variant = {
             src: newExt ? `${base}${artDirectionSuffix}${newExt}` : variantSrc,

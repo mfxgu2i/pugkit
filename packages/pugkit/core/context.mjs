@@ -11,6 +11,7 @@ export class BuildContext {
     this.graph = new DependencyGraph()
     this.sassGraph = new DependencyGraph()
     this.scriptGraph = new DependencyGraph()
+    this.imageGraph = new DependencyGraph() // Pug -> 画像ファイルの依存グラフ（dev時に構築）
 
     const outDir = config.outDir ?? 'dist'
     const resolvedOutDir = isAbsolute(outDir) ? outDir : resolve(config.root, outDir)

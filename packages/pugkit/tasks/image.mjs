@@ -5,6 +5,10 @@ import sharp from 'sharp'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
 
+// libvips の内部キャッシュを制限してメモリ消費を抑える
+sharp.cache({ memory: 50, files: 20, items: 200 })
+sharp.concurrency(1)
+
 /**
  * 画像最適化タスク
  */

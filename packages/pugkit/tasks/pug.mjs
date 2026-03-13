@@ -24,7 +24,7 @@ export async function pugTask(context, options = {}) {
   }
 
   logger.info('pug', `Building ${changed.length} file(s)`)
-  await Promise.all(changed.map(file => processFile(file, context)))
+  await runWithConcurrency(changed, 8, file => processFile(file, context))
   logger.success('pug', `Built ${changed.length} file(s)`)
 }
 
@@ -48,8 +48,18 @@ async function resolveChangedFiles(files, targetFiles, cache, isProduction) {
   return files
 }
 
+async function runWithConcurrency(items, concurrency, fn) {
+  let i = 0
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (i < items.length) {
+      await fn(items[i++])
+    }
+  })
+  await Promise.all(workers)
+}
+
 async function processFile(filePath, context) {
-  const { paths, config, cache, graph } = context
+  const { paths, config, cache, graph, imageGraph } = context
 
   try {
     let template = cache.getPugTemplate(filePath)
@@ -65,10 +75,20 @@ async function processFile(filePath, context) {
     }
 
     const builderVars = createBuilderVars(filePath, paths, config)
-    const imageSize = createImageSizeHelper(filePath, paths, logger)
-    const imageInfo = createImageInfoHelper(filePath, paths, logger, config)
+
+    // dev 時のみ: imageGraph に Pug->画像 の依存を記録して画像変更時の最小再ビルドに使う
+    const accessedImages = new Set()
+    const onAccess = context.isDevelopment ? imgPath => accessedImages.add(imgPath) : undefined
+    const imageSize = createImageSizeHelper(filePath, paths, logger, { onAccess })
+    const imageInfo = createImageInfoHelper(filePath, paths, logger, config, { onAccess })
 
     const html = template({ Builder: builderVars, imageSize, imageInfo })
+
+    if (context.isDevelopment && imageGraph) {
+      imageGraph.clearDependencies(filePath)
+      accessedImages.forEach(imgPath => imageGraph.addDependency(filePath, imgPath))
+    }
+
     const formatted = formatHtml(html, config.build.html)
     await generatePage(filePath, formatted, paths)
   } catch (error) {

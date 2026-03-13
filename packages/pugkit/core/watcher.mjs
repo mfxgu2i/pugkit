@@ -2,6 +2,7 @@ import chokidar from 'chokidar'
 import { rm } from 'node:fs/promises'
 import { relative, resolve, basename, extname } from 'node:path'
 import { logger } from '../utils/logger.mjs'
+import { clearImageSizeCache } from '../transform/image-size.mjs'
 
 /**
  * ファイル監視タスク
@@ -43,7 +44,7 @@ class FileWatcher {
         ignoreInitial: true,
         ignored: [/(^|[\/\\])\./, /node_modules/, /\.git/],
         persistent: true,
-        awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 }
+        awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 100 }
       })
       .on('change', filePath => this.handleChange(filePath))
       .on('add', filePath => this.handleAdd(filePath))
@@ -116,10 +117,11 @@ class FileWatcher {
   }
 
   async onPugUnlink(filePath) {
-    const { paths, cache, graph } = this.context
+    const { paths, cache, graph, imageGraph } = this.context
     const relPath = relative(paths.src, filePath)
     cache.invalidatePugTemplate(filePath)
     graph.clearDependencies(filePath)
+    imageGraph.clearDependencies(filePath)
     if (basename(filePath).startsWith('_')) {
       logger.info('unlink', relPath)
       return
@@ -202,11 +204,18 @@ class FileWatcher {
   // ---- Image ----
 
   async onImageChange(filePath, event) {
+    clearImageSizeCache()
     const relPath = relative(this.context.paths.src, filePath)
     logger.info(event, `image: ${relPath}`)
     try {
       if (this.context.taskRegistry?.image) {
         await this.context.taskRegistry.image(this.context, { files: [filePath] })
+      }
+      // imageGraph から影響を受ける Pug ファイルのみ再ビルド
+      // グラフ未構築（初回 dev 起動直後など）の場合は全 Pug を再ビルド
+      if (this.context.taskRegistry?.pug) {
+        const affected = this.context.imageGraph.getAffectedParents(filePath)
+        await this.context.taskRegistry.pug(this.context, { files: affected.length > 0 ? affected : undefined })
       }
       this.reload()
     } catch (error) {
@@ -215,6 +224,7 @@ class FileWatcher {
   }
 
   async onImageUnlink(filePath) {
+    clearImageSizeCache()
     const { paths, config } = this.context
     const relPath = relative(paths.src, filePath)
     const optimization = config.build.imageOptimization
@@ -223,6 +233,15 @@ class FileWatcher {
     const destRelPath = relPath.replace(new RegExp(`\\${ext}$`, 'i'), newExt)
     const distPath = resolve(paths.dist, destRelPath)
     await this.deleteDistFile(distPath, relPath)
+    // imageGraph から影響を受ける Pug ファイルのみ再ビルド
+    if (this.context.taskRegistry?.pug) {
+      const affected = this.context.imageGraph.getAffectedParents(filePath)
+      this.context.imageGraph.clearDependencies(filePath)
+      if (affected.length > 0) {
+        await this.context.taskRegistry.pug(this.context, { files: affected })
+        this.reload()
+      }
+    }
   }
 
   // ---- Public ----
