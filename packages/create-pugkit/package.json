@@ -1,6 +1,6 @@
 {
   "name": "create-pugkit",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Scaffolding for pugkit projects",
   "type": "module",
   "license": "MIT",

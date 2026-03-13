@@ -5,6 +5,10 @@ import sharp from 'sharp'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
 
+// libvips の内部キャッシュを制限してメモリ消費を抑える
+sharp.cache({ memory: 50, files: 20, items: 200 })
+sharp.concurrency(1)
+
 /**
  * 画像最適化タスク
  */
@@ -62,7 +66,7 @@ export async function imageTask(context, options = {}) {
 /**
  * 画像を処理（最適化）
  */
-async function processImage(filePath, context, optimization, isProduction) {
+async function processImage(filePath, context, optimization, isProduction, retries = 3, retryDelay = 200) {
   const { paths, config } = context
   const ext = extname(filePath).toLowerCase()
   const relativePath = relative(paths.src, filePath)
@@ -104,6 +108,10 @@ async function processImage(filePath, context, optimization, isProduction) {
     await ensureFileDir(outputPath)
     await outputImage.toFile(outputPath)
   } catch (error) {
+    if (retries > 0 && error.message.includes('unsupported image format')) {
+      await new Promise(resolve => setTimeout(resolve, retryDelay))
+      return processImage(filePath, context, optimization, isProduction, retries - 1, retryDelay * 2)
+    }
     logger.error('image', `Failed to process ${relativePath}: ${error.message}`)
   }
 }

@@ -3,7 +3,7 @@ import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import sharp from 'sharp'
-import { createImageInfoHelper } from '../../transform/image-size.mjs'
+import { createImageInfoHelper, createImageSizeHelper } from '../../transform/image-size.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const testDataDir = resolve(__dirname, '../_data')
@@ -183,5 +183,57 @@ describe('createImageInfoHelper', () => {
       expect(result.retina).toBeNull()
       expect(result.variant).toBeNull()
     })
+  })
+})
+
+describe('onAccess コールバック', () => {
+  it('createImageSizeHelper: 画像が見つかったとき onAccess が絶対パスで呼ばれる', () => {
+    const accessed = []
+    const imageSize = createImageSizeHelper(mockPugFile, paths, null, { onAccess: p => accessed.push(p) })
+    imageSize('/images/hero.jpg')
+    expect(accessed).toHaveLength(1)
+    expect(accessed[0]).toBe(resolve(imagesDir, 'hero.jpg'))
+  })
+
+  it('createImageSizeHelper: 画像が見つからないとき onAccess は呼ばれない', () => {
+    const accessed = []
+    const imageSize = createImageSizeHelper(mockPugFile, paths, null, { onAccess: p => accessed.push(p) })
+    imageSize('/images/not-found.jpg')
+    expect(accessed).toHaveLength(0)
+  })
+
+  it('createImageInfoHelper: メイン画像で onAccess が呼ばれる', () => {
+    const accessed = []
+    const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })
+    imageInfo('/images/hero.jpg')
+    expect(accessed).toContain(resolve(imagesDir, 'hero.jpg'))
+  })
+
+  it('createImageInfoHelper: retina が存在する場合 onAccess にメイン・retina 両方が登録される', () => {
+    const accessed = []
+    const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })
+    imageInfo('/images/hero.jpg')
+    expect(accessed).toContain(resolve(imagesDir, 'hero.jpg'))
+    expect(accessed).toContain(resolve(imagesDir, 'hero@2x.jpg'))
+  })
+
+  it('createImageInfoHelper: variant が存在する場合 onAccess にメイン・variant 両方が登録される', () => {
+    const accessed = []
+    const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })
+    imageInfo('/images/responsive.jpg')
+    expect(accessed).toContain(resolve(imagesDir, 'responsive.jpg'))
+    expect(accessed).toContain(resolve(imagesDir, 'responsive_sp.jpg'))
+  })
+
+  it('createImageInfoHelper: 画像が見つからない場合 onAccess は呼ばれない', () => {
+    const accessed = []
+    const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })
+    imageInfo('/images/not-found.jpg')
+    expect(accessed).toHaveLength(0)
+  })
+
+  it('onAccess なしで呼んでもエラーにならない', () => {
+    const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
+    expect(() => imageInfo('/images/hero.jpg')).not.toThrow()
   })
 })
