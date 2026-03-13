@@ -62,7 +62,7 @@ export async function imageTask(context, options = {}) {
 /**
  * 画像を処理（最適化）
  */
-async function processImage(filePath, context, optimization, isProduction) {
+async function processImage(filePath, context, optimization, isProduction, retries = 3, retryDelay = 200) {
   const { paths, config } = context
   const ext = extname(filePath).toLowerCase()
   const relativePath = relative(paths.src, filePath)
@@ -104,6 +104,10 @@ async function processImage(filePath, context, optimization, isProduction) {
     await ensureFileDir(outputPath)
     await outputImage.toFile(outputPath)
   } catch (error) {
+    if (retries > 0 && error.message.includes('unsupported image format')) {
+      await new Promise(resolve => setTimeout(resolve, retryDelay))
+      return processImage(filePath, context, optimization, isProduction, retries - 1, retryDelay * 2)
+    }
     logger.error('image', `Failed to process ${relativePath}: ${error.message}`)
   }
 }
