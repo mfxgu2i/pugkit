@@ -75,10 +75,13 @@ function validateConfig(config) {
   return config
 }
 
-export async function loadConfig(root = process.cwd()) {
+export async function loadConfig(root = process.cwd(), inlineConfig = {}) {
   const userConfig = await loadUserConfig(root)
   const config = mergeConfig(defaultConfig, userConfig)
   config.root = root
+  if (inlineConfig.siteUrl !== undefined && inlineConfig.siteUrl !== null) {
+    config.siteUrl = inlineConfig.siteUrl
+  }
   validateConfig(config)
   return config
 }
