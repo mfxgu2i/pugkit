@@ -33,14 +33,17 @@ cli
     }
   })
 
-cli.command('build [root]', 'Production build').action(async root => {
-  try {
-    await build({ root: root || process.cwd() })
-  } catch (err) {
-    console.error(err)
-    process.exit(1)
-  }
-})
+cli
+  .command('build [root]', 'Production build')
+  .option('--site-url <url>', 'Override siteUrl in config')
+  .action(async (root, options) => {
+    try {
+      await build({ root: root || process.cwd(), siteUrl: options.siteUrl })
+    } catch (err) {
+      console.error(err)
+      process.exit(1)
+    }
+  })
 
 cli.command('sprite [root]', 'Generate SVG sprite').action(async root => {
   try {

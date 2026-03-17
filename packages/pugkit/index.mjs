@@ -10,8 +10,8 @@ import spriteTask from './tasks/svg-sprite.mjs'
 import serverTask from './core/server.mjs'
 import watcherTask from './core/watcher.mjs'
 
-export async function createBuilder(root = process.cwd(), mode = 'development') {
-  const config = await loadConfig(root)
+export async function createBuilder(root = process.cwd(), mode = 'development', inlineConfig = {}) {
+  const config = await loadConfig(root, inlineConfig)
   const builder = new Builder(config, mode)
 
   builder.registerTasks({
