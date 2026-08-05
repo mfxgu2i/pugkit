@@ -48,8 +48,8 @@ export async function scriptTask(context, options = {}) {
 
   logger.info('script', `Building ${filesToBuild.length} file(s)`)
 
-  // debugモードはdevモード時のみ有効
-  const isDebugMode = !isProduction && config.debug
+  // dev は常に非圧縮 + ソースマップ、production は常に圧縮
+  const isDevBuild = !isProduction
 
   try {
     // 3. esbuild設定
@@ -63,7 +63,7 @@ export async function scriptTask(context, options = {}) {
       platform: 'browser',
       splitting: false,
       write: true,
-      sourcemap: isDebugMode,
+      sourcemap: isDevBuild,
       minify: false,
       metafile: true,
       logLevel: 'error',
@@ -72,12 +72,12 @@ export async function scriptTask(context, options = {}) {
       plugins: [],
       legalComments: 'none',
       treeShaking: true,
-      minifyWhitespace: !isDebugMode,
-      minifySyntax: !isDebugMode
+      minifyWhitespace: !isDevBuild,
+      minifySyntax: !isDevBuild
     }
 
-    // debugモードでない場合はconsole/debuggerを削除
-    if (!isDebugMode) {
+    // production はconsole/debuggerを削除
+    if (!isDevBuild) {
       esbuildConfig.drop = ['console', 'debugger']
     }
 

@@ -6,7 +6,7 @@ describe('defaultConfig', () => {
     expect(defaultConfig.siteUrl).toBe('')
     expect(defaultConfig.subdir).toBe('')
     expect(defaultConfig.outDir).toBe('dist')
-    expect(defaultConfig.debug).toBe(false)
+    expect(defaultConfig.debug).toBeUndefined()
   })
 
   it('should have server configuration', () => {

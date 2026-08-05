@@ -15,8 +15,8 @@ import { ensureFileDir } from '../utils/file.mjs'
 export async function sassTask(context, options = {}) {
   const { paths, config, isProduction, isDevelopment, sassGraph, cache } = context
 
-  // debugモードはdevモード時のみ有効
-  const isDebugMode = !isProduction && config.debug
+  // dev は常に非圧縮 + ソースマップ、production は常に圧縮
+  const isDevBuild = !isProduction
 
   // 1. ビルド対象ファイルの取得（非パーシャル）
   const allEntryFiles = await glob('**/[^_]*.scss', {
@@ -61,7 +61,7 @@ export async function sassTask(context, options = {}) {
   logger.info('sass', `Building ${filesToBuild.length} file(s)`)
 
   // 3. 並列コンパイル
-  await Promise.all(filesToBuild.map(file => compileSassFile(file, context, isDebugMode)))
+  await Promise.all(filesToBuild.map(file => compileSassFile(file, context, isDevBuild)))
 
   logger.success('sass', `Built ${filesToBuild.length} file(s)`)
 }
@@ -69,19 +69,19 @@ export async function sassTask(context, options = {}) {
 /**
  * 個別Sassファイルのコンパイル
  */
-async function compileSassFile(filePath, context, isDebugMode) {
+async function compileSassFile(filePath, context, isDevBuild) {
   const { paths, config, isProduction, sassGraph } = context
 
   try {
     // Sassコンパイル
     const result = sass.compile(filePath, {
       silenceDeprecations: ['legacy-js-api'],
-      style: isDebugMode ? 'expanded' : 'compressed',
+      style: isDevBuild ? 'expanded' : 'compressed',
       loadPaths: [resolve(paths.root, 'node_modules')],
       charset: false,
       quietDeps: true,
-      sourceMap: isDebugMode,
-      sourceMapIncludeSources: isDebugMode
+      sourceMap: isDevBuild,
+      sourceMapIncludeSources: isDevBuild
     })
 
     // 依存グラフを更新（loadedUrls からパーシャルの依存関係を構築）
@@ -102,8 +102,8 @@ async function compileSassFile(filePath, context, isDebugMode) {
     // PostCSS処理
     const postcssPlugins = [autoprefixer()]
 
-    // debugモード以外は常にminify
-    if (!isDebugMode) {
+    // production は常にminify
+    if (!isDevBuild) {
       postcssPlugins.push(
         cssnano({
           preset: [
@@ -126,7 +126,7 @@ async function compileSassFile(filePath, context, isDebugMode) {
     const postcssResult = await postcss(postcssPlugins).process(css, {
       from: filePath,
       to: outputPath,
-      map: isDebugMode ? { inline: false, annotation: true } : false
+      map: isDevBuild ? { inline: false, annotation: true } : false
     })
 
     css = postcssResult.css
@@ -135,8 +135,8 @@ async function compileSassFile(filePath, context, isDebugMode) {
     await ensureFileDir(outputPath)
     await writeFile(outputPath, css, 'utf8')
 
-    // debugモード時はソースマップを出力
-    if (isDebugMode && postcssResult.map) {
+    // dev はソースマップを出力
+    if (isDevBuild && postcssResult.map) {
       const mapPath = `${outputPath}.map`
       await writeFile(mapPath, postcssResult.map.toString(), 'utf8')
     }

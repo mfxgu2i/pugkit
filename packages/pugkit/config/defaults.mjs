@@ -2,7 +2,6 @@ export const defaultConfig = {
   siteUrl: '',
   subdir: '',
   outDir: 'dist',
-  debug: false,
   server: {
     port: 5555,
     host: 'localhost',

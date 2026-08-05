@@ -75,7 +75,6 @@ export default defineConfig({
   siteUrl: 'https://example.com/',
   subdir: '',
   outDir: 'dist',
-  debug: false,
   server: {
     port: 5555,
     host: 'localhost',
@@ -97,7 +96,6 @@ export default defineConfig({
 | `siteUrl`                            | サイトのベースURL（`Builder.url` に使用）                                                             | `string`                                        | `''`          |
 | `subdir`                             | サブディレクトリのパス                                                                                | `string`                                        | `''`          |
 | `outDir`                             | ビルド出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可          | `string`                                        | `'dist'`      |
-| `debug`                              | デバッグモード（開発時のみ有効）                                                                      | `boolean`                                       | `false`       |
 | `server.port`                        | 開発サーバーのポート番号                                                                              | `number`                                        | `5555`        |
 | `server.host`                        | 開発サーバーのホスト                                                                                  | `string`                                        | `'localhost'` |
 | `server.startPath`                   | サーバー起動時に開くパス                                                                              | `string`                                        | `'/'`         |
@@ -332,14 +330,15 @@ build: {
 
 `public/` に置いたファイルはそのまま `outDir` のルートにコピーされます。faviconやOGP画像など最適化不要なファイルの置き場として使用します。
 
-### Debug Mode
+### Dev / Build の出力の違い
 
-`debug: true` のとき、開発モードでのみ以下の出力に切り替わります。
+| 対象 | dev                                       | build                        |
+| ---- | ----------------------------------------- | ---------------------------- |
+| HTML | リクエスト時ビルド + メモリ配信（`outDir` には書き出さない） | 全ページビルドして書き出し   |
+| CSS  | expanded + ソースマップ                   | minify済み                   |
+| JS   | ソースマップ・`console.*` 保持            | minify済み・`console.*` 削除 |
 
-| 対象 | 通常                         | debug: true                    |
-| ---- | ---------------------------- | ------------------------------ |
-| CSS  | minify済み                   | expanded + ソースマップ        |
-| JS   | minify済み・`console.*` 削除 | ソースマップ・`console.*` 保持 |
+> 旧 `debug` オプションは廃止されました。dev は常にソースマップ付き非圧縮出力になります。
 
 ## Tech Stack
 
