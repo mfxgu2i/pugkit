@@ -10,6 +10,9 @@ export class CacheManager {
     this.mode = mode
     this.fileHashes = new Map() // ファイルパス -> ハッシュ
     this.compiledCache = new Map() // Pugコンパイル済みテンプレート
+    this.pageHtmlCache = new Map() // ページHTML（dev遅延ビルドの配信キャッシュ）
+    this.pageEpochs = new Map() // ファイルパス -> 無効化世代
+    this.globalPageEpoch = 0 // 全ページ無効化の世代
     this.isDevelopment = mode === 'development'
   }
 
@@ -60,11 +63,13 @@ export class CacheManager {
 
   /**
    * Pugテンプレートをキャッシュに保存
+   * epoch を渡した場合、ビルド開始時から無効化が入っていれば保存しない
+   * （ビルド中にソースが変更された古い結果の書き戻しを防ぐ）
    */
-  setPugTemplate(filePath, template) {
-    if (this.isDevelopment) {
-      this.compiledCache.set(filePath, template)
-    }
+  setPugTemplate(filePath, template, epoch) {
+    if (!this.isDevelopment) return
+    if (epoch !== undefined && epoch !== this.getPageEpoch(filePath)) return
+    this.compiledCache.set(filePath, template)
   }
 
   /**
@@ -73,6 +78,47 @@ export class CacheManager {
   invalidatePugTemplate(filePath) {
     this.compiledCache.delete(filePath)
     this.fileHashes.delete(filePath)
+  }
+
+  /**
+   * ページの現在の無効化世代を取得
+   */
+  getPageEpoch(filePath) {
+    return this.globalPageEpoch + (this.pageEpochs.get(filePath) ?? 0)
+  }
+
+  /**
+   * ページHTMLのキャッシュ取得
+   */
+  getPageHtml(filePath) {
+    return this.pageHtmlCache.get(filePath)
+  }
+
+  /**
+   * ページHTMLをキャッシュに保存
+   * epoch がビルド開始時の世代と一致しない場合（＝ビルド中に無効化された場合）は保存しない
+   */
+  setPageHtml(filePath, html, epoch) {
+    if (!this.isDevelopment) return false
+    if (epoch !== undefined && epoch !== this.getPageEpoch(filePath)) return false
+    this.pageHtmlCache.set(filePath, html)
+    return true
+  }
+
+  /**
+   * ページHTMLのキャッシュを無効化（世代を進めて実行中ビルドの書き戻しも防ぐ）
+   */
+  invalidatePageHtml(filePath) {
+    this.pageHtmlCache.delete(filePath)
+    this.pageEpochs.set(filePath, (this.pageEpochs.get(filePath) ?? 0) + 1)
+  }
+
+  /**
+   * すべてのページHTMLキャッシュを無効化
+   */
+  clearPageHtml() {
+    this.pageHtmlCache.clear()
+    this.globalPageEpoch++
   }
 
   /**
@@ -93,5 +139,11 @@ export class CacheManager {
   clear() {
     this.fileHashes.clear()
     this.compiledCache.clear()
+    this.pageHtmlCache.clear()
+    // 世代は後退させない: per-file 世代の最大値を global に繰り上げてからクリアすることで
+    // 全ページの合成世代が厳密に増加し、実行中ビルドの古い結果が書き戻されることはない
+    const maxFileEpoch = this.pageEpochs.size > 0 ? Math.max(...this.pageEpochs.values()) : 0
+    this.globalPageEpoch += maxFileEpoch + 1
+    this.pageEpochs.clear()
   }
 }

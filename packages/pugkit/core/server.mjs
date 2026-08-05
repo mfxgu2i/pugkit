@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
 import sirv from 'sirv'
 import { logger } from '../utils/logger.mjs'
+import { buildPageHtml } from '../tasks/pug.mjs'
 
 const SSE_PATH = '/__pugkit_sse'
 
@@ -35,7 +36,138 @@ const liveReloadScript = `<script>
 </script>`
 
 /**
- * 開発サーバータスク（SSE + sirv）
+ * リクエストURLを src 内の Pug ソースに解決する。
+ * 対象外（非HTML・subdir不一致・「_」始まりセグメント・src外・ファイル無し）は null。
+ *
+ * 候補順は sirv の解決順（フラットファイル優先。末尾スラッシュは除去して同順）に合わせる:
+ *   /foo.html  -> src/foo.pug
+ *   /foo       -> src/foo.pug -> src/foo/index.pug
+ *   /foo/      -> src/foo.pug -> src/foo/index.pug
+ *   /          -> src/index.pug
+ */
+export function resolvePugSource(urlPath, paths, subdir = '') {
+  let p = urlPath
+
+  if (subdir) {
+    // 境界チェック: /sub と /sub/... のみ対象（/subfoo は不一致）
+    if (p === subdir) p = '/'
+    else if (p.startsWith(subdir + '/')) p = p.slice(subdir.length)
+    else return null
+  }
+
+  if (!p.startsWith('/')) return null
+
+  // sirv 互換: 末尾スラッシュは除去して解決（/foo/ と /foo は同じ候補順）
+  if (p !== '/' && p.endsWith('/')) p = p.replace(/\/+$/, '')
+
+  const candidates = []
+  if (p === '/') {
+    candidates.push('/index.pug')
+  } else if (/\.html$/i.test(p)) {
+    candidates.push(p.replace(/\.html$/i, '.pug'))
+  } else if (!path.posix.extname(p)) {
+    candidates.push(p + '.pug', p + '/index.pug')
+  } else {
+    return null
+  }
+
+  for (const rel of candidates) {
+    const abs = path.resolve(paths.src, '.' + rel)
+
+    // src 封じ込め（パストラバーサル対策）
+    if (abs !== paths.src && !abs.startsWith(paths.src + path.sep)) continue
+
+    // パーシャル・「_」始まりディレクトリはページとして配信しない
+    const relFromSrc = path.relative(paths.src, abs)
+    if (relFromSrc.split(path.sep).some(seg => seg.startsWith('_'))) continue
+
+    if (existsSync(abs)) return abs
+  }
+
+  return null
+}
+
+/**
+ * リクエスト時遅延ビルダーを生成する。
+ * - 同一ページへの同時リクエストは 1 ビルドに統合（in-flight 重複排除）
+ * - in-flight エントリはビルド開始時の世代付き。無効化後は古い in-flight に相乗りしない
+ * - ビルド失敗時はエントリを必ず破棄（エラーはキャッシュしない）
+ */
+export function createLazyPageBuilder(context, buildFn = buildPageHtml) {
+  const inflight = new Map() // pugFile -> { epoch, promise }
+
+  return function getPage(pugFile) {
+    const { cache } = context
+
+    const cached = cache.getPageHtml(pugFile)
+    if (cached !== undefined) return Promise.resolve(cached)
+
+    const epoch = cache.getPageEpoch(pugFile)
+    const entry = inflight.get(pugFile)
+    if (entry && entry.epoch === epoch) return entry.promise
+
+    const promise = buildFn(pugFile, context)
+      .then(html => {
+        cache.setPageHtml(pugFile, html, epoch)
+        return html
+      })
+      .finally(() => {
+        if (inflight.get(pugFile)?.promise === promise) inflight.delete(pugFile)
+      })
+
+    inflight.set(pugFile, { epoch, promise })
+    return promise
+  }
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+}
+
+/**
+ * ビルドエラー時に返すページ。ライブリロードスクリプト入りなので修正保存で自動復帰する。
+ */
+function buildErrorPage(pugFile, error, paths) {
+  const rel = path.relative(paths.src, pugFile)
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Build Error - pugkit</title>
+<style>
+  body { background: #1b1b1f; color: #e0e0e0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding: 40px; }
+  h1 { color: #ff6b6b; font-size: 18px; }
+  .file { color: #ffd166; margin-bottom: 16px; }
+  pre { background: #111; padding: 16px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; line-height: 1.6; }
+  p.hint { color: #888; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>Pug Build Error</h1>
+<div class="file">${escapeHtml(rel)}</div>
+<pre>${escapeHtml(error.message)}</pre>
+<p class="hint">ファイルを修正して保存すると自動でリロードされます。</p>
+${liveReloadScript}
+</body>
+</html>`
+}
+
+function sendHtml(res, status, html) {
+  const buf = Buffer.from(html, 'utf-8')
+  res.writeHead(status, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Length': buf.length,
+    'Cache-Control': 'no-cache'
+  })
+  res.end(buf)
+}
+
+function injectReload(html) {
+  return html.includes('</body>') ? html.replace('</body>', liveReloadScript + '</body>') : html + liveReloadScript
+}
+
+/**
+ * 開発サーバータスク（SSE + 遅延ビルド + sirv）
  */
 export async function serverTask(context, options = {}) {
   const { paths, config } = context
@@ -53,6 +185,7 @@ export async function serverTask(context, options = {}) {
   const serveRoot = paths.outDir
 
   const clients = new Set()
+  const getPage = createLazyPageBuilder(context)
 
   const staticServe = sirv(serveRoot, {
     dev: true,
@@ -85,28 +218,43 @@ export async function serverTask(context, options = {}) {
       return
     }
 
-    // ── HTML へのライブリロードスクリプト注入 ───────────
-    const decoded = decodeURIComponent(urlPath)
+    let decoded
+    try {
+      decoded = decodeURIComponent(urlPath)
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end('400 Bad Request')
+      return
+    }
+
+    // ── Pug ページ: リクエスト時遅延ビルド + メモリ配信 ──
+    const pugFile = resolvePugSource(decoded, paths, subdir)
+
+    if (pugFile) {
+      getPage(pugFile)
+        .then(html => sendHtml(res, 200, injectReload(html)))
+        .catch(error => {
+          if (!res.headersSent) sendHtml(res, 500, buildErrorPage(pugFile, error, paths))
+        })
+      return
+    }
+
+    // ── 非Pugの既存HTML（public由来など）: dist読み出し + スクリプト注入 ───
     const candidates = [
       path.join(serveRoot, decoded === '/' ? 'index.html' : decoded.replace(/\/$/, '') + '/index.html'),
       path.join(serveRoot, decoded === '/' ? 'index.html' : decoded + '.html'),
       path.join(serveRoot, decoded)
     ]
-    const htmlFile = candidates.find(p => p.endsWith('.html') && existsSync(p))
+    const isInsideServeRoot = p => {
+      const abs = path.resolve(p)
+      return abs === serveRoot || abs.startsWith(serveRoot + path.sep)
+    }
+    const htmlFile = candidates.find(p => p.endsWith('.html') && isInsideServeRoot(p) && existsSync(p))
 
     if (htmlFile) {
       readFile(htmlFile, 'utf-8')
         .then(html => {
-          html = html.includes('</body>')
-            ? html.replace('</body>', liveReloadScript + '</body>')
-            : html + liveReloadScript
-          const buf = Buffer.from(html, 'utf-8')
-          res.writeHead(200, {
-            'Content-Type': 'text/html; charset=utf-8',
-            'Content-Length': buf.length,
-            'Cache-Control': 'no-cache'
-          })
-          res.end(buf)
+          sendHtml(res, 200, injectReload(html))
         })
         .catch(() => {
           staticServe(req, res, () => {

@@ -14,8 +14,12 @@ export async function watcherTask(context, options = {}) {
 
 /**
  * ファイルウォッチャー
+ *
+ * Pug は遅延ビルド方式: 変更イベントではキャッシュ無効化とリロード通知のみ行い、
+ * ビルドはブラウザが該当ページをリクエストした時に dev サーバー側で実行される。
+ * Sass / Script は従来どおりイベント駆動でインクリメンタルビルドする。
  */
-class FileWatcher {
+export class FileWatcher {
   constructor(context) {
     this.context = context
     this.watcher = null
@@ -24,13 +28,9 @@ class FileWatcher {
   async start() {
     const { paths } = this.context
 
-    // 初回ビルド（依存関係グラフ構築のため）
-    logger.info('watch', 'Building initial dependency graph...')
-
+    // Sass / Script のみ初期ビルド（Pug は遅延ビルドのため不要。
+    // 依存グラフはページが最初にリクエストされた時に構築される）
     const initialTasks = []
-    if (this.context.taskRegistry?.pug) {
-      initialTasks.push(this.context.taskRegistry.pug(this.context))
-    }
     if (this.context.taskRegistry?.sass) {
       initialTasks.push(this.context.taskRegistry.sass(this.context))
     }
@@ -96,36 +96,54 @@ class FileWatcher {
     return filePath.replace(/\\/g, '/').includes('/icons/')
   }
 
+  isImageAsset(filePath) {
+    return /\.(jpg|jpeg|png|gif|svg|webp|avif)$/i.test(filePath)
+  }
+
   // ---- Pug ----
 
-  async onPugChange(filePath) {
-    const { paths, graph, cache, taskRegistry } = this.context
+  onPugChange(filePath) {
+    const { paths, graph, cache } = this.context
     const relPath = relative(paths.src, filePath)
     logger.info('change', `pug: ${relPath}`)
-    try {
-      const affectedFiles = graph.getAffectedParents(filePath)
-      if (affectedFiles.length > 0) logger.info('pug', `Rebuilding ${affectedFiles.length} affected file(s)`)
-      cache.invalidatePugTemplate(filePath)
-      affectedFiles.forEach(f => cache.invalidatePugTemplate(f))
-      if (taskRegistry?.pug) {
-        await taskRegistry.pug(this.context, { files: [filePath, ...affectedFiles] })
-      }
-      this.reload()
-    } catch (error) {
-      logger.error('watch', `Pug build failed: ${error.message}`)
+
+    // 影響を受ける親ページを含めてキャッシュ無効化のみ行う。
+    // ビルドはリクエスト時に行われるため、ここでは何もビルドしない
+    const affected = graph.getAffectedParents(filePath)
+    if (affected.length > 0) logger.info('pug', `Invalidated ${affected.length} affected page(s)`)
+
+    for (const file of [filePath, ...affected]) {
+      cache.invalidatePugTemplate(file)
+      cache.invalidatePageHtml(file)
     }
+
+    this.reload()
   }
 
   async onPugUnlink(filePath) {
     const { paths, cache, graph, imageGraph } = this.context
     const relPath = relative(paths.src, filePath)
+
+    // clearDependencies の前に影響親を取得する（後だと逆引きが消えて取得できない）
+    const affected = graph.getAffectedParents(filePath)
+    for (const file of affected) {
+      cache.invalidatePugTemplate(file)
+      cache.invalidatePageHtml(file)
+    }
+
     cache.invalidatePugTemplate(filePath)
+    cache.invalidatePageHtml(filePath)
     graph.clearDependencies(filePath)
     imageGraph.clearDependencies(filePath)
+
     if (basename(filePath).startsWith('_')) {
       logger.info('unlink', relPath)
+      this.reload()
       return
     }
+
+    // 過去の build が dist に残した HTML があると、ソース削除後も
+    // フォールバック配信で「復活」してしまうため削除する
     const distPath = resolve(paths.dist, relPath.replace(/\.pug$/, '.html'))
     await this.deleteDistFile(distPath, relPath)
   }
@@ -183,12 +201,14 @@ class FileWatcher {
   // ---- SVG ----
 
   async onSvgChange(filePath, event) {
+    clearImageSizeCache()
     const relPath = relative(this.context.paths.src, filePath)
     logger.info(event, `svg: ${relPath}`)
     try {
       if (this.context.taskRegistry?.svg) {
         await this.context.taskRegistry.svg(this.context, { files: [filePath] })
       }
+      this.invalidateAssetDependents(filePath, event)
       this.reload()
     } catch (error) {
       logger.error('watch', `SVG processing failed: ${error.message}`)
@@ -196,7 +216,10 @@ class FileWatcher {
   }
 
   async onSvgUnlink(filePath) {
+    clearImageSizeCache()
     const relPath = relative(this.context.paths.src, filePath)
+    this.invalidateAssetDependents(filePath)
+    this.context.imageGraph.clearDependencies(filePath)
     const distPath = resolve(this.context.paths.dist, relPath)
     await this.deleteDistFile(distPath, relPath)
   }
@@ -211,12 +234,7 @@ class FileWatcher {
       if (this.context.taskRegistry?.image) {
         await this.context.taskRegistry.image(this.context, { files: [filePath] })
       }
-      // imageGraph から影響を受ける Pug ファイルのみ再ビルド
-      // グラフ未構築（初回 dev 起動直後など）の場合は全 Pug を再ビルド
-      if (this.context.taskRegistry?.pug) {
-        const affected = this.context.imageGraph.getAffectedParents(filePath)
-        await this.context.taskRegistry.pug(this.context, { files: affected.length > 0 ? affected : undefined })
-      }
+      this.invalidateAssetDependents(filePath, event)
       this.reload()
     } catch (error) {
       logger.error('watch', `Image processing failed: ${error.message}`)
@@ -225,23 +243,19 @@ class FileWatcher {
 
   async onImageUnlink(filePath) {
     clearImageSizeCache()
-    const { paths, config } = this.context
+    const { paths, config, cache, imageGraph } = this.context
     const relPath = relative(paths.src, filePath)
+
+    const affected = imageGraph.getAffectedParents(filePath)
+    imageGraph.clearDependencies(filePath)
+    affected.forEach(file => cache.invalidatePageHtml(file))
+
     const optimization = config.build.imageOptimization
     const ext = extname(filePath)
     const newExt = optimization === 'avif' || optimization === 'webp' ? `.${optimization}` : ext
     const destRelPath = relPath.replace(new RegExp(`\\${ext}$`, 'i'), newExt)
     const distPath = resolve(paths.dist, destRelPath)
     await this.deleteDistFile(distPath, relPath)
-    // imageGraph から影響を受ける Pug ファイルのみ再ビルド
-    if (this.context.taskRegistry?.pug) {
-      const affected = this.context.imageGraph.getAffectedParents(filePath)
-      this.context.imageGraph.clearDependencies(filePath)
-      if (affected.length > 0) {
-        await this.context.taskRegistry.pug(this.context, { files: affected })
-        this.reload()
-      }
-    }
   }
 
   // ---- Public ----
@@ -249,6 +263,13 @@ class FileWatcher {
   async onPublicChange(filePath, event) {
     const relPath = relative(this.context.paths.public, filePath)
     logger.info(event, `public: ${relPath}`)
+
+    // public 配下の画像も imageSize/imageInfo から参照され得る（src からのフォールバック）
+    if (this.isImageAsset(filePath)) {
+      clearImageSizeCache()
+      this.invalidateAssetDependents(filePath, event)
+    }
+
     try {
       if (this.context.taskRegistry?.copy) await this.context.taskRegistry.copy(this.context, { files: [filePath] })
       this.reload()
@@ -259,11 +280,43 @@ class FileWatcher {
 
   async onPublicUnlink(filePath) {
     const relPath = relative(this.context.paths.public, filePath)
+
+    if (this.isImageAsset(filePath)) {
+      clearImageSizeCache()
+      this.invalidateAssetDependents(filePath)
+      this.context.imageGraph.clearDependencies(filePath)
+    }
+
     const distPath = resolve(this.context.paths.dist, relPath)
     await this.deleteDistFile(distPath, relPath)
   }
 
   // ---- 共通ヘルパー ----
+
+  /**
+   * アセット（画像・SVG）に依存するページのキャッシュを無効化する。
+   * - imageGraph 経由（imageSize/imageInfo で参照）: HTML キャッシュのみ無効化
+   * - graph 経由（include でテンプレートに焼き込み）: テンプレートごと無効化
+   * - add イベントで依存が見つからない場合、「参照されているがまだ存在しなかった
+   *   アセットが後から追加された」可能性があるため、全ページ HTML を無効化する
+   *   （コンパイルは伴わないためコストは実質ゼロ）
+   */
+  invalidateAssetDependents(filePath, event) {
+    const { cache, graph, imageGraph } = this.context
+
+    const renderAffected = imageGraph.getAffectedParents(filePath)
+    renderAffected.forEach(file => cache.invalidatePageHtml(file))
+
+    const templateAffected = graph.getAffectedParents(filePath)
+    templateAffected.forEach(file => {
+      cache.invalidatePugTemplate(file)
+      cache.invalidatePageHtml(file)
+    })
+
+    if (event === 'add' && renderAffected.length === 0 && templateAffected.length === 0) {
+      cache.clearPageHtml()
+    }
+  }
 
   reload() {
     if (this.context.server) {
