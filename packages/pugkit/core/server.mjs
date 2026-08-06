@@ -10,11 +10,50 @@ const SSE_PATH = '/__pugkit_sse'
 
 /**
  * HTMLに挿入するライブリロードクライアントスクリプト。
+ * エラーページでは scroll 無効版を使う: 保存済みの位置を消費せず温存し、
+ * エラーページ自身の位置（≒先頭）も保存しないことで、修正後のリロードで
+ * エラー前のスクロール位置に戻れるようにする。
  */
-const liveReloadScript = `<script>
+function createLiveReloadScript({ scroll = true } = {}) {
+  const restoreScroll = scroll
+    ? `try {
+    var saved = sessionStorage.getItem(scrollKey);
+    if (saved !== null) {
+      sessionStorage.removeItem(scrollKey);
+      // ブラウザ標準の復元（直前ドキュメントの位置＝エラーページ等で 0 になり得る）が
+      // load 後にこちらの復元を上書きするため、保存値があるときは手動復元に切り替える
+      if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+      var pos = saved.split(',');
+      var sx = parseInt(pos[0], 10) || 0;
+      var sy = parseInt(pos[1], 10) || 0;
+      window.scrollTo(sx, sy);
+      window.addEventListener('load', function() {
+        window.scrollTo(sx, sy);
+        setTimeout(function() {
+          window.scrollTo(sx, sy);
+          if ('scrollRestoration' in history) history.scrollRestoration = 'auto';
+        }, 50);
+      });
+    }
+  } catch (e) {}`
+    : ''
+  const saveScrollBody = scroll
+    ? `try {
+      sessionStorage.setItem(scrollKey, window.scrollX + ',' + window.scrollY);
+    } catch (e) {}`
+    : ''
+
+  return `<script>
 (function() {
+  // リロード前に保存したスクロール位置を復元する（編集のたびに先頭へ戻るのを防ぐ）
+  var scrollKey = '__pugkit_scroll:' + location.pathname;
+  ${restoreScroll}
+  function saveScroll() {
+    ${saveScrollBody}
+  }
   var es = new EventSource('${SSE_PATH}');
   es.addEventListener('reload', function() {
+    saveScroll();
     location.reload();
   });
   es.addEventListener('css-update', function() {
@@ -27,13 +66,20 @@ const liveReloadScript = `<script>
   });
   es.onerror = function() {
     es.close();
-    setTimeout(function() { location.reload(); }, 1000);
+    setTimeout(function() {
+      saveScroll();
+      location.reload();
+    }, 1000);
   };
   window.addEventListener('beforeunload', function() {
     es.close();
   });
 })();
 </script>`
+}
+
+const liveReloadScript = createLiveReloadScript()
+const errorPageScript = createLiveReloadScript({ scroll: false })
 
 /**
  * リクエストURLを src 内の Pug ソースに解決する。
@@ -147,7 +193,7 @@ function buildErrorPage(pugFile, error, paths) {
 <div class="file">${escapeHtml(rel)}</div>
 <pre>${escapeHtml(error.message)}</pre>
 <p class="hint">ファイルを修正して保存すると自動でリロードされます。</p>
-${liveReloadScript}
+${errorPageScript}
 </body>
 </html>`
 }
