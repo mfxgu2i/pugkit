@@ -4,6 +4,35 @@ import * as esbuild from 'esbuild'
 import { logger } from '../utils/logger.mjs'
 import { ensureDir } from '../utils/file.mjs'
 
+// dev では esbuild の incremental build コンテキストをエントリ構成ごとに使い回し、
+// 同じファイルの連続編集でモジュールグラフを再利用する（プロセス終了時に自動破棄される）
+let _devCtx = null
+let _devCtxKey = null
+// watcher のイベントは直列化されないため、dev ビルドをキューで直列化して
+// dispose 済み context への rebuild や context の二重生成を防ぐ
+let _devBuildQueue = Promise.resolve()
+
+function enqueueDevBuild(fn) {
+  const run = _devBuildQueue.then(fn, fn)
+  _devBuildQueue = run.catch(() => {})
+  return run
+}
+
+async function getDevContext(esbuildConfig) {
+  const key = [...esbuildConfig.entryPoints].sort().join('\n')
+  if (!_devCtx || _devCtxKey !== key) {
+    if (_devCtx) {
+      const old = _devCtx
+      _devCtx = null
+      _devCtxKey = null
+      await old.dispose()
+    }
+    _devCtx = await esbuild.context(esbuildConfig)
+    _devCtxKey = key
+  }
+  return _devCtx
+}
+
 /**
  * esbuild（TypeScript/JavaScript）ビルドタスク
  */
@@ -81,9 +110,11 @@ export async function scriptTask(context, options = {}) {
       esbuildConfig.drop = ['console', 'debugger']
     }
 
-    // 4. ビルド実行
+    // 4. ビルド実行（dev はコンテキスト再利用の増分ビルド、build は従来どおり単発実行）
     await ensureDir(paths.dist)
-    const result = await esbuild.build(esbuildConfig)
+    const result = isDevelopment
+      ? await enqueueDevBuild(async () => (await getDevContext(esbuildConfig)).rebuild())
+      : await esbuild.build(esbuildConfig)
 
     if (result.errors && result.errors.length > 0) {
       throw new Error(`esbuild errors: ${result.errors.length}`)
