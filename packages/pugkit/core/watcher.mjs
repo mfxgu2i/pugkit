@@ -44,7 +44,11 @@ export class FileWatcher {
         ignoreInitial: true,
         ignored: [/(^|[\/\\])\./, /node_modules/, /\.git/],
         persistent: true,
-        awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 100 }
+        // 書き込み安定待ちは検知レイテンシに直結する。テキストファイル中心の
+        // ソースでは 50ms の安定確認で十分（旧: 100ms 安定 + 100ms ポーリングで
+        // 実効 100〜200ms）。途中書き込みを読んでもエラーページ → 次の保存で
+        // 自動復帰する構造のためリスクは限定的
+        awaitWriteFinish: { stabilityThreshold: 50, pollInterval: 20 }
       })
       .on('change', filePath => this.handleChange(filePath))
       .on('add', filePath => this.handleAdd(filePath))
@@ -319,10 +323,10 @@ export class FileWatcher {
   }
 
   reload() {
+    // HTML はメモリ配信（リクエスト時ビルド）になり dist の書き込み完了を
+    // 待つ必要がなくなったため、即時にリロード通知を送る
     if (this.context.server) {
-      setTimeout(() => {
-        this.context.server.reload()
-      }, 100)
+      this.context.server.reload()
     }
   }
 
