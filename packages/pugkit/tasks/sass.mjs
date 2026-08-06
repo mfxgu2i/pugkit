@@ -2,12 +2,27 @@ import { glob } from 'glob'
 import { readFile, writeFile } from 'node:fs/promises'
 import { relative, resolve, basename, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as sass from 'sass'
+import * as sass from 'sass-embedded'
 import postcss from 'postcss'
 import autoprefixer from 'autoprefixer'
 import cssnano from 'cssnano'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
+
+// dev では Embedded Sass のコンパイラプロセスを常駐させ、
+// 再コンパイルごとのプロセス起動コストを避ける（プロセス終了時に自動破棄される）
+let _devCompilerPromise = null
+
+function getDevCompiler() {
+  if (!_devCompilerPromise) {
+    _devCompilerPromise = sass.initAsyncCompiler()
+    // 初期化失敗を永続キャッシュせず、次回の呼び出しで再試行できるようにする
+    _devCompilerPromise.catch(() => {
+      _devCompilerPromise = null
+    })
+  }
+  return _devCompilerPromise
+}
 
 /**
  * Sassビルドタスク
@@ -60,8 +75,14 @@ export async function sassTask(context, options = {}) {
 
   logger.info('sass', `Building ${filesToBuild.length} file(s)`)
 
-  // 3. 並列コンパイル
-  await Promise.all(filesToBuild.map(file => compileSassFile(file, context, isDevBuild)))
+  // 3. 並列コンパイル（dev は常駐コンパイラを再利用、build は使い捨てで確実に破棄）
+  const compiler = isDevelopment ? await getDevCompiler() : await sass.initAsyncCompiler()
+
+  try {
+    await Promise.all(filesToBuild.map(file => compileSassFile(file, context, isDevBuild, compiler)))
+  } finally {
+    if (!isDevelopment) await compiler.dispose()
+  }
 
   logger.success('sass', `Built ${filesToBuild.length} file(s)`)
 }
@@ -69,12 +90,12 @@ export async function sassTask(context, options = {}) {
 /**
  * 個別Sassファイルのコンパイル
  */
-async function compileSassFile(filePath, context, isDevBuild) {
+async function compileSassFile(filePath, context, isDevBuild, compiler) {
   const { paths, config, isProduction, sassGraph } = context
 
   try {
     // Sassコンパイル
-    const result = sass.compile(filePath, {
+    const result = await compiler.compileAsync(filePath, {
       silenceDeprecations: ['legacy-js-api'],
       style: isDevBuild ? 'expanded' : 'compressed',
       loadPaths: [resolve(paths.root, 'node_modules')],
