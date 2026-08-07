@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { resolve } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import sharp from 'sharp'
-import { createImageInfoHelper } from '../../transform/image-size.mjs'
+import { clearImageSizeCache, createImageInfoHelper } from '../../transform/image-size.mjs'
 import { createTempProject } from '../helpers/project.mjs'
 
 // リポジトリ内の固定パスに書くと、テストを並列に走らせたとき互いのフィクスチャを消し合う
@@ -220,5 +220,43 @@ describe('onAccess コールバック', () => {
   it('onAccess なしで呼んでもエラーにならない', () => {
     const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
     expect(() => imageInfo('/images/hero.jpg')).not.toThrow()
+  })
+})
+
+describe('寸法のキャッシュ', () => {
+  /**
+   * 同じ画像は複数ページから参照されるので、読み取り結果をセッション中は使い回す。
+   * watcher は画像が変わったときに clearImageSizeCache() を呼ぶ責務を持つ。
+   * ここが効いていないと dev の HTML に古い width/height が焼き込まれたままになる。
+   */
+  const infoOf = src => createImageInfoHelper(mockPugFile, paths, null, compressConfig)(src)
+
+  beforeEach(() => clearImageSizeCache())
+
+  it('差し替えても、キャッシュを消すまでは前の寸法を返す', async () => {
+    expect(infoOf('/images/hero.jpg').width).toBe(800)
+
+    await createJpeg(resolve(imagesDir, 'hero.jpg'), 320, 240)
+
+    expect(infoOf('/images/hero.jpg').width).toBe(800)
+  })
+
+  it('キャッシュを消すと新しい寸法を返す', async () => {
+    infoOf('/images/hero.jpg')
+    await createJpeg(resolve(imagesDir, 'hero.jpg'), 320, 240)
+
+    clearImageSizeCache()
+
+    expect(infoOf('/images/hero.jpg')).toMatchObject({ width: 320, height: 240 })
+  })
+
+  it('retina・variant の寸法もキャッシュを消せば追随する', async () => {
+    createImageInfoHelper(mockPugFile, paths, null, compressConfig)('/images/responsive.jpg')
+    await createJpeg(resolve(imagesDir, 'responsive_sp.jpg'), 100, 80)
+
+    clearImageSizeCache()
+
+    const info = createImageInfoHelper(mockPugFile, paths, null, compressConfig)('/images/responsive.jpg')
+    expect(info.variant).toMatchObject({ width: 100, height: 80 })
   })
 })

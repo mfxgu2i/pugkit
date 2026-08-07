@@ -2,18 +2,23 @@ import { readFileSync, existsSync } from 'node:fs'
 import { resolve, relative, dirname, extname } from 'node:path'
 import sizeOf from 'image-size'
 
-// ビルドセッション内で画像ファイルの内容をキャッシュし、同じファイルの重複読み込みを防ぐ
-const _imageBufferCache = new Map()
+// 同じ画像は複数ページから参照されるので、読み取り結果をセッション中は使い回す。
+// 保持するのは寸法だけで、画像のバイト列は残さない
+// （読むのはヘッダだけなのに全体を抱えると、写真の多いサイトで際限なく増える）
+const _imageSizeCache = new Map()
 
-function readImageCached(filePath) {
-  if (_imageBufferCache.has(filePath)) return _imageBufferCache.get(filePath)
-  const buf = readFileSync(filePath)
-  _imageBufferCache.set(filePath, buf)
-  return buf
+function readImageSizeCached(filePath) {
+  const cached = _imageSizeCache.get(filePath)
+  if (cached) return cached
+
+  const { width, height, type } = sizeOf(readFileSync(filePath))
+  const size = { width, height, type }
+  _imageSizeCache.set(filePath, size)
+  return size
 }
 
 export function clearImageSizeCache() {
-  _imageBufferCache.clear()
+  _imageSizeCache.clear()
 }
 
 /**
@@ -66,7 +71,7 @@ export function createImageInfoHelper(filePath, paths, logger, config, { onAcces
       }
 
       onAccess?.(foundPath)
-      const { width, height, type: format } = sizeOf(readImageCached(foundPath))
+      const { width, height, type: format } = readImageSizeCached(foundPath)
 
       const ext = extname(src)
       const isSvg = ext.toLowerCase() === '.svg'
@@ -81,7 +86,7 @@ export function createImageInfoHelper(filePath, paths, logger, config, { onAcces
         if (!siblingPath) return null
 
         onAccess?.(siblingPath)
-        const sibling = sizeOf(readImageCached(siblingPath))
+        const sibling = readImageSizeCached(siblingPath)
 
         return {
           src: convertedExt ? `${base}${suffix}${convertedExt}` : siblingSrc,
