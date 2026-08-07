@@ -54,6 +54,44 @@ function cachePage(page) {
   context.cache.setPageHtml(page, '<html></html>')
 }
 
+describe('ファイルの分類', () => {
+  // 判定の順序そのものが仕様。順序が入れ替わると、
+  // 対象のはずのファイルが無視されたり、その逆が起きる
+  it.each([
+    ['index.pug', 'pug'],
+    ['assets/css/style.scss', 'sass'],
+    ['assets/js/main.js', 'script'],
+    ['assets/js/types.d.ts', null],
+    ['assets/icons/arrow.svg', 'sprite'],
+    ['assets/logo.svg', 'svg'],
+    ['assets/img/hero.jpg', 'image'],
+    ['assets/img/hero.PNG', 'image'],
+    ['README.md', null]
+  ])('%s は %s', (relativePath, expected) => {
+    expect(watcher.classify(at(relativePath))).toBe(expected)
+  })
+
+  it('public 配下は拡張子によらず public として扱う', () => {
+    expect(watcher.classify(`${context.paths.public}/ogp.jpg`)).toBe('public')
+    expect(watcher.classify(`${context.paths.public}/index.html`)).toBe('public')
+  })
+
+  it('「_」始まりのアセットは対象外', () => {
+    expect(watcher.classify(at('assets/img/_wip/draft.png'))).toBeNull()
+    expect(watcher.classify(at('_drafts/logo.svg'))).toBeNull()
+  })
+
+  it('「_」始まりでもスプライト対象のアイコンは拾う', () => {
+    // 判定順が入れ替わると、_ を含むパス配下の icons が無視される
+    expect(watcher.classify(at('_shared/icons/arrow.svg'))).toBe('sprite')
+  })
+
+  it('「_」始まりでも Pug とスタイルは拾う（パーシャルとして依存解決に必要）', () => {
+    expect(watcher.classify(at('_partials/_layout.pug'))).toBe('pug')
+    expect(watcher.classify(at('assets/css/_vars.scss'))).toBe('sass')
+  })
+})
+
 describe('Pug の変更', () => {
   it('ページ自身のキャッシュを無効化する', () => {
     const page = at('index.pug')
