@@ -10,6 +10,8 @@ import { clearImageSizeCache } from '../transform/image-size.mjs'
 // 他は実ファイルとして配信するため、出力先が空の状態でも表示できるよう起動時に作る
 const INITIAL_DEV_TASKS = ['sass', 'script', 'image', 'svg', 'sprite', 'copy']
 
+const IMAGE_EXT_RE = /\.(jpg|jpeg|png|gif)$/i
+
 const DEFAULT_PORT = 5555
 const DEFAULT_HOST = 'localhost'
 
@@ -76,45 +78,52 @@ export class FileWatcher {
         // 自動復帰する構造のためリスクは限定的
         awaitWriteFinish: { stabilityThreshold: 50, pollInterval: 20 }
       })
-      .on('change', filePath => this.handleChange(filePath))
-      .on('add', filePath => this.handleAdd(filePath))
-      .on('unlink', filePath => this.handleUnlink(filePath))
+      .on('change', filePath => this.handle('change', filePath))
+      .on('add', filePath => this.handle('add', filePath))
+      .on('unlink', filePath => this.handle('unlink', filePath))
 
     logger.info('watch', 'File watching started')
   }
 
-  // ---- ルーティング ----
-  handleChange(filePath) {
-    if (this.isPublic(filePath)) return this.onPublicChange(filePath, 'change')
-    if (filePath.endsWith('.pug')) return this.onPugChange(filePath)
-    if (filePath.endsWith('.scss')) return this.onSassChange(filePath)
-    if (this.isScript(filePath)) return this.onScriptChange(filePath)
-    if (filePath.endsWith('.svg') && this.isIcons(filePath)) return this.onSpriteChange(filePath, 'change')
-    if (this.isHiddenAsset(filePath)) return
-    if (filePath.endsWith('.svg')) return this.onSvgChange(filePath, 'change')
-    if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageChange(filePath, 'change')
+  /**
+   * 変更されたファイルの種別を決める。
+   *
+   * 判定の順序そのものが仕様。特に「_」始まりの除外は、
+   * スプライト対象の判定より後・通常アセットより前でなければならない。
+   * 対象外なら null。
+   */
+  classify(filePath) {
+    if (this.isPublic(filePath)) return 'public'
+    if (filePath.endsWith('.pug')) return 'pug'
+    if (filePath.endsWith('.scss')) return 'sass'
+    if (this.isScript(filePath)) return 'script'
+    if (filePath.endsWith('.svg') && this.isIcons(filePath)) return 'sprite'
+    if (this.isHiddenAsset(filePath)) return null
+    if (filePath.endsWith('.svg')) return 'svg'
+    if (IMAGE_EXT_RE.test(filePath)) return 'image'
+    return null
   }
 
-  handleAdd(filePath) {
-    if (this.isPublic(filePath)) return this.onPublicChange(filePath, 'add')
-    if (filePath.endsWith('.pug')) return this.onPugChange(filePath)
-    if (filePath.endsWith('.scss')) return this.onSassChange(filePath)
-    if (this.isScript(filePath)) return this.onScriptChange(filePath)
-    if (filePath.endsWith('.svg') && this.isIcons(filePath)) return this.onSpriteChange(filePath, 'add')
-    if (this.isHiddenAsset(filePath)) return
-    if (filePath.endsWith('.svg')) return this.onSvgChange(filePath, 'add')
-    if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageChange(filePath, 'add')
-  }
+  /**
+   * 種別ごとの反応。change と add は同じ扱いで、イベント名だけ渡す
+   * （画像の add は「参照先が後から置かれた」ケースの判定に使う）。
+   */
+  handle(event, filePath) {
+    const kind = this.classify(filePath)
+    if (!kind) return
 
-  handleUnlink(filePath) {
-    if (this.isPublic(filePath)) return this.onPublicUnlink(filePath)
-    if (filePath.endsWith('.pug')) return this.onPugUnlink(filePath)
-    if (filePath.endsWith('.scss')) return this.onSassUnlink(filePath)
-    if (this.isScript(filePath)) return this.onScriptUnlink(filePath)
-    if (filePath.endsWith('.svg') && this.isIcons(filePath)) return this.onSpriteChange(filePath, 'unlink')
-    if (this.isHiddenAsset(filePath)) return
-    if (filePath.endsWith('.svg')) return this.onSvgUnlink(filePath)
-    if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageUnlink(filePath)
+    const handlers = {
+      public: { change: () => this.onPublicChange(filePath, event), unlink: () => this.onPublicUnlink(filePath) },
+      pug: { change: () => this.onPugChange(filePath), unlink: () => this.onPugUnlink(filePath) },
+      sass: { change: () => this.onSassChange(filePath), unlink: () => this.onSassUnlink(filePath) },
+      script: { change: () => this.onScriptChange(filePath), unlink: () => this.onScriptUnlink(filePath) },
+      // スプライトは icons ディレクトリ全体から1ファイルを作るので削除も再生成でよい
+      sprite: { change: () => this.onSpriteChange(filePath, event), unlink: () => this.onSpriteChange(filePath, event) },
+      svg: { change: () => this.onSvgChange(filePath, event), unlink: () => this.onSvgUnlink(filePath) },
+      image: { change: () => this.onImageChange(filePath, event), unlink: () => this.onImageUnlink(filePath) }
+    }
+
+    return handlers[kind][event === 'unlink' ? 'unlink' : 'change']()
   }
 
   /**
