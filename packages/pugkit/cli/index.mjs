@@ -24,11 +24,20 @@ cli
   .command('[root]', 'Start development mode with file watching')
   .alias('dev')
   .alias('watch')
+  .option('--port <port>', 'Override server.port in config')
+  .option('--host <host>', 'Override server.host in config')
   .action(async (root, options) => {
     try {
-      await develop({ root: root || process.cwd() })
+      let port
+      if (options.port !== undefined) {
+        port = Number(options.port)
+        if (!Number.isInteger(port) || port < 0 || port > 65535) {
+          throw new Error(`--port には 0〜65535 の整数を指定してください: ${options.port}`)
+        }
+      }
+      await develop({ root: root || process.cwd(), port, host: options.host })
     } catch (err) {
-      console.error(err)
+      console.error(err.message ?? err)
       process.exit(1)
     }
   })
