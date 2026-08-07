@@ -1,8 +1,9 @@
 import { glob } from 'glob'
 import { resolve, relative, dirname, basename } from 'node:path'
 import * as esbuild from 'esbuild'
+import { writeFile } from 'node:fs/promises'
 import { logger } from '../utils/logger.mjs'
-import { ensureDir } from '../utils/file.mjs'
+import { ensureDir, ensureFileDir } from '../utils/file.mjs'
 
 // dev では esbuild の incremental build コンテキストをエントリ構成ごとに使い回し、
 // 同じファイルの連続編集でモジュールグラフを再利用する（プロセス終了時に自動破棄される）
@@ -91,7 +92,9 @@ export async function scriptTask(context, options = {}) {
       target: 'es2022',
       platform: 'browser',
       splitting: false,
-      write: true,
+      // dev は自前で書き出す。esbuild に任せるとインクリメンタルビルドの失敗時に
+      // 出力ファイルが削除され、構文エラーの最中だけ JS が 404 になってしまう
+      write: !isDevelopment,
       sourcemap: isDevBuild,
       minify: false,
       metafile: true,
@@ -118,6 +121,14 @@ export async function scriptTask(context, options = {}) {
 
     if (result.errors && result.errors.length > 0) {
       throw new Error(`esbuild errors: ${result.errors.length}`)
+    }
+
+    // dev のみ: ビルドが成功したものだけを書き出す（失敗時は前回の出力を残す）
+    if (isDevelopment && result.outputFiles) {
+      for (const file of result.outputFiles) {
+        await ensureFileDir(file.path)
+        await writeFile(file.path, file.contents)
+      }
     }
 
     // 5. 依存グラフを更新（metafile から依存関係を構築）
