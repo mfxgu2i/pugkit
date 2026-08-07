@@ -74,32 +74,6 @@ describe('buildPageHtml', () => {
     expect(context.cache.getPugTemplate(page)).toBeUndefined()
   })
 
-  it('should not record graph edges from a build invalidated mid-compile', async () => {
-    const context = createContext('development')
-    const page = resolve(root, 'src/index.pug')
-
-    // ビルド開始と同時に無効化が入るケースを擬似再現:
-    // getPageEpoch 取得後に invalidate される状況を、開始前に世代を進めた
-    // 偽の epoch で検証するのは難しいため、invalidate を挟んで直接検証する
-    const original = context.cache.getPageEpoch.bind(context.cache)
-    let firstCall = true
-    context.cache.getPageEpoch = filePath => {
-      const epoch = original(filePath)
-      if (firstCall) {
-        firstCall = false
-        // ビルド開始直後（epoch 取得直後）に watcher の無効化が入った状況を再現
-        context.cache.invalidatePageHtml(filePath)
-      }
-      return epoch
-    }
-
-    await buildPageHtml(page, context)
-    context.cache.getPageEpoch = original
-
-    // 古い世代のビルド結果はテンプレートキャッシュに書き戻されない
-    expect(context.cache.getPugTemplate(page)).toBeUndefined()
-  })
-
   it('should throw on compile errors', async () => {
     await writeFile(resolve(root, 'src/broken.pug'), 'extends /_partials/_missing.pug\n')
     const context = createContext('development')

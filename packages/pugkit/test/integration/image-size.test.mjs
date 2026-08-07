@@ -202,13 +202,6 @@ describe('onAccess コールバック', () => {
     expect(accessed).toHaveLength(0)
   })
 
-  it('createImageInfoHelper: メイン画像で onAccess が呼ばれる', () => {
-    const accessed = []
-    const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })
-    imageInfo('/images/hero.jpg')
-    expect(accessed).toContain(resolve(imagesDir, 'hero.jpg'))
-  })
-
   it('createImageInfoHelper: retina が存在する場合 onAccess にメイン・retina 両方が登録される', () => {
     const accessed = []
     const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })

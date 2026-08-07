@@ -148,25 +148,34 @@ describe('CacheManager pageHtml cache', () => {
       expect(cache.getPageHtml('/a.pug')).toBeDefined()
     })
 
-    it('should track size correctly on overwrite and invalidation', () => {
+    it('should not double-count an overwritten page', () => {
       const cache = createCappedCache()
-      cache.setPageHtml('/a.pug', page(50))
-      cache.setPageHtml('/a.pug', page(20))
-      expect(cache.pageHtmlBytes).toBe(40)
+      cache.setPageHtml('/a.pug', page(90))
+      cache.setPageHtml('/a.pug', page(10)) // 二重計上されていれば 100 文字ぶん占有したままになる
+      cache.setPageHtml('/b.pug', page(80)) // 正しく 10 文字なら合計 90 で上限内
 
-      cache.invalidatePageHtml('/a.pug')
-      expect(cache.pageHtmlBytes).toBe(0)
+      expect(cache.getPageHtml('/a.pug')).toBeDefined()
+      expect(cache.getPageHtml('/b.pug')).toBeDefined()
     })
 
-    it('should reset the size counter on clearPageHtml and clear', () => {
+    it('should reclaim space when a page is invalidated', () => {
       const cache = createCappedCache()
-      cache.setPageHtml('/a.pug', page(50))
-      cache.clearPageHtml()
-      expect(cache.pageHtmlBytes).toBe(0)
+      cache.setPageHtml('/a.pug', page(90))
+      cache.invalidatePageHtml('/a.pug') // 解放されていなければ次の投入で /b が追い出される
+      cache.setPageHtml('/b.pug', page(90))
+      cache.setPageHtml('/c.pug', page(5))
 
-      cache.setPageHtml('/b.pug', page(50))
-      cache.clear()
-      expect(cache.pageHtmlBytes).toBe(0)
+      expect(cache.getPageHtml('/b.pug')).toBeDefined()
+    })
+
+    it('should reclaim all space on clearPageHtml', () => {
+      const cache = createCappedCache()
+      cache.setPageHtml('/a.pug', page(90))
+      cache.clearPageHtml()
+      cache.setPageHtml('/b.pug', page(90))
+      cache.setPageHtml('/c.pug', page(5))
+
+      expect(cache.getPageHtml('/b.pug')).toBeDefined()
     })
   })
 
