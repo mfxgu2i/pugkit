@@ -468,12 +468,15 @@ export async function serverTask(context, options = {}) {
       const abs = path.resolve(p)
       return abs === root || abs.startsWith(root + path.sep)
     }
+    // 候補順は sirv・resolvePugSource と揃える（フラットファイル優先、
+    // 末尾スラッシュは先に除去して同順）。ここだけ順序が違うと、同じ形の URL でも
+    // Pug ページと public 由来の HTML で別の階層のファイルが選ばれてしまう
+    const base = decoded !== '/' ? decoded.replace(/\/+$/, '') : decoded
     const htmlCandidatesIn = root =>
-      [
-        path.join(root, decoded === '/' ? 'index.html' : decoded.replace(/\/$/, '') + '/index.html'),
-        path.join(root, decoded === '/' ? 'index.html' : decoded + '.html'),
-        path.join(root, decoded)
-      ].filter(p => p.endsWith('.html') && isInside(p, root) && existsSync(p))
+      (base === '/'
+        ? [path.join(root, 'index.html')]
+        : [path.join(root, base), path.join(root, `${base}.html`), path.join(root, base, 'index.html')]
+      ).filter(p => p.endsWith('.html') && isInside(p, root) && existsSync(p))
 
     const htmlFile = htmlCandidatesIn(serveRoot)[0]
 

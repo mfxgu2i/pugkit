@@ -24,6 +24,7 @@ async function startDevServer(files = minimalProjectFiles()) {
   return {
     project,
     context,
+    builder,
     get: (path, options) => fetch(`http://localhost:${port}${path}`, options)
   }
 }
@@ -159,6 +160,52 @@ describe('ビルドエラー', () => {
 
     const html = await (await server.get('/broken.html')).text()
     expect(html).toContain('__pugkit_sse')
+  })
+})
+
+describe('URL の解決順', () => {
+  /**
+   * 同じ URL 形に対して、Pug ページ・public 由来の HTML・sirv の静的配信で
+   * 解決順が食い違ってはいけない。「dev で見えるものと本番で見えるものが違う」
+   * という形の事故になる。
+   *
+   * 基準は sirv の解決順（フラットファイル優先。末尾スラッシュは除去して同順）。
+   * resolvePugSource もこれに合わせてある。
+   */
+  const bothShapes = () => ({
+    ...minimalProjectFiles(),
+    'public/dir.html': '<html><body>FLAT</body></html>\n',
+    'public/dir/index.html': '<html><body>DIRINDEX</body></html>\n',
+    'src/page.pug': 'doctype html\nhtml\n  body\n    p PUG-FLAT\n',
+    'src/page/index.pug': 'doctype html\nhtml\n  body\n    p PUG-DIRINDEX\n'
+  })
+
+  const startWithPublic = async () => {
+    const server = await startDevServer(bothShapes())
+    await server.builder.runTask('copy')
+    return server
+  }
+
+  const bodyOf = async (server, url) => (await (await server.get(url)).text()).match(/FLAT|DIRINDEX|PUG-[A-Z]+/)?.[0]
+
+  it.each([['/dir'], ['/dir/']])('%s はフラットファイルを優先する', async url => {
+    const server = await startWithPublic()
+
+    expect(await bodyOf(server, url)).toBe('FLAT')
+  })
+
+  it('拡張子つきで指定すればそのファイルを返す', async () => {
+    const server = await startWithPublic()
+
+    expect(await bodyOf(server, '/dir.html')).toBe('FLAT')
+  })
+
+  it('Pug ページと非Pug HTML で解決順が一致する', async () => {
+    const server = await startWithPublic()
+
+    // どちらも「ディレクトリの index」ではなく「フラットなファイル」を選ぶ
+    expect(await bodyOf(server, '/page')).toBe('PUG-FLAT')
+    expect(await bodyOf(server, '/dir')).toBe('FLAT')
   })
 })
 
