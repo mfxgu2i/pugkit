@@ -69,18 +69,55 @@ describe('DependencyGraph', () => {
       expect(graph.getAffectedParents('/_layout.pug')).toEqual(['/b.pug'])
     })
 
-    it('依存として消すと親側の登録も消える', () => {
+    it('他のファイルがこのファイルに依存している関係は消さない', () => {
       const graph = new DependencyGraph()
       graph.addDependency('/page.pug', '/_layout.pug')
 
-      // パーシャル自身が削除されたケース
+      // /_layout.pug 自身の依存を登録し直すだけ。
+      // 「page が layout に依存している」は page 側の情報なので残す
       graph.clearDependencies('/_layout.pug')
 
+      expect(graph.getAffectedParents('/_layout.pug')).toEqual(['/page.pug'])
+    })
+  })
+
+  describe('removeFile', () => {
+    it('ファイル削除時は双方向の依存を消す', () => {
+      const graph = new DependencyGraph()
+      graph.addDependency('/page.pug', '/_layout.pug')
+
+      graph.removeFile('/_layout.pug')
+
       expect(graph.getAffectedParents('/_layout.pug')).toEqual([])
-      // 再登録しても古い辺が復活しない
-      graph.addDependency('/page.pug', '/_other.pug')
+      // 親の依存一覧からも消える（残っていると同名で作り直したとき古い辺が復活する）
+      expect(graph.edges.get('/page.pug')?.has('/_layout.pug')).toBeFalsy()
+    })
+
+    it('自分が持つ依存も消す', () => {
+      const graph = new DependencyGraph()
+      graph.addDependency('/page.pug', '/_layout.pug')
+
+      graph.removeFile('/page.pug')
+
       expect(graph.getAffectedParents('/_layout.pug')).toEqual([])
     })
+  })
+
+  // 相互に依存する2ファイルの依存を順に登録し直すケース。
+  // 「依存としての親をクリア」が直前に登録した辺を巻き添えにすると、
+  // 変更しても再ビルドされないファイルが出る
+  it('あるファイルの依存を登録し直しても、他のファイルの依存は壊さない', () => {
+    const graph = new DependencyGraph()
+
+    graph.clearDependencies('/a.js')
+    graph.addDependency('/a.js', '/b.js')
+
+    graph.clearDependencies('/b.js')
+    graph.addDependency('/b.js', '/a.js')
+
+    // 相互依存なので互いが影響を受ける。片方でも欠けると変更が反映されない
+    expect(graph.getAffectedParents('/b.js')).toContain('/a.js')
+    expect(graph.getAffectedParents('/a.js')).toContain('/b.js')
   })
 
   it('clear ですべての依存が消える', () => {

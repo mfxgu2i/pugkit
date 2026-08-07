@@ -185,7 +185,7 @@ export class FileWatcher {
     const { paths, cache, graph, imageGraph } = this.context
     const relPath = relative(paths.src, filePath)
 
-    // clearDependencies の前に影響親を取得する（後だと逆引きが消えて取得できない）
+    // removeFile の前に影響親を取得する（後だと逆引きが消えて取得できない）
     const affected = graph.getAffectedParents(filePath)
     for (const file of affected) {
       cache.invalidatePugTemplate(file)
@@ -194,8 +194,8 @@ export class FileWatcher {
 
     cache.invalidatePugTemplate(filePath)
     cache.invalidatePageHtml(filePath)
-    graph.clearDependencies(filePath)
-    imageGraph.clearDependencies(filePath)
+    graph.removeFile(filePath)
+    imageGraph.removeFile(filePath)
 
     if (basename(filePath).startsWith('_')) {
       logger.info('unlink', relPath)
@@ -223,7 +223,7 @@ export class FileWatcher {
   async onSassUnlink(filePath) {
     const { paths, sassGraph } = this.context
     const relPath = relative(paths.src, filePath)
-    sassGraph.clearDependencies(filePath)
+    sassGraph.removeFile(filePath)
     if (basename(filePath).startsWith('_')) {
       logger.info('unlink', relPath)
       return
@@ -248,7 +248,7 @@ export class FileWatcher {
   async onScriptUnlink(filePath) {
     const { paths, scriptGraph } = this.context
     const relPath = relative(paths.src, filePath)
-    scriptGraph.clearDependencies(filePath)
+    scriptGraph.removeFile(filePath)
     if (basename(filePath).startsWith('_')) {
       logger.info('unlink', relPath)
       return
@@ -295,7 +295,7 @@ export class FileWatcher {
     clearImageSizeCache()
     const relPath = relative(this.context.paths.src, filePath)
     this.invalidateAssetDependents(filePath)
-    this.context.imageGraph.clearDependencies(filePath)
+    this.context.imageGraph.removeFile(filePath)
     const distPath = resolve(this.context.paths.dist, relPath)
     await this.deleteDistFile(distPath, relPath)
   }
@@ -323,7 +323,7 @@ export class FileWatcher {
     const relPath = relative(paths.src, filePath)
 
     const affected = imageGraph.getAffectedParents(filePath)
-    imageGraph.clearDependencies(filePath)
+    imageGraph.removeFile(filePath)
     affected.forEach(file => cache.invalidatePageHtml(file))
 
     const optimization = config.build.imageOptimization
@@ -360,7 +360,7 @@ export class FileWatcher {
     if (this.isImageAsset(filePath)) {
       clearImageSizeCache()
       this.invalidateAssetDependents(filePath)
-      this.context.imageGraph.clearDependencies(filePath)
+      this.context.imageGraph.removeFile(filePath)
     }
 
     const distPath = resolve(this.context.paths.dist, relPath)
