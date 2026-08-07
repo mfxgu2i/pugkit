@@ -33,7 +33,6 @@ $ touch ./src/index.pug
 | `pugkit`        | 開発モード（Ctrl + C で停止）  |
 | `pugkit build`  | 本番ビルド                     |
 | `pugkit sprite` | SVGスプライト生成              |
-| `pugkit bench`  | 画像サイズベンチマーク（全体） |
 
 ## Directory Structure
 
@@ -109,10 +108,6 @@ export default defineConfig({
 | `build.imageInfo.artDirectionSuffix` | アートディレクション用画像のサフィックス（`_sp`, `_tb`, `_pc` など）                                  | `string`                                        | `'_sp'`       |
 | `build.imageOverrides`               | 特定画像に個別のSharpオプションを適用（グローバルオプションに上書きマージ）                           | `Record<string, object>`                        | `{}`          |
 | `build.html`                         | HTML整形オプション（[js-beautify html options](https://github.com/beautify-web/js-beautify#options)） | `object`                                        | see below     |
-| `benchmark.image.threshold`          | `pugkit bench` で警告を出すファイルサイズ上限                                                         | `string` (`'200KB'` / `'1MB'` など)             | `'300KB'`     |
-| `benchmark.image.qualityMin`         | シミュレーションの quality 最小値                                                                     | `number`                                        | `40`          |
-| `benchmark.image.qualityMax`         | シミュレーションの quality 最大値                                                                     | `number`                                        | `90`          |
-| `benchmark.image.qualityStep`        | シミュレーションの quality ステップ幅                                                                 | `number`                                        | `10`          |
 
 ## Features
 
@@ -236,58 +231,6 @@ build: {
     'assets/img/bg-hero.jpg': { quality: 100 },
   }
 }
-```
-
-### Image Benchmark
-
-`pugkit bench` は `src/` 配下の画像を現在の `imageOptimization` 設定でシミュレートし、`benchmark.image.threshold` を超えるファイルを検出・報告します。ビルドは行わずメモリ上で処理するため、実ファイルへの影響はありません。
-
-```sh
-# src/ 全体をスキャン
-pugkit bench
-
-# ディレクトリ指定
-pugkit bench src/assets/img/top/
-
-# 単一ファイル指定
-pugkit bench src/assets/img/hero.jpg
-```
-
-閾値を超えた画像に対して、qualityを変化させたシミュレーション結果と、閾値以内で品質を最大限維持できるqualityの推奨値を表示します。
-
-```
-⚠ 1 image(s) exceed threshold (300KB) with current config
-──────────────────────────┬─────────┬──────────
- file                     │ format  │     size
-──────────────────────────┼─────────┼──────────
- assets/img/top/kv@2x.jpg │ webp    │   490 KB
-──────────────────────────┴─────────┴──────────
-
-Simulation: assets/img/top/kv@2x.jpg  (original: 2.62 MB  2800×1576)
- format: webp  (effort / other options follow config)
-─────────┬───────────┬───────────┬────────
- quality │      size │     ratio │ budget
-─────────┼───────────┼───────────┼────────
-      90 │    490 KB │      -82% │ ⚠  ← current
-      40 │    132 KB │      -95% │ ✔
-      80 │    268 KB │      -90% │ ✔
-─────────┴───────────┴───────────┴────────
-★ Recommended: quality 80  →  268 KB (-90%)
-```
-
-`pugkit.config.mjs` で閾値やシミュレーション範囲を設定できます。
-
-```js
-export default defineConfig({
-  benchmark: {
-    image: {
-      threshold: '300KB', // 警告を出す上限サイズ
-      qualityMin: 50, // シミュレーション quality の最小値
-      qualityMax: 90, // シミュレーション quality の最大値
-      qualityStep: 10 // quality のステップ幅
-    }
-  }
-})
 ```
 
 ### HTML Formatting
