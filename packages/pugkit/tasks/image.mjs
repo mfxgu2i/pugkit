@@ -22,7 +22,7 @@ export async function imageTask(context, options = {}) {
   // 特定のファイルが指定されている場合（watch時）
   if (options.files && Array.isArray(options.files)) {
     logger.info('image', `Processing ${options.files.length} image(s)`)
-    await Promise.all(options.files.map(file => processImage(file, context, optimization, isProduction)))
+    await Promise.all(options.files.map(file => processImage(file, context, optimization)))
     logger.success('image', `Processed ${options.files.length} image(s)`)
     return
   }
@@ -55,7 +55,7 @@ export async function imageTask(context, options = {}) {
   }
 
   // 並列処理
-  await Promise.all(images.map(file => processImage(file, context, optimization, isProduction)))
+  await Promise.all(images.map(file => processImage(file, context, optimization)))
 
   logger.success('image', `Processed ${images.length} image(s)`)
 }
@@ -63,7 +63,7 @@ export async function imageTask(context, options = {}) {
 /**
  * 画像を処理（最適化）
  */
-async function processImage(filePath, context, optimization, isProduction, retries = 3, retryDelay = 200) {
+async function processImage(filePath, context, optimization, retries = 3, retryDelay = 200) {
   const { paths, config } = context
   const ext = extname(filePath).toLowerCase()
   const relativePath = relative(paths.src, filePath)
@@ -115,7 +115,7 @@ async function processImage(filePath, context, optimization, isProduction, retri
   } catch (error) {
     if (retries > 0 && error.message.includes('unsupported image format')) {
       await new Promise(resolve => setTimeout(resolve, retryDelay))
-      return processImage(filePath, context, optimization, isProduction, retries - 1, retryDelay * 2)
+      return processImage(filePath, context, optimization, retries - 1, retryDelay * 2)
     }
     logger.error('image', `Failed to process ${relativePath}: ${error.message}`)
   }

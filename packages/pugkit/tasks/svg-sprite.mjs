@@ -1,6 +1,6 @@
 import { glob } from 'glob'
 import { readFile, writeFile } from 'node:fs/promises'
-import { resolve, dirname, basename, relative } from 'node:path'
+import { resolve, dirname, basename } from 'node:path'
 import { optimize } from 'svgo'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
@@ -36,7 +36,7 @@ const SPRITE_SVGO_CONFIG = {
  * SVGスプライト生成タスク
  */
 export async function spriteTask(context, options = {}) {
-  const { paths, isProduction } = context
+  const { paths } = context
 
   // iconsディレクトリを検索
   const iconDirs = await glob('**/icons', {

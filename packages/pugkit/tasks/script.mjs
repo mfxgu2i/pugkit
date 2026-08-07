@@ -1,5 +1,5 @@
 import { glob } from 'glob'
-import { resolve, relative, dirname, basename } from 'node:path'
+import { resolve, basename } from 'node:path'
 import * as esbuild from 'esbuild'
 import { writeFile } from 'node:fs/promises'
 import { logger } from '../utils/logger.mjs'

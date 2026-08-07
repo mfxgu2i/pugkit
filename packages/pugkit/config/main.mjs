@@ -94,14 +94,3 @@ export async function loadConfig(root = process.cwd(), inlineConfig = {}) {
   validateConfig(config)
   return config
 }
-
-export async function resolveConfig(inlineConfig = {}) {
-  const root = inlineConfig.root || process.cwd()
-  const config = await loadConfig(root)
-
-  if (inlineConfig.server) {
-    Object.assign(config.server, inlineConfig.server)
-  }
-
-  return config
-}

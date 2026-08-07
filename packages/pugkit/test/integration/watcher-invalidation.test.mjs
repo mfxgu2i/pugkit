@@ -26,7 +26,6 @@ beforeEach(async () => {
     imageGraph: new DependencyGraph(),
     sassGraph: new DependencyGraph(),
     scriptGraph: new DependencyGraph(),
-    taskRegistry: {},
     server: createServerSpy(),
     isDevelopment: true,
     isProduction: false

@@ -1,6 +1,6 @@
 import { glob } from 'glob'
-import { readFile, writeFile, copyFile } from 'node:fs/promises'
-import { relative, resolve, basename } from 'node:path'
+import { copyFile } from 'node:fs/promises'
+import { relative, resolve } from 'node:path'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
 

@@ -96,22 +96,9 @@ export class BuildContext {
     }
 
     this.server = null
-    this.taskRegistry = null
   }
 
-  async runTask(taskName, taskFn, options = {}) {
-    await taskFn(this, options)
-  }
 
-  async runParallel(tasks) {
-    await Promise.all(tasks.map(({ name, fn, options = {} }) => this.runTask(name, fn, options)))
-  }
-
-  async runSeries(tasks) {
-    for (const { name, fn, options = {} } of tasks) {
-      await this.runTask(name, fn, options)
-    }
-  }
 
   get isProduction() {
     return this.mode === 'production'

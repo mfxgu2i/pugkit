@@ -6,12 +6,20 @@ import { logger } from '../utils/logger.mjs'
 import { resetDevCache } from '../utils/file.mjs'
 import { clearImageSizeCache } from '../transform/image-size.mjs'
 
+// Pug（HTML）だけは遅延ビルド + メモリ配信なので事前生成しない。
+// 他は実ファイルとして配信するため、出力先が空の状態でも表示できるよう起動時に作る
+const INITIAL_DEV_TASKS = ['sass', 'script', 'image', 'svg', 'sprite', 'copy']
+
+const DEFAULT_PORT = 5555
+const DEFAULT_HOST = 'localhost'
+
 /**
  * ファイル監視タスク
  */
 export async function watcherTask(context, options = {}) {
-  const watcher = new FileWatcher(context)
+  const watcher = new FileWatcher(context, options.runTask)
   await watcher.start()
+  return watcher
 }
 
 /**
@@ -20,10 +28,13 @@ export async function watcherTask(context, options = {}) {
  * Pug は遅延ビルド方式: 変更イベントではキャッシュ無効化とリロード通知のみ行い、
  * ビルドはブラウザが該当ページをリクエストした時に dev サーバー側で実行される。
  * Sass / Script は従来どおりイベント駆動でインクリメンタルビルドする。
+ *
+ * @param runTask タスク名で実行する関数。未指定なら再ビルドを伴う処理は行わない
  */
 export class FileWatcher {
-  constructor(context) {
+  constructor(context, runTask) {
     this.context = context
+    this.runTask = runTask ?? (() => Promise.resolve())
     this.watcher = null
   }
 
@@ -32,7 +43,7 @@ export class FileWatcher {
 
     // キャッシュを消す前にポートを確認する。既に別の dev サーバーが動いていると、
     // 消した瞬間に相手の配信が壊れるため、その前に起動を中止する
-    await this.assertPortAvailable(config.server?.port ?? 5555, config.server?.host ?? 'localhost')
+    await this.assertPortAvailable(config.server?.port ?? DEFAULT_PORT, config.server?.host ?? DEFAULT_HOST)
 
     // dev の出力先はツール専用のキャッシュなので毎回作り直してよい。
     // 前回セッションの残骸（削除済みソースの生成物）が配信されるのを防ぎ、
@@ -52,12 +63,7 @@ export class FileWatcher {
     // 事前生成が不要で、依存グラフもページが最初にリクエストされた時に構築される。
     // 一方 CSS / JS / 画像 / SVG / public は実ファイルとして配信するため、
     // 出力ディレクトリが空の状態でも表示できるよう起動時に生成しておく
-    const { taskRegistry } = this.context
-    const initialTasks = []
-    for (const name of ['sass', 'script', 'image', 'svg', 'sprite', 'copy']) {
-      if (taskRegistry?.[name]) initialTasks.push(taskRegistry[name](this.context))
-    }
-    await Promise.all(initialTasks)
+    await Promise.all(INITIAL_DEV_TASKS.map(name => this.runTask(name)))
 
     this.watcher = chokidar
       .watch([paths.src, paths.public], {
@@ -213,7 +219,7 @@ export class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     logger.info('change', `sass: ${relPath}`)
     try {
-      if (this.context.taskRegistry?.sass) await this.context.taskRegistry.sass(this.context, { files: [filePath] })
+      await this.runTask('sass', { files: [filePath] })
       this.injectCSS()
     } catch (error) {
       logger.error('watch', `Sass build failed: ${error.message}`)
@@ -238,7 +244,7 @@ export class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     logger.info('change', `script: ${relPath}`)
     try {
-      if (this.context.taskRegistry?.script) await this.context.taskRegistry.script(this.context, { files: [filePath] })
+      await this.runTask('script', { files: [filePath] })
       this.reload()
     } catch (error) {
       logger.error('watch', `Script build failed: ${error.message}`)
@@ -264,9 +270,7 @@ export class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     logger.info(event, `svg: ${relPath}`)
     try {
-      if (this.context.taskRegistry?.svg) {
-        await this.context.taskRegistry.svg(this.context, { files: [filePath] })
-      }
+      await this.runTask('svg', { files: [filePath] })
       this.invalidateAssetDependents(filePath, event)
       this.reload()
     } catch (error) {
@@ -281,9 +285,7 @@ export class FileWatcher {
     logger.info(event, `sprite: ${relPath}`)
     try {
       // スプライトは icons ディレクトリ全体から1ファイルを生成するため常に全再生成
-      if (this.context.taskRegistry?.sprite) {
-        await this.context.taskRegistry.sprite(this.context)
-      }
+      await this.runTask('sprite')
       // <use href> の参照先が変わるので取り直しが必要
       this.reload('full')
     } catch (error) {
@@ -307,9 +309,7 @@ export class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     logger.info(event, `image: ${relPath}`)
     try {
-      if (this.context.taskRegistry?.image) {
-        await this.context.taskRegistry.image(this.context, { files: [filePath] })
-      }
+      await this.runTask('image', { files: [filePath] })
       this.invalidateAssetDependents(filePath, event)
       this.reload()
     } catch (error) {
@@ -347,7 +347,7 @@ export class FileWatcher {
     }
 
     try {
-      if (this.context.taskRegistry?.copy) await this.context.taskRegistry.copy(this.context, { files: [filePath] })
+      await this.runTask('copy', { files: [filePath] })
       this.reload()
     } catch (error) {
       logger.error('watch', `Copy failed: ${error.message}`)

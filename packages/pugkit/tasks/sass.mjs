@@ -1,6 +1,6 @@
 import { glob } from 'glob'
-import { readFile, writeFile } from 'node:fs/promises'
-import { relative, resolve, basename, extname } from 'node:path'
+import { writeFile } from 'node:fs/promises'
+import { relative, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as sass from 'sass-embedded'
 import postcss from 'postcss'
@@ -28,7 +28,7 @@ function getDevCompiler() {
  * Sassビルドタスク
  */
 export async function sassTask(context, options = {}) {
-  const { paths, config, isProduction, isDevelopment, sassGraph, cache } = context
+  const { paths, isProduction, isDevelopment, sassGraph } = context
 
   // dev は常に非圧縮 + ソースマップ、production は常に圧縮
   const isDevBuild = !isProduction
@@ -91,7 +91,7 @@ export async function sassTask(context, options = {}) {
  * 個別Sassファイルのコンパイル
  */
 async function compileSassFile(filePath, context, isDevBuild, compiler) {
-  const { paths, config, isProduction, sassGraph } = context
+  const { paths, config, sassGraph } = context
 
   try {
     // Sassコンパイル

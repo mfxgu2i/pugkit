@@ -26,16 +26,6 @@ export async function createBuilder(root = process.cwd(), mode = 'development', 
     watch: watcherTask
   })
 
-  builder.context.taskRegistry = {
-    pug: pugTask,
-    sass: sassTask,
-    script: scriptTask,
-    image: imageTask,
-    svg: svgTask,
-    sprite: spriteTask,
-    copy: copyTask
-  }
-
   return builder
 }
 

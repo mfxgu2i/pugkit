@@ -75,7 +75,7 @@ async function runDevAssets(project) {
   const { context } = builder
 
   for (const name of ['sass', 'script', 'image', 'svg', 'sprite', 'copy']) {
-    await context.taskRegistry[name](context)
+    await builder.runTask(name)
   }
 
   return context
