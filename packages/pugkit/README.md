@@ -340,7 +340,9 @@ build: {
 | JS   | ソースマップ・`console.*` 保持            | minify済み・`console.*` 削除 |
 | 出力先 | `cacheDir`（既定 `node_modules/.pugkit/dev`） | `outDir`                     |
 
-> **`outDir` は build 専用です。** dev は `outDir` に一切書き込まないため、`clean: false` で既存環境に組み込む構成でも、dev のソースマップ等が本番成果物に混ざりません。`outDir` にしか無いファイル（レガシー HTML など）は dev でも読み取り専用でフォールバック配信されます。
+> **`outDir` は build 専用です。** dev は `outDir` に書き込みも読み出しもしないため、`clean: false` で既存環境に組み込む構成でも、dev のソースマップ等が本番成果物に混ざりません。
+>
+> dev が配信するのは `src` と `public` から導かれるものだけです。レガシー HTML など `outDir` にしか無いファイルを dev でも表示したい場合は `public/` に置いてください（build でも `outDir` にコピーされるので、dev と build で同じものが見えます）。
 >
 > **`cacheDir` に指定したディレクトリは dev 起動のたびに中身が削除されます。** 既存ファイルのある場所を指定しないでください（プロジェクトルート・`src`・`public`・`outDir` は起動時にエラーになります）。
 

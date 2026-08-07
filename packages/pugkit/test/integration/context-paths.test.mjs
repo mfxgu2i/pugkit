@@ -35,8 +35,6 @@ describe('BuildContext output paths', () => {
     const context = new BuildContext(createConfig(), 'development')
     expect(context.paths.outputRoot).not.toBe(resolve(root, 'dist'))
     expect(context.paths.outputRoot).toBe(resolve(root, 'node_modules/.pugkit/dev'))
-    // build の出力先は参照できるが書き込み先ではない
-    expect(context.paths.buildOutDir).toBe(resolve(root, 'dist'))
   })
 
   it('should fall back to .pugkit when package.json is absent', () => {

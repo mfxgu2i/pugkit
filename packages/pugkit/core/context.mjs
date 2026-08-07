@@ -77,8 +77,8 @@ export class BuildContext {
     const outDir = config.outDir ?? 'dist'
     const buildOutDir = isAbsolute(outDir) ? outDir : resolve(config.root, outDir)
 
-    // dev は outDir に一切書かない。「outDir にあるもの = build の成果物」を保つことで、
-    // clean: false でも dev のソースマップ等が本番成果物に混ざらない
+    // dev は outDir に一切書かず、読みもしない。「outDir にあるもの = build の成果物」を
+    // 保つことで、dev のソースマップ等が本番成果物に混ざらない
     const isDevelopment = mode === 'development'
     const resolvedOutDir = isDevelopment ? resolveDevOutDir(config) : buildOutDir
 
@@ -92,9 +92,7 @@ export class BuildContext {
       // このモードでの書き込みルート。dev では cacheDir を指すので「dist」ではない
       outputRoot: resolvedOutDir,
       // subdir を含めた実際の書き込み先。タスクはここに書く
-      output: subdir ? resolve(resolvedOutDir, subdir) : resolvedOutDir,
-      // build の出力先。dev では読み取り専用のフォールバックにだけ使う
-      buildOutDir
+      output: subdir ? resolve(resolvedOutDir, subdir) : resolvedOutDir
     }
 
     this.server = null

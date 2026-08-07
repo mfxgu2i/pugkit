@@ -126,6 +126,29 @@ describe('ビルドエラー', () => {
   })
 })
 
+describe('build の出力先', () => {
+  /**
+   * dev が配信するのは src から導かれるものだけ。
+   * build の出力先を覗きに行くと、src から消したページが「復活」して見えたり、
+   * 前回ビルドの成果物が現在のソースの代わりに表示されたりする。
+   * outDir にしか無いファイルは public/ に置けば dev でも build でも同じに扱える。
+   */
+  // 出力先の有無はサーバー起動時に判定されるので、起動前に用意しておく
+  const withLegacyOutput = clean => ({
+    ...minimalProjectFiles(),
+    'pugkit.config.mjs': `export default { build: { clean: ${clean} } }\n`,
+    'dist/legacy.html': '<html><body>LEGACY</body></html>\n',
+    'dist/legacy.css': 'body{}\n'
+  })
+
+  it.each([[true], [false]])('clean: %s でも配信しない', async clean => {
+    const server = await startDevServer(withLegacyOutput(clean))
+
+    expect((await server.get('/legacy.html')).status).toBe(404)
+    expect((await server.get('/legacy.css')).status).toBe(404)
+  })
+})
+
 describe('配信できないアセット', () => {
   /**
    * 静的配信は存在を確認してから読み出すので、その間にファイルが消えると失敗する。

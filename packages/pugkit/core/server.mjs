@@ -382,25 +382,11 @@ export async function serverTask(context, options = {}) {
     }
   }
 
-  const staticServe = sirv(serveRoot, sirvOptions)
-
-  // clean: false（既存環境への組み込み）のときだけ、build の出力先にある
-  // 既存資産（レガシー HTML・手置きのファイル）を読み取り専用でフォールバック配信する。
-  // clean: true では outDir の中身は前回ビルドの成果物でしかなく、src から削除した
-  // ページが「復活」して見えてしまうため参照しない。dev がここに書き込むことはない
-  const buildOutDir = paths.buildOutDir
-  const useBuildOutDirFallback =
-    config.build?.clean === false && buildOutDir && buildOutDir !== serveRoot && existsSync(buildOutDir)
-  const fallbackServe = useBuildOutDirFallback ? sirv(buildOutDir, sirvOptions) : null
-
-  const serveStatic = guardStaticServe(
-    (req, res, notFound) => {
-      staticServe(req, res, () => {
-        if (fallbackServe) fallbackServe(req, res, notFound)
-        else notFound()
-      })
-    },
-    error => logger.warn('server', `配信に失敗しました: ${error.message}`)
+  // 配信するのは src から導かれるものだけ。build の出力先は参照しない
+  // （前回ビルドの成果物が現在のソースの代わりに見えたり、src から消したページが
+  //   復活したりする）。outDir にしか無いファイルは public/ に置けば dev でも扱える
+  const serveStatic = guardStaticServe(sirv(serveRoot, sirvOptions), error =>
+    logger.warn('server', `配信に失敗しました: ${error.message}`)
   )
 
   const httpServer = http.createServer((req, res) => {
@@ -458,7 +444,7 @@ export async function serverTask(context, options = {}) {
       return
     }
 
-    // ── 非Pugの既存HTML（public 由来、build 出力先のレガシーHTML）: 読み出し + スクリプト注入 ───
+    // ── 非Pugの既存HTML（public 由来）: 読み出し + スクリプト注入 ───
     const isInside = (p, root) => {
       const abs = path.resolve(p)
       return abs === root || abs.startsWith(root + path.sep)
@@ -470,8 +456,7 @@ export async function serverTask(context, options = {}) {
         path.join(root, decoded)
       ].filter(p => p.endsWith('.html') && isInside(p, root) && existsSync(p))
 
-    const htmlFile =
-      htmlCandidatesIn(serveRoot)[0] ?? (fallbackServe ? htmlCandidatesIn(buildOutDir)[0] : undefined)
+    const htmlFile = htmlCandidatesIn(serveRoot)[0]
 
     if (htmlFile) {
       readFile(htmlFile, 'utf-8')
