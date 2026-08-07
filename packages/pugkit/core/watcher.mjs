@@ -70,7 +70,14 @@ export class FileWatcher {
     // 事前生成が不要で、依存グラフもページが最初にリクエストされた時に構築される。
     // 一方 CSS / JS / 画像 / SVG / public は実ファイルとして配信するため、
     // 出力ディレクトリが空の状態でも表示できるよう起動時に生成しておく
-    await Promise.all(INITIAL_DEV_TASKS.map(name => this.runTask(name)))
+    // 1つ壊れていても他のアセットと dev サーバーは動かす。起動後に同じファイルを
+    // 壊したときと同じ扱いにする（ここで中止すると、dev キャッシュを作り直した直後に
+    // 落ちるため「直そうとして起動しても起動しない」状態になる）
+    await Promise.all(
+      INITIAL_DEV_TASKS.map(name =>
+        this.runTask(name).catch(error => logger.error('watch', `${name} の初期ビルドに失敗しました: ${error.message}`))
+      )
+    )
 
     this.watcher = chokidar
       .watch([paths.src, paths.public], {

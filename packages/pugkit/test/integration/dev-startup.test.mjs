@@ -190,3 +190,36 @@ describe('依存で決める差分ビルド', () => {
     expect(await readCss(context, 'style.css')).toContain('green')
   })
 })
+
+describe('壊れたアセットがあるとき', () => {
+  /**
+   * 起動後に同じファイルを壊してもサーバーは死なず、ログを出して動き続ける。
+   * 起動時だけ中止するのは非対称で、しかも dev キャッシュを作り直した後に落ちるため、
+   * 「エラーを直そうとして dev を起動しても起動しない」状態になる。
+   */
+  const outputOf = async context => listFiles(context.paths.outputRoot)
+
+  it('SCSS が壊れていても起動して他のアセットは揃う', async () => {
+    const { context } = await startWatcher(minimalProjectFiles({ 'src/assets/css/style.scss': '.a { color: red;\n' }))
+
+    expect(await outputOf(context)).toContain('assets/js/main.js')
+  })
+
+  it('JS が壊れていても起動して他のアセットは揃う', async () => {
+    const { context } = await startWatcher(minimalProjectFiles({ 'src/assets/js/main.js': 'const x = ;\n' }))
+
+    expect(await outputOf(context)).toContain('assets/css/style.css')
+  })
+
+  it('壊れたまま起動しても、直して保存すれば出力に現れる', async () => {
+    const { project, context, runTask } = await startWatcher(
+      minimalProjectFiles({ 'src/assets/css/style.scss': '.a { color: red;\n' })
+    )
+    expect(await outputOf(context)).not.toContain('assets/css/style.css')
+
+    await project.write({ 'src/assets/css/style.scss': '.a { color: rebeccapurple; }\n' })
+    await runTask('sass', { files: [project.path('src/assets/css/style.scss')] })
+
+    expect(await outputOf(context)).toContain('assets/css/style.css')
+  })
+})
