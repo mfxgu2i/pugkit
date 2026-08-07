@@ -92,6 +92,74 @@ describe('ファイルの分類', () => {
   })
 })
 
+describe('Pug に include されたファイルの変更', () => {
+  /**
+   * include は .pug 以外も受け付け、中身をテンプレートに焼き込む
+   * （クリティカル CSS のインライン化、インライン JS、データファイルなど）。
+   * 焼き込まれている以上、変更されたらテンプレートごと作り直す必要がある。
+   *
+   * 依存は graph に登録されているのに、アセットとしての種別だけで
+   * 反応を決めると、この経路が丸ごと抜け落ちて HTML が永久に古いままになる。
+   */
+  const embed = (page, dependency) => {
+    cachePage(page)
+    context.graph.addDependency(page, dependency)
+  }
+
+  it.each([
+    ['assets/css/critical.css', 'スタイル'],
+    ['_data/nav.txt', 'テキスト'],
+    ['_data/site.json', 'JSON']
+  ])('アセットとして対象外の %s でもテンプレートを無効化する', (relativePath, _label) => {
+    const page = at('index.pug')
+    embed(page, at(relativePath))
+
+    watcher.handle('change', at(relativePath))
+
+    expect(context.cache.getPugTemplate(page)).toBeUndefined()
+    expect(context.cache.getPageHtml(page)).toBeUndefined()
+  })
+
+  it('リロードを通知する', () => {
+    embed(at('index.pug'), at('_data/nav.txt'))
+
+    watcher.handle('change', at('_data/nav.txt'))
+
+    expect(context.server.reloads).toEqual(['html'])
+  })
+
+  it('埋め込まれていないファイルには反応しない', () => {
+    const page = at('index.pug')
+    cachePage(page)
+
+    watcher.handle('change', at('README.md'))
+
+    expect(context.cache.getPageHtml(page)).toBe('<html></html>')
+    expect(context.server.reloads).toEqual([])
+  })
+
+  it('スクリプトとして扱われるファイルでも無効化する', async () => {
+    // .js は esbuild の対象でもあるが、include で焼き込まれている分は別に無効化が要る
+    const page = at('index.pug')
+    embed(page, at('assets/js/inline.js'))
+
+    await watcher.handle('change', at('assets/js/inline.js'))
+
+    expect(context.cache.getPugTemplate(page)).toBeUndefined()
+  })
+
+  it('Sass として扱われるファイルでは CSS の差し替えに加えてリロードも通知する', async () => {
+    const page = at('index.pug')
+    embed(page, at('assets/css/inline.scss'))
+
+    await watcher.handle('change', at('assets/css/inline.scss'))
+
+    expect(context.cache.getPugTemplate(page)).toBeUndefined()
+    // CSS の差し替えだけでは焼き込まれた分が古いままになる
+    expect(context.server.reloads).toEqual(['html'])
+  })
+})
+
 describe('Pug の変更', () => {
   it('ページ自身のキャッシュを無効化する', () => {
     const page = at('index.pug')

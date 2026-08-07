@@ -12,6 +12,9 @@ const INITIAL_DEV_TASKS = ['sass', 'script', 'image', 'svg', 'sprite', 'copy']
 
 const IMAGE_EXT_RE = /\.(jpg|jpeg|png|gif)$/i
 
+// 自分のハンドラで graph（Pug への焼き込み）を見る種別。二重に無効化しない
+const HANDLES_EMBEDDING = new Set(['svg', 'image', 'public'])
+
 const DEFAULT_PORT = 5555
 const DEFAULT_HOST = 'localhost'
 
@@ -110,7 +113,17 @@ export class FileWatcher {
    */
   handle(event, filePath) {
     const kind = this.classify(filePath)
-    if (!kind) return
+
+    // include は .pug 以外も受け付け、中身をテンプレートに焼き込む
+    // （クリティカル CSS のインライン化、インライン JS、データファイルなど）。
+    // アセットとしての種別が何であっても、焼き込まれている分の無効化が要る。
+    // Pug 自身と、アセット経由で graph を見る種別は各ハンドラが担当する
+    const embedded = kind === 'pug' || HANDLES_EMBEDDING.has(kind) ? [] : this.invalidateEmbedded(filePath)
+
+    if (!kind) {
+      if (embedded.length > 0) this.reload('html')
+      return
+    }
 
     const handlers = {
       public: { change: () => this.onPublicChange(filePath, event), unlink: () => this.onPublicUnlink(filePath) },
@@ -123,7 +136,28 @@ export class FileWatcher {
       image: { change: () => this.onImageChange(filePath, event), unlink: () => this.onImageUnlink(filePath) }
     }
 
-    return handlers[kind][event === 'unlink' ? 'unlink' : 'change']()
+    const handled = handlers[kind][event === 'unlink' ? 'unlink' : 'change']()
+
+    // Sass は CSS を差し替えるだけでリロードを通知しない。
+    // 焼き込まれている分はそれでは古いままなので、別に知らせる
+    if (kind !== 'sass' || embedded.length === 0) return handled
+    return Promise.resolve(handled).then(() => this.reload('html'))
+  }
+
+  /**
+   * include で Pug に焼き込まれているファイルの、親ページを無効化する。
+   * 依存は graph に登録済みなので、拡張子ではなく依存関係で判断する。
+   */
+  invalidateEmbedded(filePath) {
+    const { cache, graph } = this.context
+    const parents = graph.getAffectedParents(filePath)
+
+    for (const file of parents) {
+      cache.invalidatePugTemplate(file)
+      cache.invalidatePageHtml(file)
+    }
+
+    return parents
   }
 
   /**
