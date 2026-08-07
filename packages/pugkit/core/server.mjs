@@ -29,10 +29,18 @@ function loadIdiomorphSource() {
   return idiomorphSource
 }
 
+/** 注入したスクリプトの目印。dev の注入分を機械的に見分けるために使う */
+const RELOAD_ATTR = 'data-pugkit-live-reload'
+
+/** 注入するスクリプトに埋め込む指紋の属性名。クライアントもこの名前で読む */
+const SIGNATURE_ATTR = 'data-pugkit-signature'
+
 /**
  * body の差分適用で反映できない部分（<html> の属性・head・<script>）の指紋。
- * 前回そのページに返した HTML と一致していれば差分適用してよい。
- * 両方ともサーバー生成の HTML から同じ方法で抽出するため、ブラウザのパース差に影響されない。
+ * 表示中の HTML と取得した HTML で一致していれば差分適用してよい。
+ *
+ * 実行時に差し込まれる要素（解析タグ・同意バナー等）の影響を受けないよう、
+ * ライブ DOM ではなくサーバー生成の HTML から算出する。
  */
 export function computeMorphSignature(html) {
   const htmlTag = html.match(/<html\b[^>]*>/i)?.[0] ?? ''
@@ -84,8 +92,7 @@ function createLiveReloadScript({ scroll = true, domDiff = true } = {}) {
   const idiomorphSource = domDiff ? loadIdiomorphSource() : null
   const useMorph = idiomorphSource !== null
 
-  return `<script>
-(function() {
+  return `(function() {
   // リロード前に保存したスクロール位置を復元する（編集のたびに先頭へ戻るのを防ぐ）
   var scrollKey = '__pugkit_scroll:' + location.pathname;
   ${restoreScroll}
@@ -107,19 +114,24 @@ ${useMorph ? idiomorphSource : ''}
     var all = root.querySelectorAll('*');
     for (var i = 0; i < all.length; i++) serverNodes.add(all[i]);
   }
+  // このタブが今表示している HTML の指紋。他のタブが何回取得しても影響されない
+  var selfSignature = document.currentScript && document.currentScript.getAttribute('${SIGNATURE_ATTR}');
+  function signatureOf(doc) {
+    var tag = doc.querySelector('script[${SIGNATURE_ATTR}]');
+    return tag && tag.getAttribute('${SIGNATURE_ATTR}');
+  }
   function applyMorph() {
     return fetch(location.href, { cache: 'no-store' }).then(function(res) {
       if (!res.ok) throw new Error('status ' + res.status);
-      // head・<html> 属性・<script> が変わっていないかはサーバーが判定する。
-      // morph では <script> が再実行されず head の変更も反映できないため
-      // 変わっていればフルリロードに退避する
-      if (res.headers.get('x-pugkit-morphable') !== '1') throw new Error('needs full reload');
       return res.text();
     }).then(function(html) {
       var doc = new DOMParser().parseFromString(html, 'text/html');
       if (!doc.body) throw new Error('parse failed');
+      // morph では <script> が再実行されず head の変更も反映できない。
+      // それらが変わっていればフルリロードに退避する
+      if (!selfSignature || signatureOf(doc) !== selfSignature) throw new Error('needs full reload');
       // 差分適用は body に限定する。head は解析タグが実行時に差し込んだ要素を
-      // 巻き込むため触らない（head の変更は上のヘッダー判定でフルリロードになる）
+      // 巻き込むため触らない（head の変更は上の指紋比較でフルリロードになる）
       Idiomorph.morph(document.body, doc.body, {
         ignoreActiveValue: true,
         callbacks: {
@@ -173,7 +185,19 @@ ${useMorph ? idiomorphSource : ''}
     es.close();
   });
 })();
-</script>`
+`
+}
+
+/**
+ * 注入するスクリプトタグ。指紋を属性として持たせ、タブ自身が
+ * 「今表示している HTML の指紋」を覚えられるようにする。
+ * サーバーは直近の指紋を覚えないので、同じページを何タブ開いても判定が狂わない。
+ */
+function createReloadTag(script, signature) {
+  const sig = signature ? ` ${SIGNATURE_ATTR}="${signature}"` : ''
+  // 目印を付けて、注入した分だけを機械的に取り除けるようにする
+  // （スクリプト本体の書き方に依存すると、整形しただけで剥がせなくなる）
+  return `<script ${RELOAD_ATTR}${sig}>\n${script}</script>`
 }
 
 /**
@@ -365,12 +389,13 @@ export async function serverTask(context, options = {}) {
   // DOM 差分更新（domDiff）はデフォルト有効。無効化するとフルリロードに戻る
   const domDiff = config.server?.domDiff !== false
   const liveReloadScript = createLiveReloadScript({ domDiff })
-  const errorPageScript = createLiveReloadScript({ scroll: false, domDiff: false })
+  // 指紋を持たないタグは常にフルリロードになる。
+  // エラーページと、Pug 由来でない既存 HTML（内容の作られ方を pugkit が知らない）が対象
+  const errorPageTag = createReloadTag(createLiveReloadScript({ scroll: false, domDiff: false }))
+  const staticPageTag = createReloadTag(liveReloadScript)
 
   const clients = new Set()
   const getPage = createLazyPageBuilder(context)
-  // ページごとに直近で返した HTML の morph 可否判定用の指紋
-  const morphSignatures = new Map()
 
   const sirvOptions = {
     dev: true,
@@ -428,18 +453,12 @@ export async function serverTask(context, options = {}) {
     if (pugFile) {
       getPage(pugFile)
         .then(html => {
-          // 前回そのページに返した HTML と <html> 属性・head・script が同じなら、
-          // クライアントは body の差分適用だけで最新にできる
-          const signature = computeMorphSignature(html)
-          const previous = morphSignatures.get(pugFile)
-          morphSignatures.set(pugFile, signature)
-          const morphable = previous !== undefined && previous === signature
-          sendHtml(res, 200, injectReload(html, liveReloadScript), {
-            'X-Pugkit-Morphable': morphable ? '1' : '0'
-          })
+          // 指紋は判定結果ではなく値として渡す。差分適用してよいかは、
+          // それぞれのタブが自分の持つ指紋と比べて決める
+          sendHtml(res, 200, injectReload(html, createReloadTag(liveReloadScript, computeMorphSignature(html))))
         })
         .catch(error => {
-          if (!res.headersSent) sendHtml(res, 500, buildErrorPage(pugFile, error, paths, errorPageScript))
+          if (!res.headersSent) sendHtml(res, 500, buildErrorPage(pugFile, error, paths, errorPageTag))
         })
       return
     }
@@ -461,7 +480,7 @@ export async function serverTask(context, options = {}) {
     if (htmlFile) {
       readFile(htmlFile, 'utf-8')
         .then(html => {
-          sendHtml(res, 200, injectReload(html, liveReloadScript))
+          sendHtml(res, 200, injectReload(html, staticPageTag))
         })
         .catch(() => {
           serveStatic(req, res, () => {

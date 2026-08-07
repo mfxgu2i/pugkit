@@ -141,7 +141,8 @@ describe('HTML', () => {
 
     const res = await fetch(`http://localhost:${builder.context.server.port}/about.html`)
     const html = await res.text()
-    const withoutInjection = html.replace(/<script>\n\(function\(\)[\s\S]*?<\/script>(?=<\/body>)/, '')
+    // 注入分は目印属性で見分ける（スクリプトの書き方が変わっても剥がせる）
+    const withoutInjection = html.replace(/<script data-pugkit-live-reload[\s\S]*?<\/script>/, '')
 
     expect(withoutInjection).toBe(await project.read('dist/about.html'))
   })

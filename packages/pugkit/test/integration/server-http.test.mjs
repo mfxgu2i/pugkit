@@ -67,36 +67,72 @@ describe('dev サーバーの配信', () => {
 })
 
 describe('DOM 差分適用の可否判定', () => {
-  // クライアントはこのヘッダーを見て「body の差分適用で足りるか」を決める
-  it('初回は差分適用できない（比較対象が無い）', async () => {
-    const server = await startDevServer()
-    const res = await server.get('/')
+  /**
+   * body の差分適用では <head>・<html> 属性・<script> の変更を反映できないため、
+   * それらが変わっていないかを指紋で判定する。
+   *
+   * 指紋は「そのタブが今表示している HTML」の性質なので HTML に埋め込んで持たせる。
+   * サーバーが「直近に返した指紋」を1つだけ覚える作りだと、同じページを複数タブで
+   * 開いたとき2つ目以降が「変わっていない」と誤判定し、head と script を取りこぼす。
+   */
+  const signatureOf = html => html.match(/data-pugkit-signature="([^"]+)"/)?.[1]
 
-    expect(res.headers.get('x-pugkit-morphable')).toBe('0')
-  })
-
-  it('head も script も変わっていなければ差分適用できる', async () => {
-    const server = await startDevServer()
-    await server.get('/')
-    const res = await server.get('/')
-
-    expect(res.headers.get('x-pugkit-morphable')).toBe('1')
-  })
-
-  it('head が変わったら差分適用させない', async () => {
-    const server = await startDevServer()
-    await server.get('/')
-    await server.get('/')
-
+  const changeHead = async server => {
     await server.project.write({
       'src/_partials/_layout.pug':
         'doctype html\nhtml\n  head\n    title Changed\n    meta(name="description" content="new")\n  body\n    block content\n'
     })
     server.context.cache.clearPageHtml()
     server.context.cache.invalidatePugTemplate(server.project.path('src/index.pug'))
+  }
 
-    const res = await server.get('/')
-    expect(res.headers.get('x-pugkit-morphable')).toBe('0')
+  it('配信する HTML に指紋を埋め込む', async () => {
+    const server = await startDevServer()
+
+    expect(signatureOf(await (await server.get('/')).text())).toMatch(/^[0-9a-f]+$/)
+  })
+
+  it('内容が同じなら同じ指紋になる（差分適用してよい）', async () => {
+    const server = await startDevServer()
+
+    const first = signatureOf(await (await server.get('/')).text())
+    const second = signatureOf(await (await server.get('/')).text())
+
+    expect(second).toBe(first)
+  })
+
+  it('head が変わったら指紋も変わる（差分適用させない）', async () => {
+    const server = await startDevServer()
+    const before = signatureOf(await (await server.get('/')).text())
+
+    await changeHead(server)
+
+    expect(signatureOf(await (await server.get('/')).text())).not.toBe(before)
+  })
+
+  it('何度取得しても、変更前の指紋と変更後の指紋は食い違ったまま', async () => {
+    // 複数タブ: 1つ目が取得しても、2つ目が持っている古い指紋は新しい HTML と一致しない
+    const server = await startDevServer()
+    const tabA = signatureOf(await (await server.get('/')).text())
+    const tabB = signatureOf(await (await server.get('/')).text())
+    expect(tabB).toBe(tabA)
+
+    await changeHead(server)
+
+    const fetchedByTabA = signatureOf(await (await server.get('/')).text())
+    const fetchedByTabB = signatureOf(await (await server.get('/')).text())
+
+    expect(fetchedByTabA).not.toBe(tabA)
+    expect(fetchedByTabB).not.toBe(tabB)
+  })
+
+  it('ページごとに指紋が異なる', async () => {
+    const server = await startDevServer()
+
+    const home = signatureOf(await (await server.get('/')).text())
+    const about = signatureOf(await (await server.get('/about.html')).text())
+
+    expect(about).not.toBe(home)
   })
 })
 
