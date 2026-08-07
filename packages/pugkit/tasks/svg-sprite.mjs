@@ -98,7 +98,10 @@ async function generateSprite(iconDir, outputPath) {
     const viewBox = viewBoxMatch ? viewBoxMatch[1] : '0 0 24 24'
 
     // <svg>タグを<symbol>に変換
-    svg = svg.replace(/<svg[^>]*>/, `<symbol id="${fileName}" viewBox="${viewBox}">`).replace(/<\/svg>/, '</symbol>')
+    // ファイル名は利用者の入力なので、置換文字列にすると $& などが特殊解釈される
+    svg = svg
+      .replace(/<svg[^>]*>/, () => `<symbol id="${fileName}" viewBox="${viewBox}">`)
+      .replace(/<\/svg>/, '</symbol>')
 
     // fill/strokeをcurrentColorに統一
     svg = svg
