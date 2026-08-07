@@ -34,7 +34,6 @@ function mergeConfig(defaults, user) {
     build: {
       ...defaults.build,
       ...(user.build || {}),
-      clean: user.build?.clean !== undefined ? user.build.clean : defaults.build.clean,
       imageOptions: {
         webp: { ...defaults.build.imageOptions.webp, ...(user.build?.imageOptions?.webp || {}) },
         jpeg: { ...defaults.build.imageOptions.jpeg, ...(user.build?.imageOptions?.jpeg || {}) },
@@ -63,6 +62,24 @@ function mergeConfig(defaults, user) {
   }
 }
 
+/**
+ * 廃止された設定が残っていないか確かめる。
+ *
+ * build.clean: false は「出力先の既存ファイルを消さない」設定だった。
+ * 黙って無視すると、既存サイトに組み込んでいる構成の outDir
+ * （.htaccess・PHP・アップロード画像など）が次のビルドで丸ごと消える。
+ * 取り返しがつかないので、警告ではなく中止する。
+ */
+function assertNoRemovedOptions(userConfig) {
+  if (userConfig.build?.clean === undefined) return
+
+  throw new Error(
+    `[pugkit] build.clean は廃止されました。build は常に outDir を削除してから書き出します。` +
+      `出力先に残したいファイル（.htaccess・PHP・アップロード等）がある場合は、` +
+      `public/ に移すか outDir を専用のディレクトリに変えてください。設定から build.clean を削除すると起動します。`
+  )
+}
+
 function validateConfig(config) {
   const root = config.root
   const outDir = config.outDir
@@ -86,6 +103,7 @@ function validateConfig(config) {
 
 export async function loadConfig(root = process.cwd(), inlineConfig = {}) {
   const userConfig = await loadUserConfig(root)
+  assertNoRemovedOptions(userConfig)
   const config = mergeConfig(defaultConfig, userConfig)
   config.root = root
   if (inlineConfig.siteUrl !== undefined && inlineConfig.siteUrl !== null) {

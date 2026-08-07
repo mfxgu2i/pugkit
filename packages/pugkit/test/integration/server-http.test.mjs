@@ -133,16 +133,12 @@ describe('build の出力先', () => {
    * 前回ビルドの成果物が現在のソースの代わりに表示されたりする。
    * outDir にしか無いファイルは public/ に置けば dev でも build でも同じに扱える。
    */
-  // 出力先の有無はサーバー起動時に判定されるので、起動前に用意しておく
-  const withLegacyOutput = clean => ({
-    ...minimalProjectFiles(),
-    'pugkit.config.mjs': `export default { build: { clean: ${clean} } }\n`,
-    'dist/legacy.html': '<html><body>LEGACY</body></html>\n',
-    'dist/legacy.css': 'body{}\n'
-  })
-
-  it.each([[true], [false]])('clean: %s でも配信しない', async clean => {
-    const server = await startDevServer(withLegacyOutput(clean))
+  it('outDir にしか無いファイルは配信しない', async () => {
+    const server = await startDevServer({
+      ...minimalProjectFiles(),
+      'dist/legacy.html': '<html><body>LEGACY</body></html>\n',
+      'dist/legacy.css': 'body{}\n'
+    })
 
     expect((await server.get('/legacy.html')).status).toBe(404)
     expect((await server.get('/legacy.css')).status).toBe(404)

@@ -13,7 +13,6 @@ describe('loadConfig', () => {
 
     expect(config.siteUrl).toBe('')
     expect(config.outDir).toBe('dist')
-    expect(config.build.clean).toBe(true)
   })
 
   it('設定ファイルの値を読み込む', async () => {
@@ -76,13 +75,13 @@ describe('既定値とのマージ', () => {
     expect(config.build.imageOptions.avif).toBeDefined()
   })
 
-  it('build.clean: false を指定できる', async () => {
+  // build.clean は廃止された。黙って無視すると outDir が丸ごと消えるので中止する
+  it('廃止された build.clean を指定したら読み込みを中止する', async () => {
     const project = await createTempProject({
       'pugkit.config.mjs': 'export default { build: { clean: false } }\n'
     })
-    const config = await loadConfig(project.root)
 
-    expect(config.build.clean).toBe(false)
+    await expect(loadConfig(project.root)).rejects.toThrow(/build\.clean/)
   })
 
   it('subdir は前後のスラッシュを落として保持する', async () => {
@@ -94,7 +93,7 @@ describe('既定値とのマージ', () => {
 })
 
 describe('outDir の安全確認', () => {
-  // build の clean はここを rm -rf するため、危険な値は起動前に止める
+  // build はここを rm -rf するため、危険な値は起動前に止める
   it.each([
     ['空文字（プロジェクトルート）', "''"],
     ['カレント', "'.'"],

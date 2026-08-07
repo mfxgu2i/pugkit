@@ -11,7 +11,6 @@ export const defaultConfig = {
     domDiff: true
   },
   build: {
-    clean: true,
     imageOptimization: 'webp',
     imageInfo: {
       artDirectionSuffix: '_sp'

@@ -100,7 +100,6 @@ export default defineConfig({
 | `server.port`                        | 開発サーバーのポート番号                                                                              | `number`                                        | `5555`        |
 | `server.host`                        | 開発サーバーのホスト                                                                                  | `string`                                        | `'localhost'` |
 | `server.startPath`                   | サーバー起動時に開くパス                                                                              | `string`                                        | `'/'`         |
-| `build.clean`                        | ビルド前に `outDir` をクリーンするか（`false` にすると他リソースと共存可能）                          | `boolean`                                       | `true`        |
 | `build.imageOptimization`            | 画像最適化の方式                                                                                      | `'avif'` \| `'webp'` \| `'compress'` \| `false` | `'webp'`      |
 | `build.imageOptions.avif`            | AVIF変換オプション（[Sharp AVIF options](https://sharp.pixelplumbing.com/api-output#avif)）           | `object`                                        | -             |
 | `build.imageOptions.webp`            | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）           | `object`                                        | -             |
@@ -340,7 +339,9 @@ build: {
 | JS   | ソースマップ・`console.*` 保持            | minify済み・`console.*` 削除 |
 | 出力先 | `cacheDir`（既定 `node_modules/.pugkit/dev`） | `outDir`                     |
 
-> **`outDir` は build 専用です。** dev は `outDir` に書き込みも読み出しもしないため、`clean: false` で既存環境に組み込む構成でも、dev のソースマップ等が本番成果物に混ざりません。
+> **`outDir` は build 専用です。** dev は `outDir` に書き込みも読み出しもしないため、dev のソースマップ等が本番成果物に混ざりません。
+>
+> **`outDir` は pugkit が占有します。** build のたびに中身を削除してから書き出すので、手で置いたファイル（`.htaccess`・PHP・アップロード等）は残りません。出力に含めたいものは `public/` に置いてください。
 >
 > dev が配信するのは `src` と `public` から導かれるものだけです。レガシー HTML など `outDir` にしか無いファイルを dev でも表示したい場合は `public/` に置いてください（build でも `outDir` にコピーされるので、dev と build で同じものが見えます）。
 >

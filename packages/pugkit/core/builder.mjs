@@ -44,8 +44,7 @@ export class Builder {
 
     logger.info('build', `Building in ${context.mode} mode`)
 
-    if (context.config.build.clean) await this.clean()
-    else logger.info('build', 'Skipping clean (clean: false)')
+    await this.clean()
 
     for (const phase of BUILD_PHASES) {
       const tasks = phase.map(name => this.tasks[name]).filter(Boolean)
