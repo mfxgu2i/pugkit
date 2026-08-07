@@ -466,6 +466,10 @@ export async function serverTask(context, options = {}) {
   }
 
   context.server = {
+    // 実際に待ち受けているポート（port: 0 を指定した場合は OS が割り当てた値）
+    get port() {
+      return httpServer.address()?.port ?? port
+    },
     // kind: 'html' = Pug 由来の変更（DOM 差分更新の対象）、'full' = フルリロードが必要
     reload(kind = 'full') {
       broadcast('reload', kind)
