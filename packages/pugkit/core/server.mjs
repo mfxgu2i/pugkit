@@ -6,6 +6,7 @@ import { createRequire } from 'node:module'
 import { createHash } from 'node:crypto'
 import sirv from 'sirv'
 import { logger } from '../utils/logger.mjs'
+import { publicOverrideFor } from '../utils/page-conflict.mjs'
 import { buildPageHtml } from '../tasks/pug.mjs'
 
 const SSE_PATH = '/__pugkit_sse'
@@ -433,7 +434,10 @@ export async function serverTask(context, options = {}) {
     }
 
     // ── Pug ページ: リクエスト時遅延ビルド + メモリ配信 ──
-    const pugFile = resolvePugSource(decoded, paths, subdir)
+    // public に同名の HTML があれば build では copy が Pug の出力を上書きする。
+    // dev だけ Pug を返すと「dev で見たページが本番に出ない」ことになるので合わせる
+    const pugSource = resolvePugSource(decoded, paths, subdir)
+    const pugFile = pugSource && publicOverrideFor(pugSource, paths) ? null : pugSource
 
     if (pugFile) {
       getPage(pugFile)

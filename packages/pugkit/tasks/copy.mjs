@@ -3,6 +3,23 @@ import { copyFile } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
+import { overriddenPugFor } from '../utils/page-conflict.mjs'
+
+/**
+ * copy は pug のあとに走るので、同名の HTML があれば Pug の出力を上書きする。
+ * 黙って消えると「書いたはずのページが本番に出ない」ことに気づけないため知らせる。
+ */
+function warnPageConflicts(files, paths) {
+  for (const file of files) {
+    const pugFile = overriddenPugFor(file, paths)
+    if (!pugFile) continue
+
+    logger.warn(
+      'copy',
+      `public/${relative(paths.public, file)} が src/${relative(paths.src, pugFile)} の出力を上書きします`
+    )
+  }
+}
 
 /**
  * ファイルコピータスク
@@ -13,6 +30,7 @@ export async function copyTask(context, options = {}) {
   // 特定のファイルが指定されている場合（watch時）
   if (options.files && Array.isArray(options.files)) {
     logger.info('copy', `Copying ${options.files.length} file(s)`)
+    warnPageConflicts(options.files, paths)
     await Promise.all(
       options.files.map(async file => {
         const relativePath = relative(paths.public, file)
@@ -38,6 +56,7 @@ export async function copyTask(context, options = {}) {
   }
 
   logger.info('copy', `Copying ${files.length} file(s)`)
+  warnPageConflicts(files, paths)
 
   await Promise.all(
     files.map(async file => {

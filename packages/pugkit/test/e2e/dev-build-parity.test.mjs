@@ -147,6 +147,62 @@ describe('HTML', () => {
   })
 })
 
+describe('src と public に同名の HTML があるとき', () => {
+  /**
+   * build は pug のあとに copy を走らせるので public 側が勝つ。
+   * dev が Pug を優先すると「dev では自分の書いたページ、本番では public の中身」
+   * という、もっとも発見が遅れる形の食い違いになる。
+   */
+  const publicPage = '<!DOCTYPE html><html><body><p>FROM-PUBLIC</p></body></html>\n'
+
+  it('dev の配信内容が build の出力と一致する', async () => {
+    await project.write({ 'public/about.html': publicPage })
+    await build(project.root)
+
+    const builder = await createBuilder(project.root, 'development')
+    builder.context.config.server.port = 0
+    await builder.runTask('copy')
+    await builder.tasks.server(builder.context)
+    onTestFinished(() => builder.context.server.close())
+
+    const served = await (await fetch(`http://localhost:${builder.context.server.port}/about.html`)).text()
+
+    expect(served).toContain('FROM-PUBLIC')
+    expect(await project.read('dist/about.html')).toContain('FROM-PUBLIC')
+  })
+
+  it('衝突していることを警告する（黙って上書きされると気づけない）', async () => {
+    await project.write({ 'public/about.html': publicPage })
+    const builder = await createBuilder(project.root, 'development')
+    const warnings = []
+    const { logger } = await import('../../utils/logger.mjs')
+    const original = logger.warn
+    logger.warn = (label, message) => warnings.push(message)
+    onTestFinished(() => {
+      logger.warn = original
+    })
+
+    await builder.runTask('copy')
+
+    expect(warnings.join('\n')).toContain('about.html')
+  })
+
+  it('衝突していなければ警告しない', async () => {
+    const builder = await createBuilder(project.root, 'development')
+    const warnings = []
+    const { logger } = await import('../../utils/logger.mjs')
+    const original = logger.warn
+    logger.warn = (label, message) => warnings.push(message)
+    onTestFinished(() => {
+      logger.warn = original
+    })
+
+    await builder.runTask('copy')
+
+    expect(warnings).toEqual([])
+  })
+})
+
 describe('アセット', () => {
   it('画像・SVG・スプライト・public は dev と build でバイト一致する', async () => {
     await build(project.root)
