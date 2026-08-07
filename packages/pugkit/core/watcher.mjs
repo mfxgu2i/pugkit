@@ -48,8 +48,9 @@ export class FileWatcher {
   async start() {
     const { paths, config } = this.context
 
-    // キャッシュを消す前にポートを確認する。既に別の dev サーバーが動いていると、
-    // 消した瞬間に相手の配信が壊れるため、その前に起動を中止する
+    // 待ち受けに失敗するなら、キャッシュを作り直す前に知らせる。
+    // 別の dev サーバーからキャッシュを守るのはこの確認ではなく resetDevCache の役目
+    // （ポートを変えれば2つ目が起動できてしまうため）
     await this.assertPortAvailable(config.server?.port ?? DEFAULT_PORT, config.server?.host ?? DEFAULT_HOST)
 
     // dev の出力先はツール専用のキャッシュなので毎回作り直してよい。
