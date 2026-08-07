@@ -1,8 +1,9 @@
 import { glob } from 'glob'
-import { resolve, basename } from 'node:path'
+import { resolve } from 'node:path'
 import * as esbuild from 'esbuild'
 import { writeFile } from 'node:fs/promises'
 import { logger } from '../utils/logger.mjs'
+import { resolveRebuildTargets } from '../utils/rebuild-targets.mjs'
 import { ensureDir, ensureFileDir } from '../utils/file.mjs'
 
 // dev では esbuild の incremental build コンテキストをエントリ構成ごとに使い回し、
@@ -56,23 +57,11 @@ export async function scriptTask(context, options = {}) {
   let filesToBuild = allEntryFiles
 
   if (isDevelopment && options.files?.length > 0) {
-    const changedFile = options.files[0]
-    const isPartial = basename(changedFile).startsWith('_')
+    filesToBuild = resolveRebuildTargets(options.files[0], allEntryFiles, scriptGraph)
 
-    if (isPartial) {
-      // パーシャル変更 → 依存グラフから影響を受けるエントリファイルを特定
-      const affected = scriptGraph.getAffectedParents(changedFile)
-      filesToBuild = affected.filter(f => allEntryFiles.includes(f))
-
-      if (filesToBuild.length === 0) {
-        // グラフにまだ情報がない場合はフルビルド
-        filesToBuild = allEntryFiles
-      } else {
-        logger.info('script', `Partial changed, rebuilding ${filesToBuild.length} affected file(s)`)
-      }
-    } else if (allEntryFiles.includes(changedFile)) {
-      // 非パーシャルのエントリファイル → そのファイルだけリビルド
-      filesToBuild = [changedFile]
+    if (filesToBuild.length === 0) {
+      logger.skip('script', 'No entry depends on the changed file')
+      return
     }
   }
 

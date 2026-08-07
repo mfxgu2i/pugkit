@@ -26,6 +26,14 @@ export class DependencyGraph {
   }
 
   /**
+   * このファイルについて依存関係を知っているか（親としても依存先としても）。
+   * 「依存が無い」と「まだ何も分かっていない」を区別するために使う
+   */
+  has(file) {
+    return this.edges.has(file) || this.reverseEdges.has(file)
+  }
+
+  /**
    * パーシャル変更時に再ビルドが必要な親ファイルを取得
    */
   getAffectedParents(dependency) {

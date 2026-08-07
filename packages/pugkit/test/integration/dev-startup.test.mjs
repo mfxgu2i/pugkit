@@ -151,3 +151,42 @@ describe('dev の差分ビルド', () => {
     expect(js).toContain('console.log')
   })
 })
+
+describe('依存で決める差分ビルド', () => {
+  /**
+   * 「_」始まりかどうかはファイル名の規約であって依存関係ではない。
+   * tokens.scss のように「それ自体エントリで、かつ他からも @use される」
+   * 共有ファイルは名前では見分けられず、名前で判断すると反映されない。
+   */
+  const sharedEntryProject = () =>
+    minimalProjectFiles({
+      'src/assets/css/tokens.scss': '$brand: red;\n.tokens { --x: 1; }\n',
+      'src/assets/css/style.scss': "@use 'tokens';\n.a { color: tokens.$brand; }\n"
+    })
+
+  const readCss = (context, name) =>
+    import('node:fs/promises').then(f => f.readFile(`${context.paths.outputRoot}/assets/css/${name}`, 'utf8'))
+
+  it('「_」が付かない共有ファイルの変更を、参照しているエントリに反映する', async () => {
+    const { project, context, runTask } = await startWatcher(sharedEntryProject())
+
+    await project.write({ 'src/assets/css/tokens.scss': '$brand: blue;\n.tokens { --x: 2; }\n' })
+    await runTask('sass', { files: [project.path('src/assets/css/tokens.scss')] })
+
+    expect(await readCss(context, 'style.css')).toContain('blue')
+  })
+
+  it('「_」ディレクトリ配下のパーシャルでも反映する', async () => {
+    const { project, context, runTask } = await startWatcher(
+      minimalProjectFiles({
+        'src/assets/css/_mixins/tone.scss': '$c: red;\n',
+        'src/assets/css/style.scss': "@use '_mixins/tone';\n.a { color: tone.$c; }\n"
+      })
+    )
+
+    await project.write({ 'src/assets/css/_mixins/tone.scss': '$c: green;\n' })
+    await runTask('sass', { files: [project.path('src/assets/css/_mixins/tone.scss')] })
+
+    expect(await readCss(context, 'style.css')).toContain('green')
+  })
+})

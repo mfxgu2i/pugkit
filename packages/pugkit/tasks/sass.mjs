@@ -7,6 +7,7 @@ import postcss from 'postcss'
 import autoprefixer from 'autoprefixer'
 import cssnano from 'cssnano'
 import { logger } from '../utils/logger.mjs'
+import { resolveRebuildTargets } from '../utils/rebuild-targets.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
 
 // dev では Embedded Sass のコンパイラプロセスを常駐させ、
@@ -49,27 +50,11 @@ export async function sassTask(context, options = {}) {
   let filesToBuild = allEntryFiles
 
   if (isDevelopment && options.files?.length > 0) {
-    const changedFile = options.files[0]
-    const isPartial = basename(changedFile).startsWith('_')
+    filesToBuild = resolveRebuildTargets(options.files[0], allEntryFiles, sassGraph)
 
-    if (isPartial) {
-      // パーシャル変更 → 依存グラフから影響を受けるエントリファイルを特定
-      const affected = sassGraph.getAffectedParents(changedFile)
-      filesToBuild = affected.filter(f => allEntryFiles.includes(f))
-
-      if (filesToBuild.length === 0) {
-        // グラフにまだ情報がない場合はフルビルド
-        filesToBuild = allEntryFiles
-      } else {
-        logger.info('sass', `Partial changed, rebuilding ${filesToBuild.length} affected file(s)`)
-      }
-    } else {
-      // 非パーシャル変更 → そのファイルだけリビルド
-      filesToBuild = allEntryFiles.filter(f => f === changedFile)
-      if (filesToBuild.length === 0) {
-        logger.skip('sass', 'Changed file is not a build target')
-        return
-      }
+    if (filesToBuild.length === 0) {
+      logger.skip('sass', 'No entry depends on the changed file')
+      return
     }
   }
 
