@@ -338,7 +338,7 @@ export async function serverTask(context, options = {}) {
   // ページごとに直近で返した HTML の morph 可否判定用の指紋
   const morphSignatures = new Map()
 
-  const staticServe = sirv(serveRoot, {
+  const sirvOptions = {
     dev: true,
     extensions: ['html'],
     setHeaders(res, filePath) {
@@ -346,7 +346,25 @@ export async function serverTask(context, options = {}) {
         res.setHeader('Cache-Control', 'no-cache')
       }
     }
-  })
+  }
+
+  const staticServe = sirv(serveRoot, sirvOptions)
+
+  // clean: false（既存環境への組み込み）のときだけ、build の出力先にある
+  // 既存資産（レガシー HTML・手置きのファイル）を読み取り専用でフォールバック配信する。
+  // clean: true では outDir の中身は前回ビルドの成果物でしかなく、src から削除した
+  // ページが「復活」して見えてしまうため参照しない。dev がここに書き込むことはない
+  const buildOutDir = paths.buildOutDir
+  const useBuildOutDirFallback =
+    config.build?.clean === false && buildOutDir && buildOutDir !== serveRoot && existsSync(buildOutDir)
+  const fallbackServe = useBuildOutDirFallback ? sirv(buildOutDir, sirvOptions) : null
+
+  const serveStatic = (req, res, notFound) => {
+    staticServe(req, res, () => {
+      if (fallbackServe) fallbackServe(req, res, notFound)
+      else notFound()
+    })
+  }
 
   const httpServer = http.createServer((req, res) => {
     const urlPath = req.url?.split('?')[0] ?? '/'
@@ -400,17 +418,20 @@ export async function serverTask(context, options = {}) {
       return
     }
 
-    // ── 非Pugの既存HTML（public由来など）: dist読み出し + スクリプト注入 ───
-    const candidates = [
-      path.join(serveRoot, decoded === '/' ? 'index.html' : decoded.replace(/\/$/, '') + '/index.html'),
-      path.join(serveRoot, decoded === '/' ? 'index.html' : decoded + '.html'),
-      path.join(serveRoot, decoded)
-    ]
-    const isInsideServeRoot = p => {
+    // ── 非Pugの既存HTML（public 由来、build 出力先のレガシーHTML）: 読み出し + スクリプト注入 ───
+    const isInside = (p, root) => {
       const abs = path.resolve(p)
-      return abs === serveRoot || abs.startsWith(serveRoot + path.sep)
+      return abs === root || abs.startsWith(root + path.sep)
     }
-    const htmlFile = candidates.find(p => p.endsWith('.html') && isInsideServeRoot(p) && existsSync(p))
+    const htmlCandidatesIn = root =>
+      [
+        path.join(root, decoded === '/' ? 'index.html' : decoded.replace(/\/$/, '') + '/index.html'),
+        path.join(root, decoded === '/' ? 'index.html' : decoded + '.html'),
+        path.join(root, decoded)
+      ].filter(p => p.endsWith('.html') && isInside(p, root) && existsSync(p))
+
+    const htmlFile =
+      htmlCandidatesIn(serveRoot)[0] ?? (fallbackServe ? htmlCandidatesIn(buildOutDir)[0] : undefined)
 
     if (htmlFile) {
       readFile(htmlFile, 'utf-8')
@@ -418,7 +439,7 @@ export async function serverTask(context, options = {}) {
           sendHtml(res, 200, injectReload(html, liveReloadScript))
         })
         .catch(() => {
-          staticServe(req, res, () => {
+          serveStatic(req, res, () => {
             res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
             res.end('404 Not Found')
           })
@@ -427,7 +448,7 @@ export async function serverTask(context, options = {}) {
     }
 
     // ── sirv で静的ファイルを配信 ───────────────────────
-    staticServe(req, res, () => {
+    serveStatic(req, res, () => {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
       res.end('404 Not Found')
     })

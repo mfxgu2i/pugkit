@@ -16,11 +16,20 @@ async function loadUserConfig(root) {
   }
 }
 
+/**
+ * subdir は出力先パスの組み立てにも使うため、前後のスラッシュを落として保持する。
+ * 先頭スラッシュが残ると resolve() が絶対パスとして扱い、出力先が outDir の外に出てしまう
+ */
+export function normalizeSubdir(value) {
+  return String(value ?? '').replace(/^[/\\]+|[/\\]+$/g, '')
+}
+
 function mergeConfig(defaults, user) {
   return {
     siteUrl: user.siteUrl || defaults.siteUrl,
-    subdir: user.subdir || defaults.subdir,
+    subdir: normalizeSubdir(user.subdir || defaults.subdir),
     outDir: user.outDir !== undefined ? user.outDir : defaults.outDir,
+    cacheDir: user.cacheDir !== undefined ? user.cacheDir : defaults.cacheDir,
     server: { ...defaults.server, ...(user.server || {}) },
     build: {
       ...defaults.build,
@@ -64,10 +73,11 @@ function validateConfig(config) {
   const relToRoot = relative(resolvedOutDir, root)
   const isParentOfRoot = relToRoot !== '' && !relToRoot.startsWith('..')
 
+  // build の clean はここを rm -rf するため、警告ではなく中止する
   if (isSameAsRoot || isParentOfRoot) {
-    console.warn(
+    throw new Error(
       `[pugkit] outDir "${outDir}" はプロジェクトルートと同じか親ディレクトリです。` +
-        `ソースファイルが上書きされる可能性があるため、別のディレクトリを指定してください。`
+        `ソースファイルが削除されるため、別のディレクトリを指定してください。`
     )
   }
 

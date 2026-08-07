@@ -1,7 +1,9 @@
 import chokidar from 'chokidar'
 import { rm } from 'node:fs/promises'
 import { relative, resolve, basename, extname, sep } from 'node:path'
+import net from 'node:net'
 import { logger } from '../utils/logger.mjs'
+import { resetDevCache } from '../utils/file.mjs'
 import { clearImageSizeCache } from '../transform/image-size.mjs'
 
 /**
@@ -26,7 +28,25 @@ export class FileWatcher {
   }
 
   async start() {
-    const { paths } = this.context
+    const { paths, config } = this.context
+
+    // キャッシュを消す前にポートを確認する。既に別の dev サーバーが動いていると、
+    // 消した瞬間に相手の配信が壊れるため、その前に起動を中止する
+    await this.assertPortAvailable(config.server?.port ?? 5555, config.server?.host ?? 'localhost')
+
+    // dev の出力先はツール専用のキャッシュなので毎回作り直してよい。
+    // 前回セッションの残骸（削除済みソースの生成物）が配信されるのを防ぎ、
+    // 「dev で見えているもの = 現在の src」を保証する
+    try {
+      await resetDevCache(paths.outDir)
+    } catch (error) {
+      if (error.code === 'EACCES' || error.code === 'EPERM') {
+        throw new Error(
+          `dev の出力先 "${paths.outDir}" に書き込めません。cacheDir に書き込み可能なパスを指定してください`
+        )
+      }
+      throw error
+    }
 
     // Pug 以外は初期ビルドする。Pug（HTML）だけは遅延ビルド + メモリ配信なので
     // 事前生成が不要で、依存グラフもページが最初にリクエストされた時に構築される。
@@ -89,6 +109,27 @@ export class FileWatcher {
     if (this.isHiddenAsset(filePath)) return
     if (filePath.endsWith('.svg')) return this.onSvgUnlink(filePath)
     if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageUnlink(filePath)
+  }
+
+  /**
+   * ポートが使用可能か確認する。使用中なら起動を中止する。
+   */
+  assertPortAvailable(port, host) {
+    return new Promise((resolve, reject) => {
+      const tester = net
+        .createServer()
+        .once('error', error => {
+          if (error.code === 'EADDRINUSE') {
+            reject(
+              new Error(`ポート ${port} は既に使用されています。別の dev サーバーが起動していないか確認してください`)
+            )
+            return
+          }
+          reject(error)
+        })
+        .once('listening', () => tester.close(() => resolve()))
+        .listen(port, host)
+    })
   }
 
   // ---- 判定ヘルパー ----
@@ -162,10 +203,8 @@ export class FileWatcher {
       return
     }
 
-    // 過去の build が dist に残した HTML があると、ソース削除後も
-    // フォールバック配信で「復活」してしまうため削除する
-    const distPath = resolve(paths.dist, relPath.replace(/\.pug$/, '.html'))
-    await this.deleteDistFile(distPath, relPath)
+    logger.info('unlink', relPath)
+    this.reload('full')
   }
 
   // ---- Sass ----

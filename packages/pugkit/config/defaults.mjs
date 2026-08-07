@@ -2,6 +2,8 @@ export const defaultConfig = {
   siteUrl: '',
   subdir: '',
   outDir: 'dist',
+  // dev のアセット出力先。null で node_modules/.pugkit/dev
+  cacheDir: null,
   server: {
     port: 5555,
     host: 'localhost',
