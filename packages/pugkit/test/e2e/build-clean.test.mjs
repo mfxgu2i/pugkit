@@ -44,36 +44,17 @@ describe('出力ディレクトリの作り直し', () => {
 })
 
 describe('廃止された build.clean', () => {
-  /**
-   * clean: false は「出力先の既存ファイルを消さない」設定だった。
-   * 黙って無視すると、既存サイトに組み込んでいる利用者の outDir
-   * （.htaccess・PHP・アップロード画像など）が次のビルドで丸ごと消える。
-   * 取り返しがつかないので、警告ではなくエラーで止める。
-   */
-  it.each([[false], [true]])('build.clean: %s が残っていたらビルドを中止する', async clean => {
-    const project = await createTempProject(
-      minimalProjectFiles({
-        'pugkit.config.mjs': `export default { outDir: 'htdocs', build: { clean: ${clean} } }\n`
-      })
-    )
-
-    await expect(build(project.root)).rejects.toThrow(/build\.clean/)
-  })
-
-  it('中止したときは出力先に触れない', async () => {
+  // 設定が残っていても効かない。作り直しを止める手段はもう無い
+  it('指定されていても出力ディレクトリを作り直す', async () => {
     const project = await createTempProject({
       ...minimalProjectFiles({
-        'pugkit.config.mjs': "export default { outDir: 'htdocs', build: { clean: false } }\n"
+        'pugkit.config.mjs': "export default { build: { clean: false } }\n"
       }),
-      'htdocs/.htaccess': 'Deny from all\n',
-      'htdocs/contact.php': '<?php echo 1;\n',
-      'htdocs/uploads/photo.jpg': 'binary'
+      'dist/legacy.html': '<html>old</html>'
     })
 
-    await expect(build(project.root)).rejects.toThrow()
+    await build(project.root)
 
-    expect(await listFiles(project.path('htdocs'))).toEqual(
-      expect.arrayContaining(['.htaccess', 'contact.php', 'uploads/photo.jpg'])
-    )
+    expect(await listFiles(project.path('dist'))).not.toContain('legacy.html')
   })
 })

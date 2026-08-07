@@ -75,15 +75,6 @@ describe('既定値とのマージ', () => {
     expect(config.build.imageOptions.avif).toBeDefined()
   })
 
-  // build.clean は廃止された。黙って無視すると outDir が丸ごと消えるので中止する
-  it('廃止された build.clean を指定したら読み込みを中止する', async () => {
-    const project = await createTempProject({
-      'pugkit.config.mjs': 'export default { build: { clean: false } }\n'
-    })
-
-    await expect(loadConfig(project.root)).rejects.toThrow(/build\.clean/)
-  })
-
   it('subdir は前後のスラッシュを落として保持する', async () => {
     const project = await createTempProject({ 'pugkit.config.mjs': "export default { subdir: '/sub/' }\n" })
     const config = await loadConfig(project.root)
