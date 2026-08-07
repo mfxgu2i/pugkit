@@ -1,21 +1,15 @@
-import { describe, expect, it, beforeAll, afterAll } from 'vitest'
-import { resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { describe, expect, it, beforeEach } from 'vitest'
+import { resolve } from 'node:path'
+import { writeFile } from 'node:fs/promises'
 import sharp from 'sharp'
 import { createImageInfoHelper, createImageSizeHelper } from '../../transform/image-size.mjs'
+import { createTempProject } from '../helpers/project.mjs'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const testDataDir = resolve(__dirname, '../_data')
-const imagesDir = resolve(testDataDir, 'images')
-
-// /始まりの場合は paths.src からの絶対解決になる
-const mockPugFile = resolve(testDataDir, 'index.pug')
-
-const paths = {
-  src: testDataDir,
-  public: resolve(testDataDir, 'public')
-}
+// リポジトリ内の固定パスに書くと、テストを並列に走らせたとき互いのフィクスチャを消し合う
+let testDataDir
+let imagesDir
+let mockPugFile
+let paths
 
 const avifConfig = { build: { imageOptimization: 'avif' } }
 const webpConfig = { build: { imageOptimization: 'webp' } }
@@ -30,25 +24,23 @@ async function createJpeg(filePath, width = 100, height = 80) {
     .toFile(filePath)
 }
 
-beforeAll(async () => {
-  await mkdir(imagesDir, { recursive: true })
-  // 基本画像
+beforeEach(async () => {
+  const project = await createTempProject({ 'images/.keep': '', 'index.pug': 'p x' })
+  testDataDir = project.root
+  imagesDir = project.path('images')
+  // 「/」始まりの参照は paths.src からの絶対解決になる
+  mockPugFile = project.path('index.pug')
+  paths = { src: testDataDir, public: project.path('public') }
+
   await createJpeg(resolve(imagesDir, 'hero.jpg'), 800, 600)
-  // retina @2x
   await createJpeg(resolve(imagesDir, 'hero@2x.jpg'), 1600, 1200)
-  // アートディレクション _sp / _tb
   await createJpeg(resolve(imagesDir, 'responsive.jpg'), 800, 600)
   await createJpeg(resolve(imagesDir, 'responsive_sp.jpg'), 375, 300)
   await createJpeg(resolve(imagesDir, 'responsive_tb.jpg'), 768, 500)
-  // SVG
   await writeFile(
     resolve(imagesDir, 'icon.svg'),
     '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"></svg>'
   )
-})
-
-afterAll(async () => {
-  await rm(imagesDir, { recursive: true, force: true })
 })
 
 describe('createImageInfoHelper', () => {
