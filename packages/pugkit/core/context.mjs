@@ -88,10 +88,12 @@ export class BuildContext {
     this.paths = {
       root: config.root,
       src: resolve(config.root, 'src'),
-      outDir: resolvedOutDir,
-      dist: subdir ? resolve(resolvedOutDir, subdir) : resolvedOutDir,
       public: resolve(config.root, 'public'),
-      // build の出力先（dev でも参照できるよう保持）
+      // このモードでの書き込みルート。dev では cacheDir を指すので「dist」ではない
+      outputRoot: resolvedOutDir,
+      // subdir を含めた実際の書き込み先。タスクはここに書く
+      output: subdir ? resolve(resolvedOutDir, subdir) : resolvedOutDir,
+      // build の出力先。dev では読み取り専用のフォールバックにだけ使う
       buildOutDir
     }
 

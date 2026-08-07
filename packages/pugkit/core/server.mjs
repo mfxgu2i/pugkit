@@ -316,8 +316,8 @@ export function injectReload(html, liveReloadScript) {
 export async function serverTask(context, options = {}) {
   const { paths, config } = context
 
-  if (!existsSync(paths.dist)) {
-    await mkdir(paths.dist, { recursive: true })
+  if (!existsSync(paths.output)) {
+    await mkdir(paths.output, { recursive: true })
   }
 
   const port = config.server?.port ?? 5555
@@ -326,7 +326,7 @@ export async function serverTask(context, options = {}) {
   const startPath = (config.server?.startPath || '/').replace(/^\//, '')
   const fullStartPath = subdir ? `${subdir}/${startPath}` : `/${startPath}`
 
-  const serveRoot = paths.outDir
+  const serveRoot = paths.outputRoot
 
   // DOM 差分更新（domDiff）はデフォルト有効。無効化するとフルリロードに戻る
   const domDiff = config.server?.domDiff !== false

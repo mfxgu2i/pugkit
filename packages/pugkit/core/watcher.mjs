@@ -51,11 +51,11 @@ export class FileWatcher {
     // 前回セッションの残骸（削除済みソースの生成物）が配信されるのを防ぎ、
     // 「dev で見えているもの = 現在の src」を保証する
     try {
-      await resetDevCache(paths.outDir)
+      await resetDevCache(paths.outputRoot)
     } catch (error) {
       if (error.code === 'EACCES' || error.code === 'EPERM') {
         throw new Error(
-          `dev の出力先 "${paths.outDir}" に書き込めません。cacheDir に書き込み可能なパスを指定してください`
+          `dev の出力先 "${paths.outputRoot}" に書き込めません。cacheDir に書き込み可能なパスを指定してください`
         )
       }
       throw error
@@ -243,7 +243,7 @@ export class FileWatcher {
       logger.info('unlink', relPath)
       return
     }
-    const distPath = resolve(paths.dist, relPath.replace(/\.scss$/, '.css'))
+    const distPath = resolve(paths.output, relPath.replace(/\.scss$/, '.css'))
     await this.deleteDistFile(distPath, relPath, { withSourceMap: true })
   }
 
@@ -268,7 +268,7 @@ export class FileWatcher {
       logger.info('unlink', relPath)
       return
     }
-    const distPath = resolve(paths.dist, relPath.replace(/\.ts$/, '.js'))
+    const distPath = resolve(paths.output, relPath.replace(/\.ts$/, '.js'))
     await this.deleteDistFile(distPath, relPath, { withSourceMap: true })
   }
 
@@ -307,7 +307,7 @@ export class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     this.invalidateAssetDependents(filePath)
     this.context.imageGraph.removeFile(filePath)
-    const distPath = resolve(this.context.paths.dist, relPath)
+    const distPath = resolve(this.context.paths.output, relPath)
     await this.deleteDistFile(distPath, relPath)
   }
 
@@ -339,7 +339,7 @@ export class FileWatcher {
     const ext = extname(filePath)
     const newExt = optimization === 'avif' || optimization === 'webp' ? `.${optimization}` : ext
     const destRelPath = relPath.replace(new RegExp(`\\${ext}$`, 'i'), newExt)
-    const distPath = resolve(paths.dist, destRelPath)
+    const distPath = resolve(paths.output, destRelPath)
     await this.deleteDistFile(distPath, relPath)
   }
 
@@ -372,7 +372,7 @@ export class FileWatcher {
       this.context.imageGraph.removeFile(filePath)
     }
 
-    const distPath = resolve(this.context.paths.dist, relPath)
+    const distPath = resolve(this.context.paths.output, relPath)
     await this.deleteDistFile(distPath, relPath)
   }
 

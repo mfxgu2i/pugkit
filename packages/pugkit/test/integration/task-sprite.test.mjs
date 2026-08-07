@@ -14,7 +14,7 @@ const icon = (attrs = 'fill="#ff0000"', extra = '') =>
 
 function createContext() {
   return {
-    paths: { src: project.path('src'), dist: project.path('dist') },
+    paths: { src: project.path('src'), output: project.path('dist') },
     config: {},
     isProduction: true
   }

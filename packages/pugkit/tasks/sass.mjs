@@ -142,7 +142,7 @@ async function compileSassFile(filePath, context, isDevBuild, compiler) {
     }
 
     const outputRelativePath = relative(paths.src, filePath).replace(/\.scss$/, '.css')
-    const outputPath = resolve(paths.dist, outputRelativePath)
+    const outputPath = resolve(paths.output, outputRelativePath)
 
     const postcssResult = await postcss(postcssPlugins).process(css, {
       from: filePath,

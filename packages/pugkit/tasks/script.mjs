@@ -85,7 +85,7 @@ export async function scriptTask(context, options = {}) {
     // 3. esbuild設定
     const esbuildConfig = {
       entryPoints: filesToBuild,
-      outdir: paths.dist,
+      outdir: paths.output,
       outbase: paths.src,
       bundle: true,
       format: 'esm',
@@ -114,7 +114,7 @@ export async function scriptTask(context, options = {}) {
     }
 
     // 4. ビルド実行（dev はコンテキスト再利用の増分ビルド、build は従来どおり単発実行）
-    await ensureDir(paths.dist)
+    await ensureDir(paths.output)
     const result = isDevelopment
       ? await enqueueDevBuild(async () => (await getDevContext(esbuildConfig)).rebuild())
       : await esbuild.build(esbuildConfig)

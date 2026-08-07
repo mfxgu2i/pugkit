@@ -155,13 +155,13 @@ describe('アセット', () => {
     // CSS / JS は意図的に別物、HTML は dev では書き出さないので比較対象から外す
     const target = file => !/\.(css|js|map|html)$/.test(file)
     const buildFiles = (await listFiles(project.path('dist'))).filter(target)
-    const devFiles = (await listFiles(devContext.paths.outDir)).filter(f => target(f) && !f.startsWith('.pugkit'))
+    const devFiles = (await listFiles(devContext.paths.outputRoot)).filter(f => target(f) && !f.startsWith('.pugkit'))
 
     expect(devFiles).toEqual(buildFiles)
 
     for (const file of buildFiles) {
       const fromBuild = await readFile(project.path(`dist/${file}`))
-      const fromDev = await readFile(`${devContext.paths.outDir}/${file}`)
+      const fromDev = await readFile(`${devContext.paths.outputRoot}/${file}`)
 
       expect(fromDev.equals(fromBuild), `${file} が食い違っている`).toBe(true)
     }
@@ -172,7 +172,7 @@ describe('アセット', () => {
     const devContext = await runDevAssets(project)
 
     const buildCss = await project.read('dist/assets/css/style.css')
-    const devCss = await readFile(`${devContext.paths.outDir}/assets/css/style.css`, 'utf8')
+    const devCss = await readFile(`${devContext.paths.outputRoot}/assets/css/style.css`, 'utf8')
 
     expect(buildCss).not.toContain('\n')
     expect(devCss).toContain('\n')
@@ -181,7 +181,7 @@ describe('アセット', () => {
     expect(devCss).toContain('color: red')
 
     expect(await listFiles(project.path('dist'))).not.toContain('assets/css/style.css.map')
-    expect(await listFiles(devContext.paths.outDir)).toContain('assets/css/style.css.map')
+    expect(await listFiles(devContext.paths.outputRoot)).toContain('assets/css/style.css.map')
   })
 
   it('JS は build だけ console を落とす', async () => {
@@ -189,7 +189,7 @@ describe('アセット', () => {
     const devContext = await runDevAssets(project)
 
     expect(await project.read('dist/assets/js/main.js')).not.toContain('console.log')
-    expect(await readFile(`${devContext.paths.outDir}/assets/js/main.js`, 'utf8')).toContain('console.log')
+    expect(await readFile(`${devContext.paths.outputRoot}/assets/js/main.js`, 'utf8')).toContain('console.log')
   })
 })
 
@@ -199,7 +199,7 @@ describe('出力対象の一致', () => {
     const devContext = await runDevAssets(project)
 
     const buildFiles = (await listFiles(project.path('dist'))).filter(f => !f.endsWith('.html'))
-    const devFiles = (await listFiles(devContext.paths.outDir)).filter(
+    const devFiles = (await listFiles(devContext.paths.outputRoot)).filter(
       f => !f.startsWith('.pugkit') && !f.endsWith('.map')
     )
 

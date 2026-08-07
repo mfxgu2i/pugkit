@@ -87,7 +87,7 @@ describe('dev は build の出力先に書き込まない', () => {
     await devBuilder.tasks.script(context)
 
     // dev の成果物はキャッシュ側に出る
-    expect(await listFiles(context.paths.outDir)).not.toEqual([])
+    expect(await listFiles(context.paths.outputRoot)).not.toEqual([])
     // outDir は build 専用なので触られない
     expect(await listFiles(project.path('dist'))).toEqual([])
   })

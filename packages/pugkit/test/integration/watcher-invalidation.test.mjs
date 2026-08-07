@@ -19,7 +19,7 @@ beforeEach(async () => {
   const project = await createTempProject({ 'src/.keep': '', 'public/.keep': '', 'dist/.keep': '' })
   src = project.path('src')
   context = {
-    paths: { src, public: project.path('public'), dist: project.path('dist') },
+    paths: { src, public: project.path('public'), output: project.path('dist') },
     config: { build: { imageOptimization: 'webp' } },
     cache: new CacheManager('development'),
     graph: new DependencyGraph(),

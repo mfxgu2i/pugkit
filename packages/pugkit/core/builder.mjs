@@ -83,10 +83,10 @@ export class Builder {
    * クリーンアップ
    */
   async clean() {
-    const distPath = this.context.paths.dist
-    logger.info('clean', 'Cleaning dist directory')
+    const outputDir = this.context.paths.output
+    logger.info('clean', 'Cleaning output directory')
 
-    await cleanDir(distPath)
+    await cleanDir(outputDir)
 
     this.context.cache.clear()
     this.context.graph.clear()

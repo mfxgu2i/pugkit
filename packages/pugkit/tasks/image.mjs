@@ -73,7 +73,7 @@ async function processImage(filePath, context, optimization, retries = 3, retryD
   try {
     // 最適化なし: 変換せずそのままコピーする
     if (optimization === 'copy') {
-      const outputPath = resolve(paths.dist, relativePath)
+      const outputPath = resolve(paths.output, relativePath)
       await ensureFileDir(outputPath)
       await writeFile(outputPath, await readFile(filePath))
       return
@@ -86,15 +86,15 @@ async function processImage(filePath, context, optimization, retries = 3, retryD
 
     if (optimization === 'avif') {
       // AVIF変換
-      outputPath = resolve(paths.dist, relativePath.replace(/\.(jpg|jpeg|png|gif)$/i, '.avif'))
+      outputPath = resolve(paths.output, relativePath.replace(/\.(jpg|jpeg|png|gif)$/i, '.avif'))
       outputImage = image.avif({ ...config.build.imageOptions.avif, ...overrides })
     } else if (optimization === 'webp') {
       // WebP変換
-      outputPath = resolve(paths.dist, relativePath.replace(/\.(jpg|jpeg|png|gif)$/i, '.webp'))
+      outputPath = resolve(paths.output, relativePath.replace(/\.(jpg|jpeg|png|gif)$/i, '.webp'))
       outputImage = image.webp({ ...config.build.imageOptions.webp, ...overrides })
     } else {
       // 元の形式で圧縮
-      outputPath = resolve(paths.dist, relativePath)
+      outputPath = resolve(paths.output, relativePath)
 
       if (ext === '.jpg' || ext === '.jpeg') {
         outputImage = image.jpeg({ ...config.build.imageOptions.jpeg, ...overrides })

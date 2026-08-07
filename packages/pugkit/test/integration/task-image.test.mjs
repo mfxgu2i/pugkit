@@ -23,7 +23,7 @@ async function createJpeg(filePath, width = 200, height = 150) {
 
 function makeContext({ overrides = {}, optimization = 'webp', imageOptions = {} } = {}) {
   return {
-    paths: { src: srcDir, dist: distDir },
+    paths: { src: srcDir, output: distDir },
     config: {
       build: {
         imageOptimization: optimization,

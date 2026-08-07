@@ -34,7 +34,7 @@ describe('dev サーバーの起動', () => {
   it('dev キャッシュを作り直して目印を残す', async () => {
     const { context } = await startWatcher()
 
-    expect(await listFiles(context.paths.outDir)).toContain(DEV_CACHE_MARKER)
+    expect(await listFiles(context.paths.outputRoot)).toContain(DEV_CACHE_MARKER)
   })
 
   it('前回セッションの残骸を配信しない', async () => {
@@ -45,7 +45,7 @@ describe('dev サーバーの起動', () => {
     const watcher1 = new FileWatcher(builder1.context, runTaskOf(builder1))
     await watcher1.start()
     await watcher1.stop()
-    await project.write({ [`${builder1.context.paths.outDir}/stale.css`]: 'body{}' })
+    await project.write({ [`${builder1.context.paths.outputRoot}/stale.css`]: 'body{}' })
 
     const builder2 = await createBuilder(project.root, 'development')
     builder2.context.config.server.port = 0
@@ -53,7 +53,7 @@ describe('dev サーバーの起動', () => {
     await watcher2.start()
     onTestFinished(() => watcher2.stop())
 
-    expect(await listFiles(builder2.context.paths.outDir)).not.toContain('stale.css')
+    expect(await listFiles(builder2.context.paths.outputRoot)).not.toContain('stale.css')
   })
 
   it('build の出力先には触れない', async () => {
@@ -64,7 +64,7 @@ describe('dev サーバーの起動', () => {
 
   it('HTML 以外のアセットを起動時に用意する（出力先が空でも表示できるように）', async () => {
     const { context } = await startWatcher()
-    const output = await listFiles(context.paths.outDir)
+    const output = await listFiles(context.paths.outputRoot)
 
     expect(output).toContain('assets/css/style.css')
     expect(output).toContain('assets/js/main.js')
@@ -75,16 +75,16 @@ describe('dev サーバーの起動', () => {
   it('HTML は事前生成しない（リクエスト時ビルド + メモリ配信のため）', async () => {
     const { context } = await startWatcher()
 
-    expect((await listFiles(context.paths.outDir)).filter(f => f.endsWith('.html'))).toEqual([])
+    expect((await listFiles(context.paths.outputRoot)).filter(f => f.endsWith('.html'))).toEqual([])
   })
 
   it('dev の CSS は非圧縮でソースマップつき', async () => {
     const { context } = await startWatcher()
-    const output = await listFiles(context.paths.outDir)
+    const output = await listFiles(context.paths.outputRoot)
 
     expect(output).toContain('assets/css/style.css.map')
     const css = await import('node:fs/promises').then(fs =>
-      fs.readFile(`${context.paths.outDir}/assets/css/style.css`, 'utf8')
+      fs.readFile(`${context.paths.outputRoot}/assets/css/style.css`, 'utf8')
     )
     expect(css).toMatch(/\n/) // minify されていれば1行になる
   })
@@ -94,7 +94,7 @@ describe('dev の差分ビルド', () => {
   // 「作り直されたか」は出力ファイルの mtime で観測する。
   // 内容の一致だけ見ると、全ビルドに退行しても気づけない
   const mtimeOf = async (context, name) =>
-    (await import('node:fs/promises').then(f => f.stat(`${context.paths.outDir}/${name}`))).mtimeMs
+    (await import('node:fs/promises').then(f => f.stat(`${context.paths.outputRoot}/${name}`))).mtimeMs
 
   const multiEntryProject = () =>
     minimalProjectFiles({
@@ -105,7 +105,7 @@ describe('dev の差分ビルド', () => {
 
   it('Sass のパーシャル変更では依存するエントリだけ作り直す', async () => {
     const { project, context, runTask } = await startWatcher(multiEntryProject())
-    const read = name => import('node:fs/promises').then(f => f.readFile(`${context.paths.outDir}/${name}`, 'utf8'))
+    const read = name => import('node:fs/promises').then(f => f.readFile(`${context.paths.outputRoot}/${name}`, 'utf8'))
     const otherBefore = await mtimeOf(context, 'assets/css/other.css')
 
     await new Promise(r => setTimeout(r, 10)) // mtime の解像度を確保する
@@ -119,7 +119,7 @@ describe('dev の差分ビルド', () => {
 
   it('Sass のエントリ変更では他のエントリを作り直さない', async () => {
     const { project, context, runTask } = await startWatcher(multiEntryProject())
-    const read = name => import('node:fs/promises').then(f => f.readFile(`${context.paths.outDir}/${name}`, 'utf8'))
+    const read = name => import('node:fs/promises').then(f => f.readFile(`${context.paths.outputRoot}/${name}`, 'utf8'))
     const otherBefore = await mtimeOf(context, 'assets/css/other.css')
 
     await new Promise(r => setTimeout(r, 10))
@@ -137,7 +137,7 @@ describe('dev の差分ビルド', () => {
     await runTask('script', { files: [project.path('src/assets/js/main.js')] })
 
     const js = await import('node:fs/promises').then(f =>
-      f.readFile(`${context.paths.outDir}/assets/js/main.js`, 'utf8')
+      f.readFile(`${context.paths.outputRoot}/assets/js/main.js`, 'utf8')
     )
     expect(js).toContain('updated')
   })
@@ -146,7 +146,7 @@ describe('dev の差分ビルド', () => {
     const { context } = await startWatcher()
 
     const js = await import('node:fs/promises').then(f =>
-      f.readFile(`${context.paths.outDir}/assets/js/main.js`, 'utf8')
+      f.readFile(`${context.paths.outputRoot}/assets/js/main.js`, 'utf8')
     )
     expect(js).toContain('console.log')
   })

@@ -16,7 +16,7 @@ export async function copyTask(context, options = {}) {
     await Promise.all(
       options.files.map(async file => {
         const relativePath = relative(paths.public, file)
-        const outputPath = resolve(paths.dist, relativePath)
+        const outputPath = resolve(paths.output, relativePath)
         await ensureFileDir(outputPath)
         await copyFile(file, outputPath)
       })
@@ -42,7 +42,7 @@ export async function copyTask(context, options = {}) {
   await Promise.all(
     files.map(async file => {
       const relativePath = relative(paths.public, file)
-      const outputPath = resolve(paths.dist, relativePath)
+      const outputPath = resolve(paths.output, relativePath)
 
       await ensureFileDir(outputPath)
       await copyFile(file, outputPath)

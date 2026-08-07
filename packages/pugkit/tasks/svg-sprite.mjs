@@ -54,7 +54,7 @@ export async function spriteTask(context, options = {}) {
   // 各iconsディレクトリでスプライト生成
   for (const iconDir of iconDirs) {
     const inputDir = resolve(paths.src, iconDir)
-    const outputDir = resolve(paths.dist, dirname(iconDir))
+    const outputDir = resolve(paths.output, dirname(iconDir))
     const outputPath = resolve(outputDir, 'icons.svg')
 
     const count = await generateSprite(inputDir, outputPath)

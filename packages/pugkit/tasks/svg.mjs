@@ -56,7 +56,7 @@ async function optimizeSvg(filePath, context) {
     })
 
     // 出力
-    const outputPath = resolve(paths.dist, relativePath)
+    const outputPath = resolve(paths.output, relativePath)
     await ensureFileDir(outputPath)
     await writeFile(outputPath, result.data, 'utf8')
   } catch (error) {
