@@ -87,6 +87,9 @@ export async function scriptTask(context, options = {}) {
       entryPoints: filesToBuild,
       outdir: paths.output,
       outbase: paths.src,
+      // metafile のパスはここを基準にした相対パスになる。既定はプロセスの作業
+      // ディレクトリなので、指定しないと CLI 以外の使い方で依存グラフが壊れる
+      absWorkingDir: paths.root,
       bundle: true,
       format: 'esm',
       target: 'es2022',
