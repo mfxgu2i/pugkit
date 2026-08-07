@@ -57,13 +57,3 @@ export async function resetDevCache(dirPath) {
   await writeFile(resolve(dirPath, DEV_CACHE_MARKER), '')
 }
 
-/**
- * ファイル拡張子を変更
- */
-export function changeExtension(filePath, newExt) {
-  const lastDot = filePath.lastIndexOf('.')
-  if (lastDot === -1) {
-    return filePath + newExt
-  }
-  return filePath.substring(0, lastDot) + newExt
-}

@@ -2,7 +2,6 @@ import { resolve, isAbsolute, relative } from 'node:path'
 import { existsSync } from 'node:fs'
 import { CacheManager } from './cache.mjs'
 import { DependencyGraph } from './graph.mjs'
-import { createGlobPatterns } from '../config/index.mjs'
 
 /**
  * dev の出力先は起動のたびに中身を作り直すため、消してはいけない場所を弾く。
@@ -96,7 +95,6 @@ export class BuildContext {
       buildOutDir
     }
 
-    this.patterns = createGlobPatterns(this.paths.src)
     this.server = null
     this.taskRegistry = null
   }
