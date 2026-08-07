@@ -1,6 +1,6 @@
 import chokidar from 'chokidar'
 import { rm } from 'node:fs/promises'
-import { relative, resolve, basename, extname } from 'node:path'
+import { relative, resolve, basename, extname, sep } from 'node:path'
 import { logger } from '../utils/logger.mjs'
 import { clearImageSizeCache } from '../transform/image-size.mjs'
 
@@ -28,14 +28,14 @@ export class FileWatcher {
   async start() {
     const { paths } = this.context
 
-    // Sass / Script のみ初期ビルド（Pug は遅延ビルドのため不要。
-    // 依存グラフはページが最初にリクエストされた時に構築される）
+    // Pug 以外は初期ビルドする。Pug（HTML）だけは遅延ビルド + メモリ配信なので
+    // 事前生成が不要で、依存グラフもページが最初にリクエストされた時に構築される。
+    // 一方 CSS / JS / 画像 / SVG / public は実ファイルとして配信するため、
+    // 出力ディレクトリが空の状態でも表示できるよう起動時に生成しておく
+    const { taskRegistry } = this.context
     const initialTasks = []
-    if (this.context.taskRegistry?.sass) {
-      initialTasks.push(this.context.taskRegistry.sass(this.context))
-    }
-    if (this.context.taskRegistry?.script) {
-      initialTasks.push(this.context.taskRegistry.script(this.context))
+    for (const name of ['sass', 'script', 'image', 'svg', 'sprite', 'copy']) {
+      if (taskRegistry?.[name]) initialTasks.push(taskRegistry[name](this.context))
     }
     await Promise.all(initialTasks)
 
@@ -63,7 +63,9 @@ export class FileWatcher {
     if (filePath.endsWith('.pug')) return this.onPugChange(filePath)
     if (filePath.endsWith('.scss')) return this.onSassChange(filePath)
     if (this.isScript(filePath)) return this.onScriptChange(filePath)
-    if (filePath.endsWith('.svg') && !this.isIcons(filePath)) return this.onSvgChange(filePath, 'change')
+    if (filePath.endsWith('.svg') && this.isIcons(filePath)) return this.onSpriteChange(filePath, 'change')
+    if (this.isHiddenAsset(filePath)) return
+    if (filePath.endsWith('.svg')) return this.onSvgChange(filePath, 'change')
     if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageChange(filePath, 'change')
   }
 
@@ -72,7 +74,9 @@ export class FileWatcher {
     if (filePath.endsWith('.pug')) return this.onPugChange(filePath)
     if (filePath.endsWith('.scss')) return this.onSassChange(filePath)
     if (this.isScript(filePath)) return this.onScriptChange(filePath)
-    if (filePath.endsWith('.svg') && !this.isIcons(filePath)) return this.onSvgChange(filePath, 'add')
+    if (filePath.endsWith('.svg') && this.isIcons(filePath)) return this.onSpriteChange(filePath, 'add')
+    if (this.isHiddenAsset(filePath)) return
+    if (filePath.endsWith('.svg')) return this.onSvgChange(filePath, 'add')
     if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageChange(filePath, 'add')
   }
 
@@ -81,7 +85,9 @@ export class FileWatcher {
     if (filePath.endsWith('.pug')) return this.onPugUnlink(filePath)
     if (filePath.endsWith('.scss')) return this.onSassUnlink(filePath)
     if (this.isScript(filePath)) return this.onScriptUnlink(filePath)
-    if (filePath.endsWith('.svg') && !this.isIcons(filePath)) return this.onSvgUnlink(filePath)
+    if (filePath.endsWith('.svg') && this.isIcons(filePath)) return this.onSpriteChange(filePath, 'unlink')
+    if (this.isHiddenAsset(filePath)) return
+    if (filePath.endsWith('.svg')) return this.onSvgUnlink(filePath)
     if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageUnlink(filePath)
   }
 
@@ -98,6 +104,16 @@ export class FileWatcher {
   isIcons(filePath) {
     // Windows 対応: セパレータを正規化
     return filePath.replace(/\\/g, '/').includes('/icons/')
+  }
+
+  /**
+   * 「_」始まりのファイル・ディレクトリ配下のアセット。
+   * build では glob の ignore で出力対象外なので dev でも出力しない
+   */
+  isHiddenAsset(filePath) {
+    return relative(this.context.paths.src, filePath)
+      .split(sep)
+      .some(segment => segment.startsWith('_'))
   }
 
   isImageAsset(filePath) {
@@ -121,7 +137,7 @@ export class FileWatcher {
       cache.invalidatePageHtml(file)
     }
 
-    this.reload()
+    this.reload('html')
   }
 
   async onPugUnlink(filePath) {
@@ -142,7 +158,7 @@ export class FileWatcher {
 
     if (basename(filePath).startsWith('_')) {
       logger.info('unlink', relPath)
-      this.reload()
+      this.reload('html')
       return
     }
 
@@ -174,7 +190,7 @@ export class FileWatcher {
       return
     }
     const distPath = resolve(paths.dist, relPath.replace(/\.scss$/, '.css'))
-    await this.deleteDistFile(distPath, relPath)
+    await this.deleteDistFile(distPath, relPath, { withSourceMap: true })
   }
 
   // ---- Script ----
@@ -199,7 +215,7 @@ export class FileWatcher {
       return
     }
     const distPath = resolve(paths.dist, relPath.replace(/\.ts$/, '.js'))
-    await this.deleteDistFile(distPath, relPath)
+    await this.deleteDistFile(distPath, relPath, { withSourceMap: true })
   }
 
   // ---- SVG ----
@@ -216,6 +232,23 @@ export class FileWatcher {
       this.reload()
     } catch (error) {
       logger.error('watch', `SVG processing failed: ${error.message}`)
+    }
+  }
+
+  // ---- SVG スプライト（icons/ 配下） ----
+
+  async onSpriteChange(filePath, event) {
+    const relPath = relative(this.context.paths.src, filePath)
+    logger.info(event, `sprite: ${relPath}`)
+    try {
+      // スプライトは icons ディレクトリ全体から1ファイルを生成するため常に全再生成
+      if (this.context.taskRegistry?.sprite) {
+        await this.context.taskRegistry.sprite(this.context)
+      }
+      // <use href> の参照先が変わるので取り直しが必要
+      this.reload('full')
+    } catch (error) {
+      logger.error('watch', `Sprite generation failed: ${error.message}`)
     }
   }
 
@@ -322,17 +355,25 @@ export class FileWatcher {
     }
   }
 
-  reload() {
-    // HTML はメモリ配信（リクエスト時ビルド）になり dist の書き込み完了を
-    // 待つ必要がなくなったため、即時にリロード通知を送る
+  /**
+   * リロード通知。HTML はメモリ配信（リクエスト時ビルド）になり dist の書き込み完了を
+   * 待つ必要がなくなったため即時に送る。
+   *
+   * kind 'html' は Pug 由来の変更で、クライアントは DOM 差分更新で反映する。
+   * JS・画像・SVG・public の変更は HTML 以外のリソースを取り直す必要があるため
+   * 'full'（フルリロード）にする。
+   */
+  reload(kind = 'full') {
     if (this.context.server) {
-      this.context.server.reload()
+      this.context.server.reload(kind)
     }
   }
 
-  async deleteDistFile(distPath, relPath) {
+  async deleteDistFile(distPath, relPath, { withSourceMap = false } = {}) {
     try {
       await rm(distPath, { force: true })
+      // ソースマップを置き去りにすると削除済みファイルの .map だけ配信され続ける
+      if (withSourceMap) await rm(`${distPath}.map`, { force: true })
       logger.info('unlink', relPath)
       this.reload()
     } catch (error) {

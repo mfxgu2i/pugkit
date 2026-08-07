@@ -32,6 +32,7 @@ export async function createBuilder(root = process.cwd(), mode = 'development', 
     script: scriptTask,
     image: imageTask,
     svg: svgTask,
+    sprite: spriteTask,
     copy: copyTask
   }
 
