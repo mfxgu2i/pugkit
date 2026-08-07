@@ -1,4 +1,6 @@
 import { describe, expect, it, onTestFinished } from 'vitest'
+import { chmod, mkdir, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import { createBuilder } from '../../index.mjs'
 import { createTempProject, minimalProjectFiles } from '../helpers/project.mjs'
 
@@ -121,6 +123,29 @@ describe('ビルドエラー', () => {
 
     const html = await (await server.get('/broken.html')).text()
     expect(html).toContain('__pugkit_sse')
+  })
+})
+
+describe('配信できないアセット', () => {
+  /**
+   * 静的配信は存在を確認してから読み出すので、その間にファイルが消えると失敗する。
+   * dev では watcher の削除・キャッシュ作り直しと配信が競合するため必ず起きる。
+   * 応答が壊れるのは許容するが、dev サーバーが落ちてはいけない
+   * （落ちるとエラーページも自動復帰も無く、原因も編集したファイルに見えない）。
+   *
+   * 読み取り権限を落としたファイルで、消失と同じ「存在するのに読めない」を作る。
+   */
+  it('読み出しに失敗してもサーバーは動き続ける', async () => {
+    const server = await startDevServer()
+    const unreadable = `${server.context.paths.outputRoot}/assets/css/style.css`
+    await mkdir(dirname(unreadable), { recursive: true })
+    await writeFile(unreadable, 'body{}')
+    await chmod(unreadable, 0o000)
+    onTestFinished(() => chmod(unreadable, 0o644))
+
+    await server.get('/assets/css/style.css').catch(() => null)
+
+    expect((await server.get('/')).status).toBe(200)
   })
 })
 
