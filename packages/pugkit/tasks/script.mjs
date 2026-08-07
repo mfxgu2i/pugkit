@@ -44,7 +44,7 @@ export async function scriptTask(context, options = {}) {
   const allEntryFiles = await glob('**/[^_]*.{ts,js}', {
     cwd: paths.src,
     absolute: true,
-    ignore: ['**/*.d.ts', '**/node_modules/**']
+    ignore: ['**/*.d.ts', '**/node_modules/**', '**/_*/**']
   })
 
   if (allEntryFiles.length === 0) {

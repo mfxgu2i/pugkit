@@ -37,7 +37,7 @@ export async function sassTask(context, options = {}) {
   const allEntryFiles = await glob('**/[^_]*.scss', {
     cwd: paths.src,
     absolute: true,
-    ignore: ['**/_*.scss']
+    ignore: ['**/_*.scss', '**/_*/**']
   })
 
   if (allEntryFiles.length === 0) {
