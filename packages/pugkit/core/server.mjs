@@ -303,7 +303,7 @@ function sendHtml(res, status, html, extraHeaders) {
   res.end(buf)
 }
 
-function injectReload(html, liveReloadScript) {
+export function injectReload(html, liveReloadScript) {
   // 置換文字列に第三者コードを渡すため、$& や $` が特殊解釈されないよう関数形式で置換する
   return html.includes('</body>')
     ? html.replace('</body>', () => liveReloadScript + '</body>')
