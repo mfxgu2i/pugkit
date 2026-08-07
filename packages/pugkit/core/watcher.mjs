@@ -340,7 +340,7 @@ export class FileWatcher {
     const relPath = relative(this.context.paths.public, filePath)
     logger.info(event, `public: ${relPath}`)
 
-    // public 配下の画像も imageSize/imageInfo から参照され得る（src からのフォールバック）
+    // public 配下の画像も imageInfo から参照され得る（src に無ければ public を見る）
     if (this.isImageAsset(filePath)) {
       clearImageSizeCache()
       this.invalidateAssetDependents(filePath, event)
@@ -371,7 +371,7 @@ export class FileWatcher {
 
   /**
    * アセット（画像・SVG）に依存するページのキャッシュを無効化する。
-   * - imageGraph 経由（imageSize/imageInfo で参照）: HTML キャッシュのみ無効化
+   * - imageGraph 経由（imageInfo で参照）: HTML キャッシュのみ無効化
    * - graph 経由（include でテンプレートに焼き込み）: テンプレートごと無効化
    * - add イベントで依存が見つからない場合、「参照されているがまだ存在しなかった
    *   アセットが後から追加された」可能性があるため、全ページ HTML を無効化する

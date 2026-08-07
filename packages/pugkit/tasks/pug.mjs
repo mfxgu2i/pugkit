@@ -3,7 +3,7 @@ import { basename } from 'node:path'
 import { compilePugFile } from '../transform/pug.mjs'
 import { formatHtml } from '../transform/html.mjs'
 import { createBuilderVars } from '../transform/builder-vars.mjs'
-import { createImageSizeHelper, createImageInfoHelper } from '../transform/image-size.mjs'
+import { createImageInfoHelper } from '../transform/image-size.mjs'
 import { generatePage } from '../generate/page.mjs'
 import { logger } from '../utils/logger.mjs'
 
@@ -90,10 +90,9 @@ export async function buildPageHtml(filePath, context) {
     // dev 時のみ: imageGraph に Pug->画像 の依存を記録して画像変更時の最小再ビルドに使う
     const accessedImages = new Set()
     const onAccess = context.isDevelopment ? imgPath => accessedImages.add(imgPath) : undefined
-    const imageSize = createImageSizeHelper(filePath, paths, logger, { onAccess })
     const imageInfo = createImageInfoHelper(filePath, paths, logger, config, { onAccess })
 
-    const html = template({ Builder: builderVars, imageSize, imageInfo })
+    const html = template({ Builder: builderVars, imageInfo })
 
     if (context.isDevelopment && imageGraph && isFresh()) {
       imageGraph.clearDependencies(filePath)

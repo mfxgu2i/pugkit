@@ -167,7 +167,7 @@ if info.variant
   source(media='(max-width: 767px)' srcset=info.variant.src width=info.variant.width height=info.variant.height)
 ```
 
-> `imageInfo()` は `src/` 配下の画像のみ対応しています。`public/` 配下の画像は非対応です。
+> `imageInfo()` は `src/` 配下を探し、見つからなければ `public/` 配下も探します。
 
 ### Sass
 

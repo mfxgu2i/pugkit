@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs'
-import { resolve, relative, dirname, basename, extname } from 'node:path'
+import { resolve, relative, dirname, extname } from 'node:path'
 import sizeOf from 'image-size'
 
 // ビルドセッション内で画像ファイルの内容をキャッシュし、同じファイルの重複読み込みを防ぐ
@@ -16,60 +16,37 @@ export function clearImageSizeCache() {
   _imageBufferCache.clear()
 }
 
-export function createImageSizeHelper(filePath, paths, logger, { onAccess } = {}) {
+/**
+ * Pug から参照された画像パスを実ファイルへ解決する。
+ * 「/」始まりは src からの絶対参照、それ以外はページからの相対参照。
+ * src に無ければ public も見る（public に置いた画像も HTML から参照されるため）。
+ */
+function createImageResolver(filePath, paths) {
+  const pageDir = dirname(filePath)
+
   return src => {
-    const resolveImagePath = (imageSrc, baseDir) => {
-      if (imageSrc.startsWith('/')) {
-        return resolve(paths.src, imageSrc.slice(1))
-      }
-      return resolve(baseDir, imageSrc)
-    }
+    const resolved = src.startsWith('/') ? resolve(paths.src, src.slice(1)) : resolve(pageDir, src)
+    if (existsSync(resolved)) return resolved
 
-    const findImageFile = resolvedPath => {
-      if (existsSync(resolvedPath)) return resolvedPath
-      const publicPath = resolvedPath.replace(paths.src, paths.public)
-      if (existsSync(publicPath)) return publicPath
-      return null
-    }
-
-    try {
-      const pageDir = dirname(filePath)
-      const resolvedPath = resolveImagePath(src, pageDir)
-      const foundPath = findImageFile(resolvedPath)
-
-      if (foundPath) {
-        onAccess?.(foundPath)
-        const buffer = readImageCached(foundPath)
-        return sizeOf(buffer)
-      }
-
-      logger?.warn('pug', `Image not found "${src}" in ${relative(paths.src, filePath)}`)
-      return { width: undefined, height: undefined }
-    } catch {
-      logger?.warn('pug', `Failed to read "${src}" in ${relative(paths.src, filePath)}`)
-      return { width: undefined, height: undefined }
-    }
+    const inPublic = resolve(paths.public, relative(paths.src, resolved))
+    return existsSync(inPublic) ? inPublic : null
   }
 }
 
+/**
+ * Pug に渡す imageInfo ヘルパーを作る。
+ *
+ * 画像の実寸を読んで返し、あわせて retina（@2x）とアートディレクション用の
+ * 派生画像を自動検出する。imageOptimization が avif/webp のときは src を
+ * 変換後の拡張子に読み替える。
+ */
 export function createImageInfoHelper(filePath, paths, logger, config, { onAccess } = {}) {
   const optimization = config?.build?.imageOptimization
-  const newExt = optimization === 'avif' || optimization === 'webp' ? `.${optimization}` : null
+  const convertedExt = optimization === 'avif' || optimization === 'webp' ? `.${optimization}` : null
   const artDirectionSuffix = config?.build?.imageInfo?.artDirectionSuffix ?? '_sp'
+  const findImageFile = createImageResolver(filePath, paths)
 
   return src => {
-    const resolveImagePath = (imageSrc, baseDir) => {
-      if (imageSrc.startsWith('/')) {
-        return resolve(paths.src, imageSrc.slice(1))
-      }
-      return resolve(baseDir, imageSrc)
-    }
-
-    const findImageFile = resolvedPath => {
-      if (existsSync(resolvedPath)) return resolvedPath
-      return null
-    }
-
     const fallback = {
       src,
       width: undefined,
@@ -81,64 +58,50 @@ export function createImageInfoHelper(filePath, paths, logger, config, { onAcces
     }
 
     try {
-      const pageDir = dirname(filePath)
-      const resolvedPath = resolveImagePath(src, pageDir)
-      const foundPath = findImageFile(resolvedPath)
+      const foundPath = findImageFile(src)
 
       if (!foundPath) {
         logger?.warn('pug', `Image not found "${src}" in ${relative(paths.src, filePath)}`)
         return fallback
       }
 
-      const buffer = readImageCached(foundPath)
       onAccess?.(foundPath)
-      const { width, height, type: format } = sizeOf(buffer)
+      const { width, height, type: format } = sizeOf(readImageCached(foundPath))
 
       const ext = extname(src)
       const isSvg = ext.toLowerCase() === '.svg'
       const base = src.slice(0, -ext.length)
-      // avif/webp モード時は src 自体を変換後のパスに変換（SVG は除外）
-      const resolvedSrc = !isSvg && newExt ? `${base}${newExt}` : src
 
-      // @2x retina 画像の自動検出
-      let retina = null
-      if (!isSvg) {
-        const retinaSrc = `${base}@2x${ext}`
-        const retinaResolvedPath = resolveImagePath(retinaSrc, pageDir)
-        const retinaFoundPath = findImageFile(retinaResolvedPath)
-        if (retinaFoundPath) {
-          const retinaBuffer = readImageCached(retinaFoundPath)
-          onAccess?.(retinaFoundPath)
-          const { width: rWidth, height: rHeight } = sizeOf(retinaBuffer)
-          retina = {
-            src: newExt ? `${base}@2x${newExt}` : retinaSrc,
-            width: rWidth,
-            height: rHeight
-          }
+      /** 同名にサフィックスを足した派生画像（@2x や _sp）を探す。無ければ null */
+      const findSibling = suffix => {
+        if (isSvg) return null
+
+        const siblingSrc = `${base}${suffix}${ext}`
+        const siblingPath = findImageFile(siblingSrc)
+        if (!siblingPath) return null
+
+        onAccess?.(siblingPath)
+        const sibling = sizeOf(readImageCached(siblingPath))
+
+        return {
+          src: convertedExt ? `${base}${suffix}${convertedExt}` : siblingSrc,
+          width: sibling.width,
+          height: sibling.height
         }
       }
 
-      // アートディレクション画像の自動検出
-      let variant = null
-      if (!isSvg) {
-        const variantSrc = `${base}${artDirectionSuffix}${ext}`
-        const variantResolvedPath = resolveImagePath(variantSrc, pageDir)
-        const variantFoundPath = findImageFile(variantResolvedPath)
-        if (variantFoundPath) {
-          const variantBuffer = readImageCached(variantFoundPath)
-          onAccess?.(variantFoundPath)
-          const { width: vWidth, height: vHeight } = sizeOf(variantBuffer)
-          variant = {
-            src: newExt ? `${base}${artDirectionSuffix}${newExt}` : variantSrc,
-            width: vWidth,
-            height: vHeight
-          }
-        }
+      return {
+        // SVG は変換対象外なので src をそのまま使う
+        src: !isSvg && convertedExt ? `${base}${convertedExt}` : src,
+        width,
+        height,
+        format,
+        isSvg,
+        retina: findSibling('@2x'),
+        variant: findSibling(artDirectionSuffix)
       }
-
-      return { src: resolvedSrc, width, height, format, isSvg, retina, variant }
-    } catch {
-      logger?.warn('pug', `Failed to read "${src}" in ${relative(paths.src, filePath)}`)
+    } catch (error) {
+      logger?.warn('pug', `Failed to read "${src}" in ${relative(paths.src, filePath)}: ${error.message}`)
       return fallback
     }
   }
