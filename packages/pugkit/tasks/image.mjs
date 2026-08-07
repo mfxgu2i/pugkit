@@ -15,12 +15,9 @@ sharp.concurrency(1)
 export async function imageTask(context, options = {}) {
   const { paths, config, isProduction } = context
 
-  const optimization = config.build.imageOptimization
-
-  if (!optimization || optimization === false) {
-    logger.skip('image', 'Image optimization disabled')
-    return
-  }
+  // false は「最適化しない」であって「出力しない」ではない。
+  // HTML から参照されるため、無変換でコピーする
+  const optimization = config.build.imageOptimization || 'copy'
 
   // 特定のファイルが指定されている場合（watch時）
   if (options.files && Array.isArray(options.files)) {
@@ -74,6 +71,14 @@ async function processImage(filePath, context, optimization, isProduction, retri
   const overrides = config.build.imageOverrides?.[overrideKey] ?? {}
 
   try {
+    // 最適化なし: 変換せずそのままコピーする
+    if (optimization === 'copy') {
+      const outputPath = resolve(paths.dist, relativePath)
+      await ensureFileDir(outputPath)
+      await writeFile(outputPath, await readFile(filePath))
+      return
+    }
+
     const image = sharp(filePath)
 
     let outputPath
