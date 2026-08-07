@@ -1,10 +1,12 @@
 import chokidar from 'chokidar'
 import { rm } from 'node:fs/promises'
-import { relative, resolve, basename, extname, sep } from 'node:path'
+import { existsSync } from 'node:fs'
+import { relative, resolve, basename, dirname, extname, sep } from 'node:path'
 import net from 'node:net'
 import { logger } from '../utils/logger.mjs'
 import { resetDevCache } from '../utils/file.mjs'
 import { clearImageSizeCache } from '../transform/image-size.mjs'
+import { spriteOutputPath } from '../tasks/svg-sprite.mjs'
 
 // Pug（HTML）だけは遅延ビルド + メモリ配信なので事前生成しない。
 // 他は実ファイルとして配信するため、出力先が空の状態でも表示できるよう起動時に作る
@@ -329,11 +331,25 @@ export class FileWatcher {
     try {
       // スプライトは icons ディレクトリ全体から1ファイルを生成するため常に全再生成
       await this.runTask('sprite')
+      if (event === 'unlink') await this.removeOrphanedSprite(filePath)
       // <use href> の参照先が変わるので取り直しが必要
       this.reload('full')
     } catch (error) {
       logger.error('watch', `Sprite generation failed: ${error.message}`)
     }
+  }
+
+  /**
+   * icons ディレクトリごと消えたときのスプライトの後始末。
+   * ディレクトリが残っていればタスクの再生成が処理するが、消えていると
+   * glob から見えないので、消えたアイコンのパスから出力先を辿る
+   */
+  async removeOrphanedSprite(iconFile) {
+    const { paths } = this.context
+    const iconDir = dirname(iconFile)
+    if (existsSync(iconDir)) return
+
+    await rm(spriteOutputPath(relative(paths.src, iconDir), paths), { force: true })
   }
 
   async onSvgUnlink(filePath) {

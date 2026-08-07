@@ -1,5 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest'
+import { rm } from 'node:fs/promises'
 import { spriteTask } from '../../tasks/svg-sprite.mjs'
+import { FileWatcher } from '../../core/watcher.mjs'
 import { createTempProject, listFiles } from '../helpers/project.mjs'
 
 /**
@@ -131,5 +133,63 @@ describe('出力先', () => {
     await spriteTask(createContext())
 
     expect(await listFiles(project.path('dist'))).toEqual([])
+  })
+
+  it('「_」始まりのディレクトリ配下のアイコンは対象外', async () => {
+    // README:「_ で始まるファイル・ディレクトリはビルド対象外」
+    await project.write({
+      'src/_parts/icons/hidden.svg': icon(),
+      'src/assets/icons/arrow.svg': icon()
+    })
+
+    await spriteTask(createContext())
+
+    expect(await listFiles(project.path('dist'))).toEqual(['assets/icons.svg'])
+  })
+})
+
+describe('アイコンが無くなったとき', () => {
+  /**
+   * スプライトは icons ディレクトリ全体から1ファイルを作るので、
+   * アイコンが減っただけなら作り直しで追随できる。
+   * だが0件になると生成自体が行われず、古いスプライトが残って配信され続ける
+   * （消したアイコンを参照する <use> が解決してしまい、エラーにもならない）。
+   */
+  it('最後のアイコンを消したら古いスプライトも消す', async () => {
+    await project.write({ 'src/assets/icons/star.svg': icon() })
+    await spriteTask(createContext())
+    expect(await listFiles(project.path('dist'))).toContain('assets/icons.svg')
+
+    await rm(project.path('src/assets/icons/star.svg'))
+    await spriteTask(createContext())
+
+    expect(await listFiles(project.path('dist'))).not.toContain('assets/icons.svg')
+  })
+
+  // ディレクトリごと消えると glob から見えなくなり、タスクだけでは後始末できない。
+  // 監視側は「消えたファイル」を知っているので、そこから辿る
+  it('icons ディレクトリごと消えても古いスプライトを消す', async () => {
+    await project.write({ 'src/assets/icons/star.svg': icon() })
+    const context = createContext()
+    await spriteTask(context)
+
+    const watcher = new FileWatcher(context, () => spriteTask(context))
+    await rm(project.path('src/assets/icons'), { recursive: true })
+    await watcher.onSpriteChange(project.path('src/assets/icons/star.svg'), 'unlink')
+
+    expect(await listFiles(project.path('dist'))).not.toContain('assets/icons.svg')
+  })
+
+  it('他のディレクトリのスプライトには触れない', async () => {
+    await project.write({
+      'src/assets/icons/star.svg': icon(),
+      'src/other/icons/moon.svg': icon()
+    })
+    await spriteTask(createContext())
+
+    await rm(project.path('src/assets/icons/star.svg'))
+    await spriteTask(createContext())
+
+    expect(await listFiles(project.path('dist'))).toEqual(['other/icons.svg'])
   })
 })
