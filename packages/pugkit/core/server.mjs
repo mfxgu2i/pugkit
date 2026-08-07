@@ -1,7 +1,9 @@
 import http from 'node:http'
 import path from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { createHash } from 'node:crypto'
 import sirv from 'sirv'
 import { logger } from '../utils/logger.mjs'
 import { buildPageHtml } from '../tasks/pug.mjs'
@@ -9,12 +11,47 @@ import { buildPageHtml } from '../tasks/pug.mjs'
 const SSE_PATH = '/__pugkit_sse'
 
 /**
- * HTMLに挿入するライブリロードクライアントスクリプト。
- * エラーページでは scroll 無効版を使う: 保存済みの位置を消費せず温存し、
- * エラーページ自身の位置（≒先頭）も保存しないことで、修正後のリロードで
- * エラー前のスクロール位置に戻れるようにする。
+ * idiomorph 本体（DOM 差分適用ライブラリ）をクライアントスクリプトに同梱するため読み込む。
+ * dev サーバー起動時にだけ読むよう遅延化している（build では読まれない）。
+ * 読めない場合は DOM 差分更新を諦めてフルリロードにフォールバックする。
  */
-function createLiveReloadScript({ scroll = true } = {}) {
+let idiomorphSource
+function loadIdiomorphSource() {
+  if (idiomorphSource === undefined) {
+    try {
+      const require = createRequire(import.meta.url)
+      idiomorphSource = readFileSync(require.resolve('idiomorph/dist/idiomorph.min.js'), 'utf8')
+    } catch {
+      idiomorphSource = null
+    }
+  }
+  return idiomorphSource
+}
+
+/**
+ * body の差分適用で反映できない部分（<html> の属性・head・<script>）の指紋。
+ * 前回そのページに返した HTML と一致していれば差分適用してよい。
+ * 両方ともサーバー生成の HTML から同じ方法で抽出するため、ブラウザのパース差に影響されない。
+ */
+export function computeMorphSignature(html) {
+  const htmlTag = html.match(/<html\b[^>]*>/i)?.[0] ?? ''
+  const head = html.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i)?.[1] ?? ''
+  const scripts = html.match(/<script\b[\s\S]*?<\/script>/gi)?.join('') ?? ''
+  return createHash('md5').update(`${htmlTag}\u0000${head}\u0000${scripts}`).digest('hex')
+}
+
+/**
+ * HTMLに挿入するライブリロードクライアントスクリプト。
+ *
+ * - domDiff: Pug 変更時に location.reload() ではなく、新しい HTML を取得して
+ *   表示中の DOM へ差分適用する。スクロール位置・フォーム入力・スライダーの
+ *   状態や遅延読み込み済み画像が保持され、リロード特有のちらつきが起きない。
+ *   <script> の変更・取得失敗・差分適用エラー時はフルリロードに退避する。
+ * - scroll: エラーページでは無効化する。保存済みの位置を消費せず温存し、
+ *   エラーページ自身の位置（≒先頭）も保存しないことで、修正後のリロードで
+ *   エラー前のスクロール位置に戻れるようにする。
+ */
+function createLiveReloadScript({ scroll = true, domDiff = true } = {}) {
   const restoreScroll = scroll
     ? `try {
     var saved = sessionStorage.getItem(scrollKey);
@@ -43,6 +80,9 @@ function createLiveReloadScript({ scroll = true } = {}) {
     } catch (e) {}`
     : ''
 
+  const idiomorphSource = domDiff ? loadIdiomorphSource() : null
+  const useMorph = idiomorphSource !== null
+
   return `<script>
 (function() {
   // リロード前に保存したスクロール位置を復元する（編集のたびに先頭へ戻るのを防ぐ）
@@ -51,10 +91,67 @@ function createLiveReloadScript({ scroll = true } = {}) {
   function saveScroll() {
     ${saveScrollBody}
   }
-  var es = new EventSource('${SSE_PATH}');
-  es.addEventListener('reload', function() {
+  function fullReload() {
     saveScroll();
     location.reload();
+  }
+${useMorph ? idiomorphSource : ''}
+  // このスクリプトが動く時点（body 末尾）の DOM ＝ サーバー生成そのまま。
+  // ここに無い要素は実行時に差し込まれたもの（解析タグ・同意バナー・チャット等）
+  // として扱い、差分適用で消さないようにする
+  var serverNodes = typeof WeakSet === 'function' ? new WeakSet() : null;
+  function markServerNodes(root) {
+    if (!serverNodes || root.nodeType !== 1) return;
+    serverNodes.add(root);
+    var all = root.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) serverNodes.add(all[i]);
+  }
+  function applyMorph() {
+    return fetch(location.href, { cache: 'no-store' }).then(function(res) {
+      if (!res.ok) throw new Error('status ' + res.status);
+      // head・<html> 属性・<script> が変わっていないかはサーバーが判定する。
+      // morph では <script> が再実行されず head の変更も反映できないため
+      // 変わっていればフルリロードに退避する
+      if (res.headers.get('x-pugkit-morphable') !== '1') throw new Error('needs full reload');
+      return res.text();
+    }).then(function(html) {
+      var doc = new DOMParser().parseFromString(html, 'text/html');
+      if (!doc.body) throw new Error('parse failed');
+      // 差分適用は body に限定する。head は解析タグが実行時に差し込んだ要素を
+      // 巻き込むため触らない（head の変更は上のヘッダー判定でフルリロードになる）
+      Idiomorph.morph(document.body, doc.body, {
+        ignoreActiveValue: true,
+        callbacks: {
+          beforeNodeMorphed: function(oldNode) {
+            // <noscript> の中身はライブ DOM ではテキスト、DOMParser では要素として
+            // 解釈される。差分を取ると中の iframe/img が実体化して実際に読み込まれる
+            if (oldNode.nodeType === 1 && oldNode.tagName === 'NOSCRIPT') return false;
+          },
+          beforeNodeRemoved: function(node) {
+            // 実行時に差し込まれた要素は残す。サーバー生成の要素は Pug から
+            // 消されたということなので通常どおり削除する
+            if (serverNodes && node.nodeType === 1 && !serverNodes.has(node)) return false;
+          },
+          afterNodeAdded: function(node) {
+            markServerNodes(node);
+          }
+        }
+      });
+      window.dispatchEvent(new CustomEvent('pugkit:morphed'));
+    });
+  }
+  if (typeof Idiomorph !== 'undefined') markServerNodes(document.body);
+  var es = new EventSource('${SSE_PATH}');
+  es.addEventListener('reload', function(e) {
+    var kind = (e && e.data) || 'full';
+    if (kind !== 'html' || typeof Idiomorph === 'undefined') {
+      fullReload();
+      return;
+    }
+    applyMorph().catch(function(err) {
+      if (window.console && console.debug) console.debug('[pugkit] full reload:', err && err.message);
+      fullReload();
+    });
   });
   es.addEventListener('css-update', function() {
     document.querySelectorAll('link[rel="stylesheet"]').forEach(function(link) {
@@ -77,9 +174,6 @@ function createLiveReloadScript({ scroll = true } = {}) {
 })();
 </script>`
 }
-
-const liveReloadScript = createLiveReloadScript()
-const errorPageScript = createLiveReloadScript({ scroll: false })
 
 /**
  * リクエストURLを src 内の Pug ソースに解決する。
@@ -173,7 +267,7 @@ function escapeHtml(str) {
 /**
  * ビルドエラー時に返すページ。ライブリロードスクリプト入りなので修正保存で自動復帰する。
  */
-function buildErrorPage(pugFile, error, paths) {
+function buildErrorPage(pugFile, error, paths, errorPageScript) {
   const rel = path.relative(paths.src, pugFile)
   return `<!DOCTYPE html>
 <html lang="ja">
@@ -198,18 +292,22 @@ ${errorPageScript}
 </html>`
 }
 
-function sendHtml(res, status, html) {
+function sendHtml(res, status, html, extraHeaders) {
   const buf = Buffer.from(html, 'utf-8')
   res.writeHead(status, {
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Length': buf.length,
-    'Cache-Control': 'no-cache'
+    'Cache-Control': 'no-cache',
+    ...extraHeaders
   })
   res.end(buf)
 }
 
-function injectReload(html) {
-  return html.includes('</body>') ? html.replace('</body>', liveReloadScript + '</body>') : html + liveReloadScript
+function injectReload(html, liveReloadScript) {
+  // 置換文字列に第三者コードを渡すため、$& や $` が特殊解釈されないよう関数形式で置換する
+  return html.includes('</body>')
+    ? html.replace('</body>', () => liveReloadScript + '</body>')
+    : html + liveReloadScript
 }
 
 /**
@@ -230,8 +328,15 @@ export async function serverTask(context, options = {}) {
 
   const serveRoot = paths.outDir
 
+  // DOM 差分更新（domDiff）はデフォルト有効。無効化するとフルリロードに戻る
+  const domDiff = config.server?.domDiff !== false
+  const liveReloadScript = createLiveReloadScript({ domDiff })
+  const errorPageScript = createLiveReloadScript({ scroll: false, domDiff: false })
+
   const clients = new Set()
   const getPage = createLazyPageBuilder(context)
+  // ページごとに直近で返した HTML の morph 可否判定用の指紋
+  const morphSignatures = new Map()
 
   const staticServe = sirv(serveRoot, {
     dev: true,
@@ -278,9 +383,19 @@ export async function serverTask(context, options = {}) {
 
     if (pugFile) {
       getPage(pugFile)
-        .then(html => sendHtml(res, 200, injectReload(html)))
+        .then(html => {
+          // 前回そのページに返した HTML と <html> 属性・head・script が同じなら、
+          // クライアントは body の差分適用だけで最新にできる
+          const signature = computeMorphSignature(html)
+          const previous = morphSignatures.get(pugFile)
+          morphSignatures.set(pugFile, signature)
+          const morphable = previous !== undefined && previous === signature
+          sendHtml(res, 200, injectReload(html, liveReloadScript), {
+            'X-Pugkit-Morphable': morphable ? '1' : '0'
+          })
+        })
         .catch(error => {
-          if (!res.headersSent) sendHtml(res, 500, buildErrorPage(pugFile, error, paths))
+          if (!res.headersSent) sendHtml(res, 500, buildErrorPage(pugFile, error, paths, errorPageScript))
         })
       return
     }
@@ -300,7 +415,7 @@ export async function serverTask(context, options = {}) {
     if (htmlFile) {
       readFile(htmlFile, 'utf-8')
         .then(html => {
-          sendHtml(res, 200, injectReload(html))
+          sendHtml(res, 200, injectReload(html, liveReloadScript))
         })
         .catch(() => {
           staticServe(req, res, () => {
@@ -330,8 +445,9 @@ export async function serverTask(context, options = {}) {
   }
 
   context.server = {
-    reload() {
-      broadcast('reload')
+    // kind: 'html' = Pug 由来の変更（DOM 差分更新の対象）、'full' = フルリロードが必要
+    reload(kind = 'full') {
+      broadcast('reload', kind)
     },
     reloadCSS() {
       broadcast('css-update')

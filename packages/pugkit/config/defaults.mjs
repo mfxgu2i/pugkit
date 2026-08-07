@@ -5,7 +5,8 @@ export const defaultConfig = {
   server: {
     port: 5555,
     host: 'localhost',
-    startPath: '/'
+    startPath: '/',
+    domDiff: true
   },
   build: {
     clean: true,
