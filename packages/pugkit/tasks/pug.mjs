@@ -17,15 +17,9 @@ export async function pugTask(context, options = {}) {
     return
   }
 
-  const changed = await resolveChangedFiles(filesToBuild, targetFiles, cache, isProduction)
-  if (changed.length === 0) {
-    logger.skip('pug', 'No changes detected')
-    return
-  }
-
-  logger.info('pug', `Building ${changed.length} file(s)`)
-  await runWithConcurrency(changed, 8, file => processFile(file, context))
-  logger.success('pug', `Built ${changed.length} file(s)`)
+  logger.info('pug', `Building ${filesToBuild.length} file(s)`)
+  await runWithConcurrency(filesToBuild, 8, file => processFile(file, context))
+  logger.success('pug', `Built ${filesToBuild.length} file(s)`)
 }
 
 async function resolveFiles(paths, targetFiles) {
@@ -42,11 +36,6 @@ async function resolveFiles(paths, targetFiles) {
   return allFiles.filter(file => !basename(file).startsWith('_'))
 }
 
-async function resolveChangedFiles(files, targetFiles, cache, isProduction) {
-  if (targetFiles?.length > 0) return files
-  if (!isProduction) return cache.getChangedFiles(files)
-  return files
-}
 
 async function runWithConcurrency(items, concurrency, fn) {
   let i = 0

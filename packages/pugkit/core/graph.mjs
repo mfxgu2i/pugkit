@@ -43,16 +43,7 @@ export class DependencyGraph {
     const queued = new Set([dependency])
     const queue = [dependency]
 
-    // 探索が終わらないのは実装の不具合。dev サーバーが無言で固まると原因を追えないため、
-    // ノード数を超えたら明示的に落とす
-    const maxNodes = this.edges.size + this.reverseEdges.size + 1
-    let processed = 0
-
     while (queue.length > 0) {
-      if (++processed > maxNodes) {
-        throw new Error('依存グラフの探索が終了しませんでした（循環参照の処理に不具合があります）')
-      }
-
       const parents = this.reverseEdges.get(queue.shift())
       if (!parents) continue
 

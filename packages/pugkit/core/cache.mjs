@@ -1,7 +1,3 @@
-import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-
 // ページHTMLキャッシュの上限（概算バイト）。ページ数の多いサイトを延々と閲覧しても
 // メモリが際限なく増えないようにする。超過分は古い順に捨てるが、捨てられたページは
 // 次のリクエストで再ビルドされるだけなので正しさには影響しない
@@ -18,7 +14,6 @@ function approximateBytes(html) {
 export class CacheManager {
   constructor(mode, { pageHtmlCacheLimit = DEFAULT_PAGE_HTML_CACHE_LIMIT } = {}) {
     this.mode = mode
-    this.fileHashes = new Map() // ファイルパス -> ハッシュ
     this.compiledCache = new Map() // Pugコンパイル済みテンプレート
     this.pageHtmlCache = new Map() // ページHTML（dev遅延ビルドの配信キャッシュ / 挿入順=最近使った順）
     this.pageHtmlBytes = 0 // pageHtmlCache の概算バイト数
@@ -28,43 +23,6 @@ export class CacheManager {
     this.isDevelopment = mode === 'development'
   }
 
-  /**
-   * ファイルが変更されたかチェック
-   */
-  async isFileChanged(filePath) {
-    if (!existsSync(filePath)) {
-      return false
-    }
-
-    const currentHash = await this.computeHash(filePath)
-    const cachedHash = this.fileHashes.get(filePath)
-
-    // キャッシュが存在しない場合は変更ありとして扱う
-    if (cachedHash === undefined) {
-      this.fileHashes.set(filePath, currentHash)
-      return true
-    }
-
-    if (cachedHash === currentHash) {
-      return false
-    }
-
-    this.fileHashes.set(filePath, currentHash)
-    return true
-  }
-
-  /**
-   * 複数ファイルの変更をバッチチェック
-   */
-  async getChangedFiles(filePaths) {
-    const checks = await Promise.all(
-      filePaths.map(async path => ({
-        path,
-        changed: await this.isFileChanged(path)
-      }))
-    )
-    return checks.filter(c => c.changed).map(c => c.path)
-  }
 
   /**
    * Pugテンプレートのキャッシュ取得
@@ -89,7 +47,6 @@ export class CacheManager {
    */
   invalidatePugTemplate(filePath) {
     this.compiledCache.delete(filePath)
-    this.fileHashes.delete(filePath)
   }
 
   /**
@@ -166,23 +123,11 @@ export class CacheManager {
     this.globalPageEpoch++
   }
 
-  /**
-   * ハッシュ計算（ファイル内容のみ）
-   */
-  async computeHash(filePath) {
-    try {
-      const content = await readFile(filePath)
-      return createHash('md5').update(content).digest('hex')
-    } catch {
-      return `error-${Math.random()}`
-    }
-  }
 
   /**
    * すべてのキャッシュをクリア
    */
   clear() {
-    this.fileHashes.clear()
     this.compiledCache.clear()
     this.pageHtmlCache.clear()
     this.pageHtmlBytes = 0

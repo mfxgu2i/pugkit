@@ -34,15 +34,7 @@ export async function build(root = process.cwd()) {
   await builder.build()
 }
 
-export async function watch(root = process.cwd()) {
-  const builder = await createBuilder(root, 'development')
-  await builder.watch()
-}
 
-export async function runTask(taskName, root = process.cwd()) {
-  const builder = await createBuilder(root, 'production')
-  await builder.runTask(taskName)
-}
 
 export { Builder, loadConfig }
 export { BuildContext } from './core/context.mjs'
