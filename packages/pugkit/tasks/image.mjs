@@ -10,7 +10,12 @@ import { densityOutputs, hasScaledVariant, scaleDown, sourceDensityOf } from '..
 sharp.cache({ memory: 50, files: 20, items: 200 })
 sharp.concurrency(1)
 
-const IMAGE_GLOB = '**/*.{jpg,jpeg,png,gif}'
+export const IMAGE_GLOB = '**/*.{jpg,jpeg,png,gif}'
+export const IMAGE_IGNORE = ['**/_*/**']
+
+// src に置かれても、どのタスクの担当にもならない画像形式。
+// imageInfo() は寸法を読んで参照を書くので、放置すると無警告のリンク切れになる
+const UNHANDLED_GLOB = '**/*.{webp,avif}'
 
 /**
  * 画像の出力先。生成側と watcher の削除側で規則がずれると、
@@ -26,41 +31,6 @@ export function imageOutputPaths(relativePath, config, paths) {
   }))
 }
 
-// パス比較は区切り文字を揃えてから行う（glob は「/」、path.relative は OS 依存）
-const normalize = p => p.replace(/\\/g, '/')
-
-/**
- * 出力先が一意であることを確かめる。同じ場所に二人以上が書くと、
- * どちらが残るかが Promise.all の完了順で決まって再現しなくなる。
- * 黙って片方を捨てると「置いたはずの画像が使われていない」ことに気づけないので中止する。
- *
- * public は copyTask がそのまま出すだけなので、変換しない所有者として同じ表に載せる。
- * image と copy は同じフェーズで並列に走るため、両者の衝突も同じ問題になる
- */
-async function assertUniqueOutputs(images, context) {
-  const { paths, config } = context
-  const owners = new Map()
-  const conflicts = []
-
-  const claim = (output, source) => {
-    const existing = owners.get(output)
-    if (existing && existing !== source) conflicts.push(`  ${output}  ←  ${existing} / ${source}`)
-    else owners.set(output, source)
-  }
-
-  for (const file of images) {
-    const rel = relative(paths.src, file)
-    for (const out of imageOutputPaths(rel, config, paths)) claim(normalize(out.relative), `src/${normalize(rel)}`)
-  }
-
-  const publicFiles = await glob('**/*', { cwd: paths.public, nodir: true, dot: true })
-  for (const rel of publicFiles) claim(normalize(rel), `public/${normalize(rel)}`)
-
-  if (conflicts.length === 0) return
-
-  throw new Error(`出力先が衝突しています。どちらが残るかが決まらないため中止しました。\n${conflicts.join('\n')}`)
-}
-
 /**
  * 画像最適化タスク
  */
@@ -70,12 +40,8 @@ export async function imageTask(context, options = {}) {
   const images = await glob(IMAGE_GLOB, {
     cwd: paths.src,
     absolute: true,
-    ignore: ['**/_*/**']
+    ignore: IMAGE_IGNORE
   })
-
-  // 衝突は追加された 1 枚だけを見ても分からない（相手のソースが必要）。
-  // glob は画像を読まないので、変更時に毎回走らせても実質のコストは無い
-  await assertUniqueOutputs(images, context)
 
   // 変更されたファイルだけ（dev の監視時）
   if (options.changed) {
@@ -89,12 +55,30 @@ export async function imageTask(context, options = {}) {
     return
   }
 
+  await warnUnhandledImages(context)
+
   logger.info('image', `Processing ${images.length} image(s)`)
 
   // 並列処理
   await Promise.all(images.map(file => processImage(file, context)))
 
   logger.success('image', `Processed ${images.length} image(s)`)
+}
+
+/**
+ * 変換対象外の画像形式が src にあれば知らせる。
+ *
+ * これらは image タスクの対象でも svg タスクの対象でもなく、copy は public しか見ないため
+ * 出力に出ない。それでも imageInfo() は寸法を読んで参照を書くので、
+ * 黙っていると「HTML に書かれているのにファイルが無い」状態になる
+ */
+async function warnUnhandledImages(context) {
+  const { paths } = context
+  const unhandled = await glob(UNHANDLED_GLOB, { cwd: paths.src, ignore: IMAGE_IGNORE })
+
+  if (unhandled.length === 0) return
+
+  logger.warn('image', `変換対象外のため出力されません（public/ に置いてください）: ${unhandled.sort().join(', ')}`)
 }
 
 /**

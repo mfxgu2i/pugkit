@@ -7,9 +7,11 @@ import { logger } from '../utils/logger.mjs'
 import { resetDevCache } from '../utils/file.mjs'
 import { clearImageSizeCache } from '../transform/image-size.mjs'
 import { spriteOutputPath } from '../tasks/svg-sprite.mjs'
+import { svgOutputPath } from '../tasks/svg.mjs'
 import { imageOutputPaths } from '../tasks/image.mjs'
 import { sassOutputPath } from '../tasks/sass.mjs'
 import { scriptOutputPath } from '../tasks/script.mjs'
+import { assertUniqueOutputs } from './output-conflicts.mjs'
 
 // Pug（HTML）だけは遅延ビルド + メモリ配信なので事前生成しない。
 // 他は実ファイルとして配信するため、出力先が空の状態でも表示できるよう起動時に作る
@@ -69,6 +71,11 @@ export class FileWatcher {
       }
       throw error
     }
+
+    // 出力先の衝突は起動時に一度だけ見る。変更のたびに見ないのは、
+    // 衝突が設定ミスであり、最終的な関門は build 側だから（dev は軽さを優先する）。
+    // ここで中止はしない。dev は壊れたソースがあっても起動する
+    await assertUniqueOutputs(this.context).catch(error => logger.error('watch', error.message))
 
     // Pug 以外は初期ビルドする。Pug（HTML）だけは遅延ビルド + メモリ配信なので
     // 事前生成が不要で、依存グラフもページが最初にリクエストされた時に構築される。
@@ -147,7 +154,10 @@ export class FileWatcher {
       sass: { change: () => this.onSassChange(filePath), unlink: () => this.onSassUnlink(filePath) },
       script: { change: () => this.onScriptChange(filePath), unlink: () => this.onScriptUnlink(filePath) },
       // スプライトは icons ディレクトリ全体から1ファイルを作るので削除も再生成でよい
-      sprite: { change: () => this.onSpriteChange(filePath, event), unlink: () => this.onSpriteChange(filePath, event) },
+      sprite: {
+        change: () => this.onSpriteChange(filePath, event),
+        unlink: () => this.onSpriteChange(filePath, event)
+      },
       svg: { change: () => this.onSvgChange(filePath, event), unlink: () => this.onSvgUnlink(filePath) },
       image: { change: () => this.onImageChange(filePath, event), unlink: () => this.onImageUnlink(filePath) }
     }
@@ -375,8 +385,7 @@ export class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     this.invalidateAssetDependents(filePath)
     this.context.imageGraph.removeFile(filePath)
-    const outputPath = resolve(this.context.paths.output, relPath)
-    await this.deleteOutputFile(outputPath, relPath)
+    await this.deleteOutputFile(svgOutputPath(relPath, this.context.paths), relPath)
   }
 
   // ---- Image ----

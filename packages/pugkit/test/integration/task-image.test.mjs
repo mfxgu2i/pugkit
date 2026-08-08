@@ -168,59 +168,42 @@ describe('imageSourceDensity', () => {
   })
 })
 
-describe('出力先の衝突', () => {
+describe('変換対象外の画像', () => {
   /**
-   * 同じ出力先に二人以上が書くと、どちらが残るかが Promise.all の完了順で決まる。
-   * 黙って片方を捨てると「置いたはずの画像が使われていない」ことに気づけないので中止する
+   * .webp / .avif は image タスクの対象でも svg タスクの対象でもなく、
+   * copy は public しか見ないため出力に出ない。それでも imageInfo() は
+   * 寸法を読んで参照を書くので、黙っていると無警告のリンク切れになる
    */
-  it('別のソースが同じ出力先に写像したら中止する', async () => {
-    // density 2 では normal.jpg が normal@half.webp を生むので、手置きの @half と衝突する
-    await createJpeg(resolve(srcDir, 'normal@half.jpg'))
-
-    await expect(imageTask(makeContext({ density: 2 }))).rejects.toThrow(/normal@half\.webp/)
-  })
-
-  it('public と同じ出力先になったら中止する', async () => {
-    await mkdir(publicDir, { recursive: true })
-    await writeFile(resolve(publicDir, 'normal.webp'), 'public-wins')
-
-    await expect(imageTask(makeContext({ density: 2 }))).rejects.toThrow(/normal\.webp/)
-  })
-
-  it('中止したときは何も出力しない（半端な成果物を残さない）', async () => {
-    await mkdir(publicDir, { recursive: true })
-    await writeFile(resolve(publicDir, 'normal.webp'), 'public-wins')
-
-    await imageTask(makeContext({ density: 2 })).catch(() => {})
-
-    // 前提: 衝突していない画像も含めて 1 枚も出ていない
-    expect(await listFiles(distDir)).toEqual(['.keep'])
-  })
-
-  it('衝突の相手が分かるメッセージを出す', async () => {
-    await createJpeg(resolve(srcDir, 'normal@half.jpg'))
-
-    const error = await imageTask(makeContext({ density: 2 })).catch(e => e)
-
-    expect(error.message).toContain('src/normal.jpg')
-    expect(error.message).toContain('src/normal@half.jpg')
-  })
-
-  it('変更されたファイルだけの処理でも衝突を見る（dev 中の追加を取りこぼさない）', async () => {
-    await createJpeg(resolve(srcDir, 'normal@half.jpg'))
-
-    await expect(
-      imageTask(makeContext({ density: 2 }), { changed: resolve(srcDir, 'normal@half.jpg') })
-    ).rejects.toThrow(/normal@half\.webp/)
-  })
-
-  it('衝突が無ければ public と src は共存できる', async () => {
-    await mkdir(publicDir, { recursive: true })
-    await writeFile(resolve(publicDir, 'logo.svg'), '<svg/>')
+  it('src に置かれていても出力しない', async () => {
+    await sharp({ create: { width: 20, height: 10, channels: 3, background: '#0a0' } })
+      .webp()
+      .toFile(resolve(srcDir, 'photo.webp'))
 
     await imageTask(makeContext({ density: 2 }))
 
-    expect(await listFiles(distDir)).toEqual(expect.arrayContaining(['normal.webp', 'normal@half.webp']))
+    const output = await listFiles(distDir)
+    // 前提: 他の画像は処理されている
+    expect(output).toContain('normal.webp')
+    expect(output).not.toContain('photo.webp')
+  })
+
+  it('出力されないことを警告する', async () => {
+    await sharp({ create: { width: 20, height: 10, channels: 3, background: '#0a0' } })
+      .webp()
+      .toFile(resolve(srcDir, 'photo.webp'))
+
+    const logs = []
+    await withCapturedLogs(logs, () => imageTask(makeContext({ density: 2 })))
+
+    expect(logs.join('\n')).toMatch(/photo\.webp/)
+    expect(logs.join('\n')).toMatch(/public/)
+  })
+
+  it('無ければ警告しない', async () => {
+    const logs = []
+    await withCapturedLogs(logs, () => imageTask(makeContext({ density: 2 })))
+
+    expect(logs.join('\n')).not.toMatch(/変換対象外/)
   })
 })
 
@@ -255,3 +238,14 @@ describe('出力先の規則', () => {
     expect(first).toMatchObject({ relative: 'img/a.webp', density: 2 })
   })
 })
+
+/** logger は console.log に出すので、そちらを横取りする */
+async function withCapturedLogs(sink, fn) {
+  const original = console.log
+  console.log = (...args) => sink.push(args.join(' '))
+  try {
+    await fn()
+  } finally {
+    console.log = original
+  }
+}

@@ -5,6 +5,18 @@ import { optimize } from 'svgo'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
 
+export const SVG_GLOB = '**/*.svg'
+// icons はスプライト用なので個別出力の対象外
+export const SVG_IGNORE = ['**/_*/**', '**/icons/**']
+
+/**
+ * SVG の出力先。生成側と watcher の削除側で規則がずれると、
+ * 消したはずのファイルが配信され続けるので、ここ一箇所に置く
+ */
+export function svgOutputPath(relativePath, paths) {
+  return paths ? resolve(paths.output, relativePath) : relativePath
+}
+
 /**
  * SVG最適化タスク
  */
@@ -20,10 +32,10 @@ export async function svgTask(context, options = {}) {
   }
 
   // 対象SVGを取得
-  const svgs = await glob('**/*.svg', {
+  const svgs = await glob(SVG_GLOB, {
     cwd: paths.src,
     absolute: true,
-    ignore: ['**/_*/**', '**/icons/**'] // iconsはスプライト用なので除外
+    ignore: SVG_IGNORE
   })
 
   if (svgs.length === 0) {
@@ -56,7 +68,7 @@ async function optimizeSvg(filePath, context) {
     })
 
     // 出力
-    const outputPath = resolve(paths.output, relativePath)
+    const outputPath = svgOutputPath(relativePath, paths)
     await ensureFileDir(outputPath)
     await writeFile(outputPath, result.data, 'utf8')
   } catch (error) {

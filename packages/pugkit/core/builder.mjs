@@ -1,14 +1,11 @@
 import { BuildContext } from './context.mjs'
 import { logger } from '../utils/logger.mjs'
 import { cleanDir } from '../utils/file.mjs'
+import { assertUniqueOutputs } from './output-conflicts.mjs'
 
 // ビルドの順序。同じ段のタスクは並列に走る。
 // Pug は Sass/Script の出力を参照するため中段に置く
-const BUILD_PHASES = [
-  ['sass', 'script', 'sprite'],
-  ['pug'],
-  ['image', 'svg', 'copy']
-]
+const BUILD_PHASES = [['sass', 'script', 'sprite'], ['pug'], ['image', 'svg', 'copy']]
 
 /**
  * メインビルダー
@@ -45,6 +42,10 @@ export class Builder {
     const startTime = Date.now()
 
     logger.info('build', `Building in ${context.mode} mode`)
+
+    // 出力先が衝突していると、どちらが残るかが決まらない。
+    // 消す前に確かめる（中止するなら、前回の成果物は残したままにする）
+    await assertUniqueOutputs(context)
 
     await this.clean()
 
@@ -110,7 +111,12 @@ export class Builder {
 
     // 出力を消したら、それを前提にしていた状態も一緒に捨てる
     this.context.cache.clear()
-    for (const graph of [this.context.graph, this.context.sassGraph, this.context.scriptGraph, this.context.imageGraph]) {
+    for (const graph of [
+      this.context.graph,
+      this.context.sassGraph,
+      this.context.scriptGraph,
+      this.context.imageGraph
+    ]) {
       graph.clear()
     }
 
