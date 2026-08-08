@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { buildPageHtml, pugTask } from '../../tasks/pug.mjs'
+import { createBuilder } from '../../index.mjs'
 import { BuildContext } from '../../core/context.mjs'
 import { defaultConfig } from '../../config/defaults.mjs'
 import { createTempProject, listFiles } from '../helpers/project.mjs'
@@ -109,5 +110,37 @@ describe('pugTask', () => {
     const output = await listFiles(project.path('dist'))
     expect(output).toContain('index.html')
     expect(output).not.toContain('_draft.html')
+  })
+})
+
+describe('依存グラフの更新', () => {
+  /**
+   * ページをビルドし直すとき消してよいのは「そのページが持つ依存」だけ。
+   * 「そのページに依存している側」は他のファイルが持つ情報なので、
+   * 消すと相手を作り直すまで復元されず、変更が反映されなくなる。
+   *
+   * ページでもあり他から include もされるファイル（共通の断片をページとしても
+   * 公開している等）で差が出る。
+   */
+  it('ページを作り直しても、そのページに依存する側の記録を消さない', async () => {
+    const project = await createTempProject({
+      'package.json': '{"name":"graph","type":"module"}',
+      'pugkit.config.mjs': 'export default {}\n',
+      'src/shared.pug': 'p SHARED\n',
+      'src/page.pug': 'doctype html\nhtml\n  body\n    include shared.pug\n'
+    })
+    const builder = await createBuilder(project.root, 'development')
+    const { context } = builder
+    const shared = project.path('src/shared.pug')
+
+    // page が shared に依存していることを記録させる
+    await buildPageHtml(project.path('src/page.pug'), context)
+    expect(context.graph.getAffectedParents(shared)).toContain(project.path('src/page.pug'))
+
+    // shared 自身をページとしてビルドし直す
+    await buildPageHtml(shared, context)
+
+    // page が shared に依存している記録は残っていなければならない
+    expect(context.graph.getAffectedParents(shared)).toContain(project.path('src/page.pug'))
   })
 })

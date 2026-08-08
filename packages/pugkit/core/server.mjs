@@ -517,6 +517,10 @@ export async function serverTask(context, options = {}) {
     get port() {
       return httpServer.address()?.port ?? port
     },
+    // 繋がっているブラウザの数。切断されたものが残り続けていないか確かめられる
+    get clientCount() {
+      return clients.size
+    },
     // kind: 'html' = Pug 由来の変更（DOM 差分更新の対象）、'full' = フルリロードが必要
     reload(kind = 'full') {
       broadcast('reload', kind)

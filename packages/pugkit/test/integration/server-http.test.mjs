@@ -1,6 +1,7 @@
 import { describe, expect, it, onTestFinished } from 'vitest'
+import net from 'node:net'
 import { chmod, mkdir, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { dirname, relative } from 'node:path'
 import { createBuilder } from '../../index.mjs'
 import { createTempProject, minimalProjectFiles } from '../helpers/project.mjs'
 
@@ -163,6 +164,87 @@ describe('ビルドエラー', () => {
   })
 })
 
+describe('配信ルートの封じ込め', () => {
+  /**
+   * fetch は "/.." を送る前に正規化してしまうので、生のソケットで送る。
+   * Pug の解決（resolvePugSource）側にはテストがあるが、
+   * 既存 HTML を読み出す経路にも同じ封じ込めが要る。
+   */
+  function rawGet(port, rawPath) {
+    return new Promise((resolve, reject) => {
+      const socket = net.connect(port, 'localhost', () => {
+        socket.write(`GET ${rawPath} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`)
+      })
+      let data = ''
+      socket.setEncoding('utf8')
+      socket.on('data', chunk => (data += chunk))
+      socket.on('end', () => resolve(data))
+      socket.on('error', reject)
+    })
+  }
+
+  /**
+   * 「..」の数は配信ルートの深さで決まる。固定で書くと届かないパスになり、
+   * 封じ込めを外しても素通りするテスト（＝何も守らないテスト）になる
+   */
+  const escapeTo = (server, target) => relative(server.context.paths.outputRoot, server.project.path(target))
+
+  const shapes = {
+    そのまま: escape => `/${escape}`,
+    スラッシュ重複: escape => `/${escape.replace(/\//g, '//')}`,
+    エンコード: escape => `/${escape.replace(/\//g, '%2f')}`,
+    'カレント経由': escape => `/./${escape}`
+  }
+
+  it.each(Object.keys(shapes))('%s の形でも配信ルートの外を読み出せない', async shape => {
+    const server = await startDevServer({
+      ...minimalProjectFiles(),
+      // 配信ルート（dev キャッシュ）の外に置いた、公開してはいけないファイル
+      'secret.html': '<html><body>SECRET</body></html>\n'
+    })
+    const rawPath = shapes[shape](escapeTo(server, 'secret.html'))
+
+    const response = await rawGet(server.context.server.port, rawPath)
+
+    // 届くはずのパスであることを確かめてから、届いていないことを確かめる
+    expect(rawPath).toMatch(/\.\.|%2e/)
+    expect(response).not.toContain('SECRET')
+  })
+
+  it('配信ルートの中の HTML は読み出せる（封じ込めが強すぎないことの確認）', async () => {
+    const server = await startDevServer({ ...minimalProjectFiles(), 'public/legacy.html': '<html>OK</html>\n' })
+    await server.builder.runTask('copy')
+
+    expect((await server.get('/legacy.html')).status).toBe(200)
+  })
+})
+
+describe('Pug 由来でない HTML', () => {
+  // public に置いた既存 HTML も dev で編集される。ライブリロードが効かないと、
+  // そのページだけ手動リロードが必要という分かりにくい状態になる
+  it('ライブリロードを注入する', async () => {
+    const server = await startDevServer({ ...minimalProjectFiles(), 'public/legacy.html': '<html>OK</html>\n' })
+    await server.builder.runTask('copy')
+
+    const html = await (await server.get('/legacy.html')).text()
+
+    expect(html).toContain('data-pugkit-live-reload')
+    expect(html).toContain('__pugkit_sse')
+  })
+
+  // 中身の作られ方を pugkit が知らないので、差分適用はさせずフルリロードにする
+  it('指紋は埋め込まない（差分適用の対象外）', async () => {
+    const server = await startDevServer({ ...minimalProjectFiles(), 'public/legacy.html': '<html>OK</html>\n' })
+    await server.builder.runTask('copy')
+
+    const html = await (await server.get('/legacy.html')).text()
+    // 属性そのものを見る。スクリプト本体には属性名が文字列として現れる
+    const openingTag = html.match(/<script data-pugkit-live-reload[^>]*>/)?.[0]
+
+    expect(openingTag).toBe('<script data-pugkit-live-reload>')
+  })
+})
+
 describe('URL の解決順', () => {
   /**
    * 同じ URL 形に対して、Pug ページ・public 由来の HTML・sirv の静的配信で
@@ -266,6 +348,25 @@ describe('SSE', () => {
 
     expect(decoder.decode(value)).toBe('event: reload\ndata: html\n\n')
     await reader.cancel()
+  })
+
+  /**
+   * 切断されたクライアントを持ち続けると、リロードのたびに死んだ接続へ書き込む。
+   * 次の broadcast で結果的に取り除かれるので気づきにくいが、
+   * タブを開き閉じするたびに溜まる
+   */
+  it('切断されたクライアントを持ち続けない', async () => {
+    const server = await startDevServer()
+    const controller = new AbortController()
+    const res = await server.get('/__pugkit_sse', { signal: controller.signal })
+    res.body.getReader().read()
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(server.context.server.clientCount).toBe(1)
+
+    controller.abort()
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    expect(server.context.server.clientCount).toBe(0)
   })
 
   it('CSS 更新はリロードとは別のイベントで送る', async () => {
