@@ -79,3 +79,24 @@ describe('廃止された build.clean', () => {
     expect(await listFiles(project.path('dist'))).not.toContain('legacy.html')
   })
 })
+
+describe('subdir があるとき', () => {
+  /**
+   * 作り直す対象は outDir 全体。subdir の中だけを消すと、
+   * subdir を変更したときに前の階層が残ったままデプロイされる
+   * （src には無いページが本番に生き続ける）。
+   */
+  it('subdir の外にある前回の出力も消す', async () => {
+    const project = await createTempProject(
+      minimalProjectFiles({ 'pugkit.config.mjs': "export default { subdir: 'v2' }\n" })
+    )
+    // 前回 subdir: 'v1' でビルドしたときの残骸に相当する
+    await project.write({ 'dist/v1/index.html': '<html>stale</html>' })
+
+    await build(project.root)
+
+    const output = await listFiles(project.path('dist'))
+    expect(output).toContain('v2/index.html')
+    expect(output.filter(f => f.startsWith('v1/'))).toEqual([])
+  })
+})

@@ -102,10 +102,11 @@ export class Builder {
    * クリーンアップ
    */
   async clean() {
-    const outputDir = this.context.paths.output
+    // subdir の中だけでなく outDir 全体を作り直す。
+    // subdir を変更したときに前の階層が残ると、src に無いページが本番に生き続ける
     logger.info('clean', 'Cleaning output directory')
 
-    await cleanDir(outputDir)
+    await cleanDir(this.context.paths.outputRoot)
 
     this.context.cache.clear()
     this.context.graph.clear()
