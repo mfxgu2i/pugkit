@@ -8,6 +8,8 @@ import { resetDevCache } from '../utils/file.mjs'
 import { clearImageSizeCache } from '../transform/image-size.mjs'
 import { spriteOutputPath } from '../tasks/svg-sprite.mjs'
 import { imageOutputPath } from '../tasks/image.mjs'
+import { sassOutputPath } from '../tasks/sass.mjs'
+import { scriptOutputPath } from '../tasks/script.mjs'
 
 // Pug（HTML）だけは遅延ビルド + メモリ配信なので事前生成しない。
 // 他は実ファイルとして配信するため、出力先が空の状態でも表示できるよう起動時に作る
@@ -220,6 +222,10 @@ export class FileWatcher {
       .some(segment => segment.startsWith('_'))
   }
 
+  /**
+   * imageInfo() が寸法を読む対象。変換タスクの対象（IMAGE_EXT_RE）より広く、
+   * すでに webp/avif/svg になっているものも含む
+   */
   isImageAsset(filePath) {
     return /\.(jpg|jpeg|png|gif|svg|webp|avif)$/i.test(filePath)
   }
@@ -291,8 +297,8 @@ export class FileWatcher {
       logger.info('unlink', relPath)
       return
     }
-    const distPath = resolve(paths.output, relPath.replace(/\.scss$/, '.css'))
-    await this.deleteDistFile(distPath, relPath, { withSourceMap: true })
+    const outputPath = sassOutputPath(relPath, paths)
+    await this.deleteOutputFile(outputPath, relPath, { withSourceMap: true })
   }
 
   // ---- Script ----
@@ -316,8 +322,8 @@ export class FileWatcher {
       logger.info('unlink', relPath)
       return
     }
-    const distPath = resolve(paths.output, relPath.replace(/\.ts$/, '.js'))
-    await this.deleteDistFile(distPath, relPath, { withSourceMap: true })
+    const outputPath = scriptOutputPath(relPath, paths)
+    await this.deleteOutputFile(outputPath, relPath, { withSourceMap: true })
   }
 
   // ---- SVG ----
@@ -369,8 +375,8 @@ export class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     this.invalidateAssetDependents(filePath)
     this.context.imageGraph.removeFile(filePath)
-    const distPath = resolve(this.context.paths.output, relPath)
-    await this.deleteDistFile(distPath, relPath)
+    const outputPath = resolve(this.context.paths.output, relPath)
+    await this.deleteOutputFile(outputPath, relPath)
   }
 
   // ---- Image ----
@@ -397,8 +403,8 @@ export class FileWatcher {
     imageGraph.removeFile(filePath)
     affected.forEach(file => cache.invalidatePageHtml(file))
 
-    const distPath = imageOutputPath(relPath, config.build.imageOptimization, paths)
-    await this.deleteDistFile(distPath, relPath)
+    const outputPath = imageOutputPath(relPath, config.build.imageOptimization, paths)
+    await this.deleteOutputFile(outputPath, relPath)
   }
 
   // ---- Public ----
@@ -430,8 +436,8 @@ export class FileWatcher {
       this.context.imageGraph.removeFile(filePath)
     }
 
-    const distPath = resolve(this.context.paths.output, relPath)
-    await this.deleteDistFile(distPath, relPath)
+    const outputPath = resolve(this.context.paths.output, relPath)
+    await this.deleteOutputFile(outputPath, relPath)
   }
 
   // ---- 共通ヘルパー ----
@@ -475,11 +481,11 @@ export class FileWatcher {
     }
   }
 
-  async deleteDistFile(distPath, relPath, { withSourceMap = false } = {}) {
+  async deleteOutputFile(outputPath, relPath, { withSourceMap = false } = {}) {
     try {
-      await rm(distPath, { force: true })
+      await rm(outputPath, { force: true })
       // ソースマップを置き去りにすると削除済みファイルの .map だけ配信され続ける
-      if (withSourceMap) await rm(`${distPath}.map`, { force: true })
+      if (withSourceMap) await rm(`${outputPath}.map`, { force: true })
       logger.info('unlink', relPath)
       this.reload()
     } catch (error) {

@@ -106,7 +106,7 @@ async function getCurrentSimulatedSize(rawData, info, ext, config) {
 /**
  * 指定フォーマット・品質でシミュレートしたバイト数を返す（rawData 使い回し）
  */
-export async function simulateFormat(rawData, info, format, quality, imageOptions) {
+async function simulateFormat(rawData, info, format, quality, imageOptions) {
   const image = fromRaw(rawData, info)
   if (format === 'webp') {
     return (await image.webp({ ...imageOptions.webp, quality }).toBuffer()).length

@@ -43,10 +43,9 @@ export async function serverTask(context, options = {}) {
   const sirvOptions = {
     dev: true,
     extensions: ['html'],
-    setHeaders(res, filePath) {
-      if (filePath.endsWith('.css') || filePath.endsWith('.js')) {
-        res.setHeader('Cache-Control', 'no-cache')
-      }
+    // dev では常に取り直させる。画像や SVG も差し替えた瞬間に反映したい
+    setHeaders(res) {
+      res.setHeader('Cache-Control', 'no-cache')
     }
   }
 

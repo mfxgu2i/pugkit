@@ -47,6 +47,13 @@ export async function disposeDevContext() {
 }
 
 /**
+ * JS の出力先。esbuild が書く側と watcher の削除側で規則がずれないよう共有する
+ */
+export function scriptOutputPath(relativePath, paths) {
+  return resolve(paths.output, relativePath.replace(/\.ts$/, '.js'))
+}
+
+/**
  * esbuild（TypeScript/JavaScript）ビルドタスク
  */
 export async function scriptTask(context, options = {}) {

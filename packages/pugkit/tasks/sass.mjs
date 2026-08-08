@@ -42,6 +42,13 @@ export async function disposeDevCompiler() {
 }
 
 /**
+ * Sass の出力先。生成側と watcher の削除側で規則がずれないよう共有する
+ */
+export function sassOutputPath(relativePath, paths) {
+  return resolve(paths.output, relativePath.replace(/\.scss$/, '.css'))
+}
+
+/**
  * Sassビルドタスク
  */
 export async function sassTask(context, options = {}) {
@@ -142,8 +149,7 @@ async function compileSassFile(filePath, context, isDevBuild, compiler) {
       )
     }
 
-    const outputRelativePath = relative(paths.src, filePath).replace(/\.scss$/, '.css')
-    const outputPath = resolve(paths.output, outputRelativePath)
+    const outputPath = sassOutputPath(relative(paths.src, filePath), paths)
 
     const postcssResult = await postcss(postcssPlugins).process(css, {
       from: filePath,

@@ -83,8 +83,6 @@ export class BuildContext {
     this.server = null
   }
 
-
-
   get isProduction() {
     return this.mode === 'production'
   }
