@@ -46,12 +46,6 @@ function mergeConfig(defaults, user) {
         ...defaults.build.html,
         ...(user.build?.html || {})
       }
-    },
-    benchmark: {
-      image: {
-        ...defaults.benchmark.image,
-        ...(user.benchmark?.image || {})
-      }
     }
   }
 }
