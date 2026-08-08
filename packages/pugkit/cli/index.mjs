@@ -17,6 +17,18 @@ function pkgVersion() {
   return pkg.version
 }
 
+/**
+ * 異常終了。3 つのコマンドで表示を揃える。
+ *
+ * 利用者に見せるのはメッセージだけにする。設定ミスや出力先の衝突のように
+ * 「ソースを直せば済む」エラーが、スタックトレースに埋もれると読まれない。
+ * スタックは pugkit 自身の不具合を追うときだけ必要なので PUGKIT_DEBUG=1 で出す
+ */
+function fail(error) {
+  console.error(process.env.PUGKIT_DEBUG ? (error.stack ?? error) : (error.message ?? error))
+  process.exit(1)
+}
+
 const cli = cac('pugkit')
 
 cli
@@ -36,8 +48,7 @@ cli
       }
       await develop({ root: root || process.cwd(), port, host: options.host })
     } catch (err) {
-      console.error(err.message ?? err)
-      process.exit(1)
+      fail(err)
     }
   })
 
@@ -48,8 +59,7 @@ cli
     try {
       await build({ root: root || process.cwd(), siteUrl: options.siteUrl })
     } catch (err) {
-      console.error(err)
-      process.exit(1)
+      fail(err)
     }
   })
 
@@ -57,8 +67,7 @@ cli.command('sprite [root]', 'Generate SVG sprite').action(async root => {
   try {
     await sprite({ root: root || process.cwd() })
   } catch (err) {
-    console.error(err)
-    process.exit(1)
+    fail(err)
   }
 })
 

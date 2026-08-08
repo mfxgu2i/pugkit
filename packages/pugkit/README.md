@@ -100,7 +100,8 @@ export default defineConfig({
 | `server.host`                        | 開発サーバーのホスト                                                                                  | `string`                                        | `'localhost'` |
 | `server.startPath`                   | 起動ログに表示する URL のパス                                                                         | `string`                                        | `'/'`         |
 | `server.domDiff`                     | ライブリロードで DOM の差分適用を使うか（`false` で常にフルリロード）                                 | `boolean`                                       | `true`        |
-| `build.imageOptimization`            | 画像最適化の方式                                                                                      | `'avif'` \| `'webp'` \| `'compress'` \| `false` | `'webp'`      |
+| `build.imageOptimization`            | 画像最適化の方式                                                                                      | `'avif'` \| `'webp'` \| `'compress'`           | `'webp'`      |
+| `build.imageSourceDensity`           | `src/` の画像を何倍の原本として扱うか。`2` なら等倍版を生成して `srcset` を出す                       | `1` \| `2`                                      | `2`           |
 | `build.imageOptions.avif`            | AVIF変換オプション（[Sharp AVIF options](https://sharp.pixelplumbing.com/api-output#avif)）           | `object`                                        | -             |
 | `build.imageOptions.webp`            | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）           | `object`                                        | -             |
 | `build.imageOptions.jpeg`            | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）           | `object`                                        | -             |
@@ -136,33 +137,42 @@ meta(property='og:url', content=Builder.url.href)
 
 #### imageInfo()
 
-`src/` 配下の画像のメタデータを取得します。`imageOptimization` の設定に応じて `src` が最適化後のパスに変換され、retina / アートディレクション画像が存在する場合も自動的に解決されます。
+`src/` 配下の画像のメタデータを取得します。`imageOptimization` に応じて `src` が最適化後のパスに変換され、`imageSourceDensity` に応じた `srcset` が組み立てられます。アートディレクション画像が存在する場合も自動的に解決されます。
 
 ```pug
 - const info = imageInfo('/assets/img/hero.jpg')
-img(src=info.src width=info.width height=info.height alt='')
+img(src=info.src srcset=info.srcset width=info.width height=info.height alt='')
 ```
 
-| Property  | Type                                                     | Description                                                                   |
-| --------- | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `src`     | `string`                                                 | 最適化設定に応じたパス（avifモード時は `.avif`、webpモード時は `.webp` パス） |
-| `width`   | `number \| undefined`                                    | 画像の幅（px）                                                                |
-| `height`  | `number \| undefined`                                    | 画像の高さ（px）                                                              |
-| `format`  | `string \| undefined`                                    | 画像フォーマット（`'jpg'` / `'png'` / `'svg'` など）                          |
-| `isSvg`   | `boolean`                                                | SVG かどうか                                                                  |
-| `retina`  | `{ src: string, width: number, height: number } \| null` | `@2x` 画像が存在する場合に自動検出                                            |
-| `variant` | `{ src: string, width: number, height: number } \| null` | `imageInfo.artDirectionSuffix` に応じて検出したアートディレクション画像       |
+| Property  | Type                                                                      | Description                                                        |
+| --------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `src`     | `string`                                                                  | 表示サイズ側のパス（`srcset` の `1x` と一致する）                  |
+| `width`   | `number \| undefined`                                                     | 表示サイズの幅（px）                                               |
+| `height`  | `number \| undefined`                                                     | 表示サイズの高さ（px）                                             |
+| `srcset`  | `string \| undefined`                                                     | 密度記述子つきの `srcset`。画像が見つからない場合のみ `undefined`  |
+| `format`  | `string \| undefined`                                                     | 画像フォーマット（`'jpg'` / `'png'` / `'svg'` など）               |
+| `isSvg`   | `boolean`                                                                 | SVG かどうか                                                       |
+| `variant` | `{ src, width, height, srcset } \| null`                                  | `imageInfo.artDirectionSuffix` に応じたアートディレクション画像    |
 
 ```pug
 - const info = imageInfo('/assets/img/hero.jpg')
-//- retina srcset
-- const srcset = info.retina ? `${info.src} 1x, ${info.retina.src} 2x` : undefined
-//- アートディレクション
-if info.variant
-  source(media='(max-width: 767px)' srcset=info.variant.src width=info.variant.width height=info.variant.height)
+picture
+  //- アートディレクション
+  if info.variant
+    source(media='(max-width: 767px)' srcset=info.variant.srcset width=info.variant.width height=info.variant.height)
+  img(src=info.src srcset=info.srcset width=info.width height=info.height alt='')
+```
+
+`imageSourceDensity: 2` で 1600×1200 の `hero.jpg` を置いた場合、出力は次のようになります。
+
+```html
+<img src="/assets/img/hero@half.webp"
+     srcset="/assets/img/hero@half.webp 1x, /assets/img/hero.webp 2x"
+     width="800" height="600">
 ```
 
 > `imageInfo()` は `src/` 配下を探し、見つからなければ `public/` 配下も探します。
+> `public/` の画像は変換も縮小もされないため、`src` は元のパスのまま返り、`srcset` は 1 枚だけになります。
 
 ### Sass
 
@@ -212,12 +222,35 @@ npm install --save-dev typescript
 
 ### Image Optimization
 
-ビルド時に `src/` 配下の画像（JPEG・PNG）を自動的に最適化します。
+ビルド時に `src/` 配下の画像を自動的に最適化します。
 
-- `'avif'` - PNG/JPEGをAVIFに変換
-- `'webp'` - PNG/JPEGをWebPに変換
+- `'avif'` - PNG/JPEG/GIF を AVIF に変換
 - `'compress'` - 元の形式を維持したまま圧縮
-- `false` - 最適化を無効化
+- `'webp'` - PNG/JPEG/GIF を WebP に変換
+
+> **`src/` に置いた画像は必ず変換されます。** 変換したくない画像は `public/` に置いてください。
+
+#### 画像は 1 枚だけ置く
+
+`src/` には**最大解像度の 1 枚だけ**を置きます。等倍版はビルドが生成するので、`@2x` を手で用意する必要はありません。
+
+```
+src/assets/img/hero.jpg   (1600x1200)
+  ↓  imageSourceDensity: 2
+dist/assets/img/hero.webp      (1600x1200)   ← 無印は src と同じ寸法
+dist/assets/img/hero@half.webp   ( 800x600)
+```
+
+無印を原寸のままにしているのは、CSS の `url()` 直書きや OGP 画像など `imageInfo()` を通らない参照が壊れないようにするためです。
+
+| 設定                    | 挙動                                                       |
+| ----------------------- | ---------------------------------------------------------- |
+| `imageSourceDensity: 2` | 等倍版を生成し、`srcset` に `1x` / `2x` を並べる（既定）   |
+| `imageSourceDensity: 1` | 原寸を 1 枚出すだけ。縮小も `srcset` も行わない            |
+
+等倍のまま出したい画像（ロゴやアイコンなど）は `public/` に置いてください。`public/` の画像は変換も縮小もされません。
+
+> GIF と SVG は密度の対象外です（GIF は縮小するとアニメーションが失われるため）。
 
 #### 特定画像の個別オプション指定
 
@@ -272,7 +305,9 @@ build: {
 
 ### Public Directory
 
-`public/` に置いたファイルはそのまま `outDir` のルートにコピーされます。faviconやOGP画像など最適化不要なファイルの置き場として使用します。
+`public/` に置いたファイルはそのまま `outDir` のルートにコピーされます。**変換も縮小もされない**ので、favicon・OGP画像のほか、等倍のまま出したい画像の置き場としても使います。
+
+`src/` と `public/` で同じ出力先になる画像があった場合は、どちらが残るかが決まらないため**ビルドを中止します**。どちらか一方を削除してください。
 
 ### Dev / Build の出力の違い
 
@@ -292,6 +327,16 @@ build: {
 > **`cacheDir` に指定したディレクトリは dev 起動のたびに中身が削除されます。** 既存ファイルのある場所を指定しないでください（プロジェクトルート・`src`・`public`・`outDir` は起動時にエラーになります）。
 
 > 旧 `debug` オプションは廃止されました。dev は常にソースマップ付き非圧縮出力になります。
+
+### エラー表示
+
+CLI が異常終了したときは、原因のメッセージだけを表示して終了コード `1` を返します。設定ミスや出力先の衝突など、ソースを直せば済むエラーがスタックトレースに埋もれないようにするためです。
+
+pugkit 自身の不具合を調べたい場合は `PUGKIT_DEBUG=1` を付けるとスタックトレースが出ます。
+
+```sh
+PUGKIT_DEBUG=1 npx pugkit build
+```
 
 ## Tech Stack
 

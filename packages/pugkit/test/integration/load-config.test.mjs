@@ -140,3 +140,44 @@ describe('root の解決', () => {
     expect((await loadConfig(project.root)).root).toBe(project.root)
   })
 })
+
+/**
+ * 画像設定の正規化。不正な値を黙って通すと、全画像が意図しない寸法や形式で
+ * 出力されるという静かな壊れ方をする（build.clean を消したときと同じ形）。
+ */
+describe('画像設定の正規化', () => {
+  const load = async source => {
+    const project = await createTempProject({ 'pugkit.config.mjs': source })
+    return loadConfig(project.root)
+  }
+
+  it('imageSourceDensity の既定は 2', async () => {
+    const config = await load('export default {}\n')
+    expect(config.build.imageSourceDensity).toBe(2)
+  })
+
+  it.each([1, 2])('imageSourceDensity: %i はそのまま通る', async value => {
+    const config = await load(`export default { build: { imageSourceDensity: ${value} } }\n`)
+    expect(config.build.imageSourceDensity).toBe(value)
+  })
+
+  it('不正な imageSourceDensity は 1 に倒す（半分の寸法で出力される事故を防ぐ）', async () => {
+    const config = await load('export default { build: { imageSourceDensity: 3 } }\n')
+    expect(config.build.imageSourceDensity).toBe(1)
+  })
+
+  it('廃止された imageOptimization: false は webp として扱う', async () => {
+    const config = await load('export default { build: { imageOptimization: false } }\n')
+    expect(config.build.imageOptimization).toBe('webp')
+  })
+
+  it('未知の imageOptimization は webp として扱う', async () => {
+    const config = await load("export default { build: { imageOptimization: 'jpegxl' } }\n")
+    expect(config.build.imageOptimization).toBe('webp')
+  })
+
+  it.each(['avif', 'webp', 'compress'])('imageOptimization: %s はそのまま通る', async value => {
+    const config = await load(`export default { build: { imageOptimization: '${value}' } }\n`)
+    expect(config.build.imageOptimization).toBe(value)
+  })
+})
