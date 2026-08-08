@@ -7,7 +7,7 @@ import { logger } from '../utils/logger.mjs'
 import { resetDevCache } from '../utils/file.mjs'
 import { clearImageSizeCache } from '../transform/image-size.mjs'
 import { spriteOutputPath } from '../tasks/svg-sprite.mjs'
-import { imageOutputPath } from '../tasks/image.mjs'
+import { imageOutputPaths } from '../tasks/image.mjs'
 import { sassOutputPath } from '../tasks/sass.mjs'
 import { scriptOutputPath } from '../tasks/script.mjs'
 
@@ -403,8 +403,13 @@ export class FileWatcher {
     imageGraph.removeFile(filePath)
     affected.forEach(file => cache.invalidatePageHtml(file))
 
-    const outputPath = imageOutputPath(relPath, config.build.imageOptimization, paths)
-    await this.deleteOutputFile(outputPath, relPath)
+    // 1 ソースが複数の密度を生むので全部消す。
+    // 出力先が衝突する構成はビルドが中止されるため、ここに来る出力は必ず自分が作ったもの
+    const outputs = imageOutputPaths(relPath, config, paths)
+
+    await Promise.all(outputs.map(out => rm(out.absolute, { force: true })))
+    logger.info('unlink', relPath)
+    this.reload()
   }
 
   // ---- Public ----

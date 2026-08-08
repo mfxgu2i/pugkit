@@ -1,6 +1,13 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve, relative, dirname, extname } from 'node:path'
 import sizeOf from 'image-size'
+import {
+  densityOutputs,
+  hasScaledVariant,
+  scaleDown,
+  sourceDensityOf,
+  supportsDensity
+} from '../utils/image-density.mjs'
 
 // 同じ画像は複数ページから参照されるので、読み取り結果をセッション中は使い回す。
 // 保持するのは寸法だけで、画像のバイト列は残さない
@@ -22,34 +29,83 @@ export function clearImageSizeCache() {
 }
 
 /**
+ * srcset は「カンマ + 空白」区切りのリストなので、URL に空白やカンマが入ると
+ * 候補の切れ目を誤らせて srcset ごと壊れる。支給画像には空白入りのファイル名が混ざる。
+ * 日本語などは区切りにならないのでそのままにし、読みやすさを保つ
+ */
+function encodeSrcsetUrl(url) {
+  return url.replace(/\s/g, '%20').replace(/,/g, '%2C')
+}
+
+/**
  * Pug から参照された画像パスを実ファイルへ解決する。
  * 「/」始まりは src からの絶対参照、それ以外はページからの相対参照。
  * src に無ければ public も見る（public に置いた画像も HTML から参照されるため）。
+ *
+ * public 由来かどうかを返すのは、public は copy されるだけで変換も縮小もされないため。
+ * 見分けずに変換後の拡張子を返すと、存在しないファイルを src に書いて 404 になる
  */
 function createImageResolver(filePath, paths) {
   const pageDir = dirname(filePath)
 
   return src => {
     const resolved = src.startsWith('/') ? resolve(paths.src, src.slice(1)) : resolve(pageDir, src)
-    if (existsSync(resolved)) return resolved
+    if (existsSync(resolved)) return { path: resolved, fromPublic: false }
 
     const inPublic = resolve(paths.public, relative(paths.src, resolved))
-    return existsSync(inPublic) ? inPublic : null
+    return existsSync(inPublic) ? { path: inPublic, fromPublic: true } : null
   }
 }
 
 /**
  * Pug に渡す imageInfo ヘルパーを作る。
  *
- * 画像の実寸を読んで返し、あわせて retina（@2x）とアートディレクション用の
- * 派生画像を自動検出する。imageOptimization が avif/webp のときは src を
- * 変換後の拡張子に読み替える。
+ * 画像の実寸を読み、imageSourceDensity に応じた表示サイズと srcset を返す。
+ * あわせてアートディレクション用の派生画像（既定 `_sp`）を自動検出する。
+ *
+ * 出力名の規則は utils/image-density.mjs に置き、生成側（tasks/image.mjs）と共有する。
+ * ここで独自に組み立てると、書いた width/height と実際の画像がずれて CLS になる
  */
 export function createImageInfoHelper(filePath, paths, logger, config, { onAccess } = {}) {
   const optimization = config?.build?.imageOptimization
-  const convertedExt = optimization === 'avif' || optimization === 'webp' ? `.${optimization}` : null
+  const sourceDensity = sourceDensityOf(config)
   const artDirectionSuffix = config?.build?.imageInfo?.artDirectionSuffix ?? '_sp'
   const findImageFile = createImageResolver(filePath, paths)
+
+  /**
+   * 参照パスと実ファイルから、出力側の src / 寸法 / srcset を組み立てる。
+   * 返す src は最小密度（表示サイズ）側で、srcset の 1x と一致する
+   */
+  const describe = (src, found) => {
+    const { width, height, type } = readImageSizeCached(found.path)
+
+    // 縮小版が実在しないものは密度 1 として扱う。そうしないと 1x の無い
+    // srcset="... 2x" だけを書くことになる（SVG / GIF / public 配下 / 極小画像）
+    //
+    // public は copyTask がバイト列のまま出すだけなので、変換も密度も適用されない
+    const scalable = !found.fromPublic && supportsDensity(src) && hasScaledVariant(width, height, sourceDensity)
+    const density = scalable ? sourceDensity : 1
+    const outputOptimization = found.fromPublic ? null : optimization
+
+    const entries = densityOutputs(src, outputOptimization, density)
+      .map(out => ({
+        src: out.name,
+        density: out.density,
+        width: scaleDown(width, density / out.density),
+        height: scaleDown(height, density / out.density)
+      }))
+      .sort((a, b) => a.density - b.density)
+
+    const [smallest] = entries
+
+    return {
+      src: smallest.src,
+      width: smallest.width,
+      height: smallest.height,
+      format: type,
+      srcset: entries.map(entry => `${encodeSrcsetUrl(entry.src)} ${entry.density}x`).join(', ')
+    }
+  }
 
   return src => {
     const fallback = {
@@ -58,53 +114,38 @@ export function createImageInfoHelper(filePath, paths, logger, config, { onAcces
       height: undefined,
       format: undefined,
       isSvg: false,
-      retina: null,
+      srcset: undefined,
       variant: null
     }
 
     try {
-      const foundPath = findImageFile(src)
+      const found = findImageFile(src)
 
-      if (!foundPath) {
+      if (!found) {
         logger?.warn('pug', `Image not found "${src}" in ${relative(paths.src, filePath)}`)
         return fallback
       }
 
-      onAccess?.(foundPath)
-      const { width, height, type: format } = readImageSizeCached(foundPath)
+      onAccess?.(found.path)
 
       const ext = extname(src)
       const isSvg = ext.toLowerCase() === '.svg'
       const base = src.slice(0, -ext.length)
 
-      /** 同名にサフィックスを足した派生画像（@2x や _sp）を探す。無ければ null */
-      const findSibling = suffix => {
+      /** アートディレクション用の派生画像（`_sp` など）を探す。無ければ null */
+      const findVariant = () => {
         if (isSvg) return null
 
-        const siblingSrc = `${base}${suffix}${ext}`
-        const siblingPath = findImageFile(siblingSrc)
-        if (!siblingPath) return null
+        const variantSrc = `${base}${artDirectionSuffix}${ext}`
+        const variantFound = findImageFile(variantSrc)
+        if (!variantFound) return null
 
-        onAccess?.(siblingPath)
-        const sibling = readImageSizeCached(siblingPath)
-
-        return {
-          src: convertedExt ? `${base}${suffix}${convertedExt}` : siblingSrc,
-          width: sibling.width,
-          height: sibling.height
-        }
+        onAccess?.(variantFound.path)
+        const { format, ...rest } = describe(variantSrc, variantFound)
+        return rest
       }
 
-      return {
-        // SVG は変換対象外なので src をそのまま使う
-        src: !isSvg && convertedExt ? `${base}${convertedExt}` : src,
-        width,
-        height,
-        format,
-        isSvg,
-        retina: findSibling('@2x'),
-        variant: findSibling(artDirectionSuffix)
-      }
+      return { ...describe(src, found), isSvg, variant: findVariant() }
     } catch (error) {
       logger?.warn('pug', `Failed to read "${src}" in ${relative(paths.src, filePath)}: ${error.message}`)
       return fallback

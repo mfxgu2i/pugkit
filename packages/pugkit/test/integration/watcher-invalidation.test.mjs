@@ -20,7 +20,7 @@ beforeEach(async () => {
   src = project.path('src')
   context = {
     paths: { src, public: project.path('public'), output: project.path('dist') },
-    config: { build: { imageOptimization: 'webp' } },
+    config: { build: { imageOptimization: 'webp', imageSourceDensity: 2 } },
     cache: new CacheManager('development'),
     graph: new DependencyGraph(),
     imageGraph: new DependencyGraph(),
@@ -273,6 +273,26 @@ describe('画像の変更', () => {
     expect(context.cache.getPageHtml(page)).toBeUndefined()
     expect(context.imageGraph.getAffectedParents(image)).toEqual([])
   })
+
+  /**
+   * 1 ソースが複数の密度を生むので、削除側も全部消せないと
+   * 「消したはずの画像が配信され続ける」状態になる
+   */
+  it('画像削除で密度違いの出力もすべて消す', async () => {
+    const { writeFile, mkdir } = await import('node:fs/promises')
+    const { existsSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+
+    await mkdir(resolve(context.paths.output, 'assets'), { recursive: true })
+    await writeFile(resolve(context.paths.output, 'assets/hero.webp'), 'x')
+    await writeFile(resolve(context.paths.output, 'assets/hero@half.webp'), 'x')
+
+    await watcher.onImageUnlink(at('assets/hero.jpg'))
+
+    expect(existsSync(resolve(context.paths.output, 'assets/hero.webp'))).toBe(false)
+    expect(existsSync(resolve(context.paths.output, 'assets/hero@half.webp'))).toBe(false)
+  })
+
 })
 
 describe('SVG の変更', () => {

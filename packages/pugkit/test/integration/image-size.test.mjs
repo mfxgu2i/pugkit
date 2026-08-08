@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { resolve } from 'node:path'
-import { writeFile } from 'node:fs/promises'
+import { writeFile, mkdir } from 'node:fs/promises'
 import sharp from 'sharp'
 import { clearImageSizeCache, createImageInfoHelper } from '../../transform/image-size.mjs'
 import { createTempProject } from '../helpers/project.mjs'
@@ -11,10 +11,13 @@ let imagesDir
 let mockPugFile
 let paths
 
-const avifConfig = { build: { imageOptimization: 'avif' } }
-const webpConfig = { build: { imageOptimization: 'webp' } }
-const compressConfig = { build: { imageOptimization: 'compress' } }
-const noOptConfig = { build: { imageOptimization: false } }
+const config = (optimization, density = 1, extra = {}) => ({
+  build: { imageOptimization: optimization, imageSourceDensity: density, ...extra }
+})
+
+const avifConfig = config('avif')
+const webpConfig = config('webp')
+const compressConfig = config('compress')
 
 async function createJpeg(filePath, width = 100, height = 80) {
   await sharp({
@@ -33,9 +36,8 @@ beforeEach(async () => {
   paths = { src: testDataDir, public: project.path('public') }
 
   await createJpeg(resolve(imagesDir, 'hero.jpg'), 800, 600)
-  await createJpeg(resolve(imagesDir, 'hero@2x.jpg'), 1600, 1200)
   await createJpeg(resolve(imagesDir, 'responsive.jpg'), 800, 600)
-  await createJpeg(resolve(imagesDir, 'responsive_sp.jpg'), 375, 300)
+  await createJpeg(resolve(imagesDir, 'responsive_sp.jpg'), 376, 300)
   await createJpeg(resolve(imagesDir, 'responsive_tb.jpg'), 768, 500)
   await writeFile(
     resolve(imagesDir, 'icon.svg'),
@@ -60,7 +62,8 @@ describe('createImageInfoHelper', () => {
       expect(result.src).toBe('/images/not-found.jpg')
       expect(result.width).toBeUndefined()
       expect(result.height).toBeUndefined()
-      expect(result.retina).toBeNull()
+      // 「見つからない」と「1 枚しか無い」をここで区別できるようにしておく
+      expect(result.srcset).toBeUndefined()
       expect(result.variant).toBeNull()
     })
   })
@@ -68,30 +71,20 @@ describe('createImageInfoHelper', () => {
   describe('src のパス解決', () => {
     it('imageOptimization: avif のとき src が .avif パスになる', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, paths, null, avifConfig)
-      const result = imageInfo('/images/hero.jpg')
-      expect(result.src).toBe('/images/hero.avif')
+      expect(imageInfo('/images/hero.jpg').src).toBe('/images/hero.avif')
     })
 
     it('imageOptimization: webp のとき src が .webp パスになる', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
-      const result = imageInfo('/images/hero.jpg')
-      expect(result.src).toBe('/images/hero.webp')
+      expect(imageInfo('/images/hero.jpg').src).toBe('/images/hero.webp')
     })
 
     it('imageOptimization: compress のとき src は元パスのまま', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, paths, null, compressConfig)
-      const result = imageInfo('/images/hero.jpg')
-      expect(result.src).toBe('/images/hero.jpg')
-    })
-
-    it('imageOptimization: false のとき src は元パスのまま', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, noOptConfig)
-      const result = imageInfo('/images/hero.jpg')
-      expect(result.src).toBe('/images/hero.jpg')
+      expect(imageInfo('/images/hero.jpg').src).toBe('/images/hero.jpg')
     })
 
     it('src に無ければ public も探す', async () => {
-      const { mkdir, writeFile } = await import('node:fs/promises')
       await mkdir(resolve(paths.public, 'images'), { recursive: true })
       await writeFile(
         resolve(paths.public, 'images/only-public.svg'),
@@ -106,36 +99,116 @@ describe('createImageInfoHelper', () => {
     })
   })
 
-  describe('retina 自動検出', () => {
-    it('@2x が存在する場合 retina に src / width / height が入る (avif モード)', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, avifConfig)
-      const result = imageInfo('/images/hero.jpg')
-      expect(result.retina).not.toBeNull()
-      expect(result.retina.src).toBe('/images/hero@2x.avif')
-      expect(result.retina.width).toBe(1600)
-      expect(result.retina.height).toBe(1200)
+  describe('public 配下の画像', () => {
+    /**
+     * public は copyTask がバイト列のまま出すだけ。変換も縮小もされないので、
+     * 拡張子を読み替えると存在しないファイルを src に書いて 404 になる
+     */
+    beforeEach(async () => {
+      await mkdir(resolve(paths.public, 'images'), { recursive: true })
+      await createJpeg(resolve(paths.public, 'images/logo.jpg'), 240, 80)
     })
 
-    it('@2x が存在する場合 retina に src / width / height が入る (webp モード)', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
-      const result = imageInfo('/images/hero.jpg')
-      expect(result.retina).not.toBeNull()
-      expect(result.retina.src).toBe('/images/hero@2x.webp')
-      expect(result.retina.width).toBe(1600)
-      expect(result.retina.height).toBe(1200)
+    it('webp モードでも拡張子を読み替えない', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      expect(imageInfo('/images/logo.jpg').src).toBe('/images/logo.jpg')
     })
 
-    it('@2x が存在しない場合 retina は null', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
-      const result = imageInfo('/images/responsive.jpg')
-      expect(result.retina).toBeNull()
+    it('密度も適用しない（原寸をそのまま返す）', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const result = imageInfo('/images/logo.jpg')
+
+      expect(result).toMatchObject({ width: 240, height: 80 })
+      expect(result.srcset).toBe('/images/logo.jpg 1x')
+    })
+  })
+
+  describe('imageSourceDensity', () => {
+    it('density 1 では原寸を返し srcset は 1 枚だけ', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 1))
+      const result = imageInfo('/images/hero.jpg')
+
+      expect(result).toMatchObject({ src: '/images/hero.webp', width: 800, height: 600 })
+      expect(result.srcset).toBe('/images/hero.webp 1x')
     })
 
-    it('compress モードのとき retina.src は元パス', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, compressConfig)
+    it('density 2 では src と width/height が表示サイズになる', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
       const result = imageInfo('/images/hero.jpg')
-      expect(result.retina).not.toBeNull()
-      expect(result.retina.src).toBe('/images/hero@2x.jpg')
+
+      expect(result).toMatchObject({ src: '/images/hero@half.webp', width: 400, height: 300 })
+    })
+
+    it('density 2 の srcset は 1x が縮小版、2x が無印（原寸）', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      expect(imageInfo('/images/hero.jpg').srcset).toBe('/images/hero@half.webp 1x, /images/hero.webp 2x')
+    })
+
+    it('compress モードでも密度は効く', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('compress', 2))
+      expect(imageInfo('/images/hero.jpg').srcset).toBe('/images/hero@half.jpg 1x, /images/hero.jpg 2x')
+    })
+
+    it('縮小しても寸法が変わらない画像は 1 枚扱いになる', async () => {
+      await createJpeg(resolve(imagesDir, 'tiny.jpg'), 1, 1)
+
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const result = imageInfo('/images/tiny.jpg')
+
+      expect(result).toMatchObject({ src: '/images/tiny.webp', width: 1, height: 1 })
+      expect(result.srcset).toBe('/images/tiny.webp 1x')
+    })
+
+    it('不正な密度は 1 として扱う（全画像が半分になる事故を防ぐ）', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 3))
+      expect(imageInfo('/images/hero.jpg')).toMatchObject({ width: 800, height: 600 })
+    })
+
+    it('@2x 兄弟ファイルは検出しない（生成物の名前空間と衝突するため）', async () => {
+      await createJpeg(resolve(imagesDir, 'sibling.jpg'), 800, 600)
+      await createJpeg(resolve(imagesDir, 'sibling@2x.jpg'), 1600, 1200)
+
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 1))
+      const result = imageInfo('/images/sibling.jpg')
+
+      expect(result.retina).toBeUndefined()
+      expect(result.srcset).toBe('/images/sibling.webp 1x')
+    })
+  })
+
+  describe('srcset の URL エンコード', () => {
+    /**
+     * srcset は「カンマ + 空白」区切り。区切り文字がそのまま入ると候補の切れ目を誤らせ、
+     * srcset ごと無効になる。支給画像には空白入りのファイル名が混ざる
+     */
+    it('空白を含むファイル名でも候補が壊れない', async () => {
+      await createJpeg(resolve(imagesDir, 'hero image.jpg'), 800, 600)
+
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const { srcset } = imageInfo('/images/hero image.jpg')
+
+      expect(srcset).toBe('/images/hero%20image@half.webp 1x, /images/hero%20image.webp 2x')
+      // 前提: 候補が 2 つに分かれて読めること
+      expect(srcset.split(', ')).toHaveLength(2)
+    })
+
+    it('カンマを含むファイル名でも候補が壊れない', async () => {
+      await createJpeg(resolve(imagesDir, 'photo,1.jpg'), 800, 600)
+
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const { srcset } = imageInfo('/images/photo,1.jpg')
+
+      expect(srcset).toBe('/images/photo%2C1@half.webp 1x, /images/photo%2C1.webp 2x')
+      expect(srcset.split(', ')).toHaveLength(2)
+    })
+
+    it('日本語はそのまま残す（区切りにならないので読みやすさを優先）', async () => {
+      await createJpeg(resolve(imagesDir, 'メインビジュアル.jpg'), 800, 600)
+
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const { srcset } = imageInfo('/images/メインビジュアル.jpg')
+
+      expect(srcset).toBe('/images/メインビジュアル@half.webp 1x, /images/メインビジュアル.webp 2x')
     })
   })
 
@@ -145,22 +218,17 @@ describe('createImageInfoHelper', () => {
       const result = imageInfo('/images/responsive.jpg')
       expect(result.variant).not.toBeNull()
       expect(result.variant.src).toBe('/images/responsive_sp.avif')
-      expect(result.variant.width).toBe(375)
-      expect(result.variant.height).toBe(300)
-    })
-
-    it('デフォルト（imageInfo.artDirectionSuffix: "_sp"）: _sp が検出される', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
-      const result = imageInfo('/images/responsive.jpg')
-      expect(result.variant).not.toBeNull()
-      expect(result.variant.src).toBe('/images/responsive_sp.webp')
-      expect(result.variant.width).toBe(375)
+      expect(result.variant.width).toBe(376)
       expect(result.variant.height).toBe(300)
     })
 
     it('imageInfo.artDirectionSuffix: "_tb" のとき _tb が検出される', () => {
-      const config = { build: { imageOptimization: 'webp', imageInfo: { artDirectionSuffix: '_tb' } } }
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config)
+      const imageInfo = createImageInfoHelper(
+        mockPugFile,
+        paths,
+        null,
+        config('webp', 1, { imageInfo: { artDirectionSuffix: '_tb' } })
+      )
       const result = imageInfo('/images/responsive.jpg')
       expect(result.variant).not.toBeNull()
       expect(result.variant.src).toBe('/images/responsive_tb.webp')
@@ -170,38 +238,37 @@ describe('createImageInfoHelper', () => {
 
     it('バリアント画像が存在しない場合は null', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
-      const result = imageInfo('/images/hero.jpg')
-      expect(result.variant).toBeNull()
+      expect(imageInfo('/images/hero.jpg').variant).toBeNull()
     })
 
-    it('compress モードのとき variant.src は元パス', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, compressConfig)
-      const result = imageInfo('/images/responsive.jpg')
-      expect(result.variant.src).toBe('/images/responsive_sp.jpg')
+    it('variant にも密度が適用される（source の width/height が実寸の 2 倍になるのを防ぐ）', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const { variant } = imageInfo('/images/responsive.jpg')
+
+      expect(variant).toMatchObject({ src: '/images/responsive_sp@half.webp', width: 188, height: 150 })
+      expect(variant.srcset).toBe('/images/responsive_sp@half.webp 1x, /images/responsive_sp.webp 2x')
+    })
+
+    it('density 1 でも variant.srcset は必ず出す（source が無視されるのを防ぐ）', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 1))
+      expect(imageInfo('/images/responsive.jpg').variant.srcset).toBe('/images/responsive_sp.webp 1x')
     })
   })
 
   describe('SVG', () => {
-    it('isSvg: true / retina: null / variant: null、src は変換されない', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
+    it('isSvg: true / variant: null、src は変換されない', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
       const result = imageInfo('/images/icon.svg')
       expect(result.isSvg).toBe(true)
       expect(result.src).toBe('/images/icon.svg')
-      expect(result.retina).toBeNull()
       expect(result.variant).toBeNull()
+      // 密度の対象外なので縮小版は存在しない
+      expect(result.srcset).toBe('/images/icon.svg 1x')
     })
   })
 })
 
 describe('onAccess コールバック', () => {
-  it('retina が存在する場合 onAccess にメイン・retina 両方が登録される', () => {
-    const accessed = []
-    const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })
-    imageInfo('/images/hero.jpg')
-    expect(accessed).toContain(resolve(imagesDir, 'hero.jpg'))
-    expect(accessed).toContain(resolve(imagesDir, 'hero@2x.jpg'))
-  })
-
   it('variant が存在する場合 onAccess にメイン・variant 両方が登録される', () => {
     const accessed = []
     const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })
@@ -250,13 +317,12 @@ describe('寸法のキャッシュ', () => {
     expect(infoOf('/images/hero.jpg')).toMatchObject({ width: 320, height: 240 })
   })
 
-  it('retina・variant の寸法もキャッシュを消せば追随する', async () => {
-    createImageInfoHelper(mockPugFile, paths, null, compressConfig)('/images/responsive.jpg')
+  it('variant の寸法もキャッシュを消せば追随する', async () => {
+    infoOf('/images/responsive.jpg')
     await createJpeg(resolve(imagesDir, 'responsive_sp.jpg'), 100, 80)
 
     clearImageSizeCache()
 
-    const info = createImageInfoHelper(mockPugFile, paths, null, compressConfig)('/images/responsive.jpg')
-    expect(info.variant).toMatchObject({ width: 100, height: 80 })
+    expect(infoOf('/images/responsive.jpg').variant).toMatchObject({ width: 100, height: 80 })
   })
 })

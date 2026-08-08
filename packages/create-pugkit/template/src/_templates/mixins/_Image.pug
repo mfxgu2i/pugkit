@@ -2,7 +2,8 @@
 //- Image mixin
 //- ============================================================
 //- imageInfoヘルパーを使用して画像のメタデータ・パスを自動解決します。
-//- ※ src/配下の画像のみ対応。public/配下の画像は非対応。
+//- ※ src/ 配下の画像は imageSourceDensity に応じて srcset が自動生成されます。
+//-   等倍のまま変換せずに出したい画像は public/ 配下に置いてください。
 //-
 //- 引数
 //-   path  {string}  img/配下の画像パス
@@ -23,24 +24,19 @@ mixin Image(path, args = {})
     const loading       = args.lazy !== false ? 'lazy' : undefined
     const fetchpriority = args.lazy === false ? 'high' : undefined
 
-    // 2x画像が存在する場合のみsrcsetに含める
-    const imgSrcset = (!info.isSvg && info.retina)
-      ? `${info.src} 1x, ${info.retina.src} 2x`
-      : undefined
-
   picture(class=args.class)
 
     //- アートディレクション画像が存在する場合のみ出力
     if info.variant
       source(
         media=media
-        srcset=info.variant.src
+        srcset=info.variant.srcset
         width=info.variant.width
         height=info.variant.height
       )
     img(
       src=info.src
-      srcset=imgSrcset
+      srcset=info.srcset
       alt=alt
       width=info.width
       height=info.height

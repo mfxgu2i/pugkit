@@ -56,14 +56,13 @@ async function createProject(overrides = {}) {
   await project.write({
     'src/_partials/_mixins.pug': `mixin figure
   - const info = imageInfo('/assets/img/hero.jpg')
-  img(src=info.src, width=info.width, height=info.height)
-  if info.retina
-    img(src=info.retina.src, width=info.retina.width)
+  img(src=info.src, srcset=info.srcset, width=info.width, height=info.height)
+  if info.variant
+    source(srcset=info.variant.srcset, width=info.variant.width, height=info.variant.height)
 `
   })
-  await writeFile(project.path('src/assets/img/hero.jpg'), await jpeg(400, 300))
-  await writeFile(project.path('src/assets/img/hero@2x.jpg'), await jpeg(800, 600))
-  await writeFile(project.path('src/assets/img/hero_sp.jpg'), await jpeg(200, 150))
+  await writeFile(project.path('src/assets/img/hero.jpg'), await jpeg(800, 600))
+  await writeFile(project.path('src/assets/img/hero_sp.jpg'), await jpeg(376, 300))
 
   return project
 }
@@ -107,7 +106,50 @@ describe('HTML', () => {
     }
 
     // 寸法が焼き込まれていること自体も確かめる（両方とも空なら一致してしまう）
+    // imageSourceDensity: 2 が既定なので 800x600 の原本は表示 400x300 になる
     expect(await project.read('dist/index.html')).toMatch(/width="400"/)
+  })
+
+  it('焼き込まれた width/height が、実際に出力された画像の寸法と一致する', async () => {
+    await build(project.root)
+
+    const html = await project.read('dist/index.html')
+    const src = html.match(/<img src="([^"]+)"/)[1]
+    const width = Number(html.match(/width="(\d+)"/)[1])
+    const height = Number(html.match(/height="(\d+)"/)[1])
+
+    const output = await sharp(project.path(`dist${src}`)).metadata()
+
+    expect(output).toMatchObject({ width, height })
+  })
+
+  it('srcset に並ぶ URL がすべて実ファイルに対応する', async () => {
+    await build(project.root)
+
+    const html = await project.read('dist/index.html')
+    const srcset = html.match(/srcset="([^"]+)"/)[1]
+    const urls = srcset.split(',').map(entry => entry.trim().split(/\s+/)[0])
+
+    // 前提: 密度つきの srcset が実際に出ている（1 枚だけなら以下の検査が骨抜きになる）
+    expect(urls).toHaveLength(2)
+    expect(srcset).toBe('/assets/img/hero@half.webp 1x, /assets/img/hero.webp 2x')
+
+    const built = await listFiles(project.path('dist'))
+    for (const url of urls) {
+      expect(built, `${url} が出力されていない`).toContain(url.replace(/^\//, ''))
+    }
+  })
+
+  it('アートディレクション画像にも密度が効く（source の寸法が実寸の 2 倍にならない）', async () => {
+    await build(project.root)
+
+    const html = await project.read('dist/index.html')
+    const source = html.match(/<source srcset="([^"]+)" width="(\d+)" height="(\d+)"/)
+
+    expect(source[1]).toBe('/assets/img/hero_sp@half.webp 1x, /assets/img/hero_sp.webp 2x')
+
+    const output = await sharp(project.path(`dist/assets/img/hero_sp@half.webp`)).metadata()
+    expect(output).toMatchObject({ width: Number(source[2]), height: Number(source[3]) })
   })
 
   it('subdir を設定しても一致する', async () => {
