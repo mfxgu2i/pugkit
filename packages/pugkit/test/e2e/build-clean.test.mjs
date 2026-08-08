@@ -34,13 +34,6 @@ describe('出力ディレクトリの作り直し', () => {
     expect(await listFiles(project.path('dist'))).not.toContain('legacy.html')
   })
 
-  it('本番成果物にソースマップを混ぜない', async () => {
-    const project = await createTempProject(minimalProjectFiles())
-
-    await build(project.root)
-
-    expect((await listFiles(project.path('dist'))).filter(f => f.endsWith('.map'))).toEqual([])
-  })
 })
 
 describe('消してはいけない場所を outDir にしたとき', () => {

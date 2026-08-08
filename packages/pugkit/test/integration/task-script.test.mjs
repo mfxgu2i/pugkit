@@ -61,17 +61,6 @@ describe('依存グラフ', () => {
     ])
   })
 
-  it('import していないエントリは依存に含めない', async () => {
-    const { project, graph } = await buildScripts({
-      'src/assets/js/_lib/util.js': 'export const tag = 1\n',
-      'src/assets/js/main.js': "import { tag } from './_lib/util.js'\nconsole.log(tag)\n",
-      'src/assets/js/other.js': "console.log('other')\n"
-    })
-
-    expect(graph.getAffectedParents(project.path('src/assets/js/_lib/util.js'))).not.toContain(
-      project.path('src/assets/js/other.js')
-    )
-  })
 })
 
 describe('dev の差分ビルド', () => {

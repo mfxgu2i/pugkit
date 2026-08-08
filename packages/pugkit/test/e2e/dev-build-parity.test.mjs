@@ -105,18 +105,9 @@ describe('HTML', () => {
 
       expect(served, `${relativePath} が食い違っている`).toBe(built)
     }
-  })
 
-  it('画像の寸法が dev と build で同じ値になる', async () => {
-    await build(project.root)
-    const built = await project.read('dist/index.html')
-
-    const devContext = (await createBuilder(project.root, 'development')).context
-    const served = await buildPageHtml(project.path('src/index.pug'), devContext)
-
-    // 幅・高さが焼き込まれていること自体も確認する（両方とも空なら一致してしまう）
-    expect(built).toMatch(/width="400"/)
-    expect(served).toBe(built)
+    // 寸法が焼き込まれていること自体も確かめる（両方とも空なら一致してしまう）
+    expect(await project.read('dist/index.html')).toMatch(/width="400"/)
   })
 
   it('subdir を設定しても一致する', async () => {

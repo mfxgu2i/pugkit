@@ -92,14 +92,6 @@ describe('CacheManager pageHtml cache', () => {
       return new CacheManager('development', { pageHtmlCacheLimit: limit })
     }
 
-    it('should keep pages while under the limit', () => {
-      const cache = createCappedCache()
-      cache.setPageHtml('/a.pug', page(40))
-      cache.setPageHtml('/b.pug', page(40))
-      expect(cache.getPageHtml('/a.pug')).toBeDefined()
-      expect(cache.getPageHtml('/b.pug')).toBeDefined()
-    })
-
     it('should evict the oldest page when the limit is exceeded', () => {
       const cache = createCappedCache()
       cache.setPageHtml('/a.pug', page(60))

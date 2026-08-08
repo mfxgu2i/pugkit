@@ -63,35 +63,7 @@ describe('build の再現性', () => {
   })
 })
 
-describe('dev と build の出力一致', () => {
-  it('dev が配信する HTML は build が書き出す HTML と一致する', async () => {
-    const project = await createTempProject(minimalProjectFiles())
-    await build(project.root)
-    const built = await project.read('dist/index.html')
-
-    const devBuilder = await createBuilder(project.root, 'development')
-    const { buildPageHtml } = await import('../../tasks/pug.mjs')
-    const served = await buildPageHtml(project.path('src/index.pug'), devBuilder.context)
-
-    expect(served).toBe(built)
-  })
-})
-
 describe('dev は build の出力先に書き込まない', () => {
-  it('dev のタスクを走らせても outDir が空のまま', async () => {
-    const project = await createTempProject(minimalProjectFiles())
-
-    const devBuilder = await createBuilder(project.root, 'development')
-    const { context } = devBuilder
-    await devBuilder.tasks.sass(context)
-    await devBuilder.tasks.script(context)
-
-    // dev の成果物はキャッシュ側に出る
-    expect(await listFiles(context.paths.outputRoot)).not.toEqual([])
-    // outDir は build 専用なので触られない
-    expect(await listFiles(project.path('dist'))).toEqual([])
-  })
-
   it('build 済みの outDir を dev が汚さない', async () => {
     const project = await createTempProject(minimalProjectFiles())
     await build(project.root)

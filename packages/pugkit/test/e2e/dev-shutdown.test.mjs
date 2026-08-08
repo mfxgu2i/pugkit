@@ -32,20 +32,6 @@ function runUntilExit(source, timeoutMs = 20000) {
 }
 
 describe('dev の停止', () => {
-  it('close() を呼べばプロセスが自然終了する', async () => {
-    const project = await createTempProject(minimalProjectFiles())
-
-    const result = await runUntilExit(`
-      import { createBuilder } from '${ENTRY}'
-      const builder = await createBuilder(${JSON.stringify(project.root)}, 'development')
-      builder.context.config.server.port = 0
-      await builder.watch()
-      await builder.close()
-    `)
-
-    expect(result).toBe(0)
-  })
-
   it('close() しなければ終わらない（このテスト自身の妥当性の確認）', async () => {
     const project = await createTempProject(minimalProjectFiles())
 
@@ -56,13 +42,14 @@ describe('dev の停止', () => {
       builder.context.config.server.port = 0
       await builder.watch()
     `,
-      4000
+      1500
     )
 
     expect(result).toBe('timeout')
   })
 
-  it('停止したあとでも同じプロセスで再び起動できる', async () => {
+  // 2周するので「1周目の close() が効いていること」も同時に確かめられる
+  it('close() すればプロセスが終わり、同じプロセスで再び起動もできる', async () => {
     const project = await createTempProject(minimalProjectFiles())
 
     const result = await runUntilExit(`

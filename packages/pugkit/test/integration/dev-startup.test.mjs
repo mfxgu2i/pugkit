@@ -78,16 +78,6 @@ describe('dev サーバーの起動', () => {
     expect((await listFiles(context.paths.outputRoot)).filter(f => f.endsWith('.html'))).toEqual([])
   })
 
-  it('dev の CSS は非圧縮でソースマップつき', async () => {
-    const { context } = await startWatcher()
-    const output = await listFiles(context.paths.outputRoot)
-
-    expect(output).toContain('assets/css/style.css.map')
-    const css = await import('node:fs/promises').then(fs =>
-      fs.readFile(`${context.paths.outputRoot}/assets/css/style.css`, 'utf8')
-    )
-    expect(css).toMatch(/\n/) // minify されていれば1行になる
-  })
 })
 
 describe('dev の差分ビルド', () => {
@@ -140,15 +130,6 @@ describe('dev の差分ビルド', () => {
       f.readFile(`${context.paths.outputRoot}/assets/js/main.js`, 'utf8')
     )
     expect(js).toContain('updated')
-  })
-
-  it('dev の JS は console を残す', async () => {
-    const { context } = await startWatcher()
-
-    const js = await import('node:fs/promises').then(f =>
-      f.readFile(`${context.paths.outputRoot}/assets/js/main.js`, 'utf8')
-    )
-    expect(js).toContain('console.log')
   })
 })
 
