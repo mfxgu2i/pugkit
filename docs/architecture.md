@@ -90,18 +90,25 @@ dev の書き込み先は `cacheDir`（既定: `node_modules/.pugkit/dev`、`nod
 
 `core/server.mjs` は HTTP と SSE の結線だけを持ち、それ以外は責務ごとに分ける。
 
-| モジュール                   | 役割                                                                   |
-| ---------------------------- | ---------------------------------------------------------------------- |
-| `core/server.mjs`            | HTTP サーバー・SSE・ルーティングの結線                                 |
-| `core/dev/page-source.mjs`   | URL → `src` の Pug ソース解決（`src` の外へ出さない封じ込めを含む）    |
-| `core/dev/lazy-builder.mjs`  | リクエスト時ビルドと、同時リクエストの重複排除（世代つき）             |
-| `core/dev/client-script.mjs` | 注入するスクリプトタグの組み立てと、差分適用可否の指紋計算             |
-| `core/dev/response.mjs`      | HTML の送出・エラーページ・静的配信の失敗の受け止め                    |
-| `client/live-reload.js`      | ブラウザ側のライブリロード。実ファイルで、設定は `data` 属性で受け取る |
+| モジュール                     | 役割                                                                         |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| `core/server.mjs`              | HTTP サーバー・SSE・ルーティングの結線                                       |
+| `core/dev/startup.mjs`         | dev の起動シーケンス（ポート確認・キャッシュ作り直し・衝突検査・初期ビルド） |
+| `core/watcher.mjs`             | chokidar の結線と、変更の種別ごとの反応                                      |
+| `core/dev/page-candidates.mjs` | URL → ページ候補の展開と、ルート配下への封じ込め                             |
+| `core/dev/page-source.mjs`     | URL → `src` の Pug ソース解決（パーシャルの除外を含む）                      |
+| `core/dev/lazy-builder.mjs`    | リクエスト時ビルドと、同時リクエストの重複排除（世代つき）                   |
+| `core/dev/client-script.mjs`   | 注入するスクリプトタグの組み立てと、差分適用可否の指紋計算                   |
+| `core/dev/response.mjs`        | HTML の送出・エラーページ・静的配信の失敗の受け止め                          |
+| `client/live-reload.js`        | ブラウザ側のライブリロード。実ファイルで、設定は `data` 属性で受け取る       |
 
-**URL の解決順は sirv に合わせる**（フラットファイル優先。末尾スラッシュは除去して同順）。Pug ページ・`public` 由来の HTML・静的配信で順序が違うと、同じ URL でも別のファイルが選ばれる。
+**URL の解決順は sirv に合わせる**（フラットファイル優先。末尾スラッシュは除去して同順）。Pug ページ・`public` 由来の HTML・静的配信で順序が違うと、同じ URL でも別のファイルが選ばれる。展開そのものは `core/dev/page-candidates.mjs` に置き、拡張子（`.pug` / `.html`）だけを差し替えて Pug ページと既存 HTML で共有する。
 
-**出力先の導出規則はタスク側に置き、監視側の削除処理と共有する**（`imageOutputPaths` / `svgOutputPath` / `sassOutputPath` / `scriptOutputPath` / `spriteOutputPath`）。生成と削除で規則がずれると、消したはずのファイルが配信され続ける。
+**出力先の導出規則はタスク側に置き、監視側の削除処理と共有する**（`imageOutputPaths` / `svgOutputPath` / `sassOutputPath` / `scriptOutputPath` / `spriteOutputPath` / `publicOutputPath`）。生成と削除で規則がずれると、消したはずのファイルが配信され続ける。出力先の衝突検査（`core/output-conflicts.mjs`）も同じ関数を通して突き合わせる。
+
+**常駐プロセスの後始末はタスク登録時に渡す**（`registerTask(name, { run, dispose })`）。どのタスクが常駐プロセスを持つかはタスク自身の事情なので、`Builder` は名指しせず受け取った `dispose` を呼ぶだけにする。
+
+**拡張子の集合は `utils/image-formats.mjs` に集める**。glob（走査対象）・正規表現（変更の種別判定）・拡張子の読み替えという別々の形で必要になるため、書き下すと片方だけ増えたときに気づけない。
 
 画像は 1 ソースが複数の密度を生むため `imageOutputPaths` は配列を返す（筆頭は必ず原寸）。**同じ理由で寸法の計算も共有する**（`utils/image-density.mjs`）。生成される画像の実寸と、HTML に焼き込む `width` / `height` がずれると CLS になる。
 
@@ -115,7 +122,7 @@ dev サーバーがどんな状態であっても（不具合・キャッシュ�
 `pugkit build` を実行するたびに新しい Node.js プロセスを起動する。dev サーバーが保持していたすべてのメモリ状態（`_imageSizeCache`・各依存グラフ・コンパイル済みテンプレート）を引き継がない。
 
 **2. production モードではキャッシュを一切参照しない**  
-`resolveChangedFiles`（`tasks/pug.mjs`）は `isProduction` のとき全ファイルをそのまま返す。`CacheManager.setPugTemplate` も production では保存しない。Sass・Script のインクリメンタル処理も `isDevelopment` の条件で保護し、production では常に全エントリーを処理する。
+`pugTask`（`tasks/pug.mjs`）は常に全ページを glob して処理する（変更検知による絞り込みは持たない）。`CacheManager.setPugTemplate` も production では保存しない。Sass・Script のインクリメンタル処理も `isDevelopment` の条件で保護し、production では常に全エントリーを処理する。
 
 **3. 出力ディレクトリを完全削除**  
 ビルド開始前に出力ディレクトリを削除してから再生成する。前回ビルドの残骸が混入しないようにする。

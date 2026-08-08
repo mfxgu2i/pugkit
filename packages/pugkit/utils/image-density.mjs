@@ -1,4 +1,5 @@
 import { extname } from 'node:path'
+import { CONVERTIBLE_EXT_RE, DENSITY_EXT_RE } from './image-formats.mjs'
 
 /**
  * 画像の密度と出力名の規則。
@@ -6,14 +7,9 @@ import { extname } from 'node:path'
  * 生成側（tasks/image.mjs）と参照側（transform/image-size.mjs）が同じ規則を使わないと、
  * HTML に書く width/height と実際に出力された画像の寸法がずれて CLS になる。
  * 出力先の導出を imageOutputPaths に一本化しているのと同じ理由で、ここに集める。
+ *
+ * 対象の拡張子そのものは utils/image-formats.mjs に置く（glob や種別判定でも要るため）。
  */
-
-// 変換対象の拡張子。これ以外は元の形式のまま出力する
-const CONVERTIBLE_EXT_RE = /\.(jpg|jpeg|png|gif)$/i
-
-// 密度を適用する拡張子。GIF は sharp のアニメーション対応を入れていないため、
-// 縮小すると 1 コマ目に潰れる。SVG はベクターなので密度の概念が当てはまらない
-const DENSITY_EXT_RE = /\.(jpg|jpeg|png)$/i
 
 export const VALID_SOURCE_DENSITIES = [1, 2]
 
@@ -51,6 +47,7 @@ export function hasScaledVariant(width, height, sourceDensity) {
   return scaleDown(width, sourceDensity) < width && scaleDown(height, sourceDensity) < height
 }
 
+/** 密度（縮小版）を適用してよい形式か。SVG はベクターなので密度の概念が当てはまらない */
 export function supportsDensity(name) {
   return DENSITY_EXT_RE.test(name)
 }

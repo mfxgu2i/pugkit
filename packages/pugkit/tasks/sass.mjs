@@ -84,6 +84,10 @@ export async function sassTask(context, options = {}) {
   logger.info('sass', `Building ${filesToBuild.length} file(s)`)
 
   // 3. 並列コンパイル（dev は常駐コンパイラを再利用、build は使い捨てで確実に破棄）
+  //
+  // ここは同時実行数を絞らない。対象はパーシャルを除いたエントリだけで元々少なく、
+  // 多重化は常駐コンパイラ側が持っている。ファイル数がそのまま並列数になる
+  // image / svg / copy とは事情が違う（utils/concurrency.mjs を参照）
   const compiler = isDevelopment ? await getDevCompiler() : await sass.initAsyncCompiler()
 
   try {

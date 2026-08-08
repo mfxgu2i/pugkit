@@ -1,6 +1,7 @@
-import { resolve, isAbsolute } from 'node:path'
+import { resolve } from 'node:path'
 import { assertSafeToWipe } from '../utils/safe-dir.mjs'
 import { normalizeSubdir } from '../utils/subdir.mjs'
+import { resolveFromRoot } from '../utils/paths.mjs'
 import { existsSync } from 'node:fs'
 import { defaultConfig } from './defaults.mjs'
 import { logger } from '../utils/logger.mjs'
@@ -17,40 +18,47 @@ async function loadUserConfig(root) {
     const module = await import(configPath)
     return module.default || {}
   } catch (error) {
-    console.warn(`Failed to load pugkit.config.mjs: ${error.message}`)
+    logger.warn('config', `pugkit.config.mjs を読み込めませんでした（既定値で続行します）: ${error.message}`)
     return {}
   }
 }
 
+const mergeShallow = (defaults, user) => ({ ...defaults, ...(user ?? {}) })
+
+/**
+ * build 配下で、丸ごと差し替えではなくキー単位で混ぜるもの。
+ *
+ * 差し替えにすると、`html.indent_size` だけ指定したときに他の整形設定が
+ * 既定値ごと消える。imageOptions は形式ごとに同じ扱いが要るので別に見る
+ */
+const MERGED_BUILD_KEYS = ['imageInfo', 'imageOverrides', 'html']
+
+function mergeBuild(defaults, user = {}) {
+  const build = mergeShallow(defaults, user)
+
+  for (const key of MERGED_BUILD_KEYS) {
+    build[key] = mergeShallow(defaults[key], user[key])
+  }
+
+  // 形式の一覧は既定値から取る。形式を増やしてもここを直さなくて済む
+  build.imageOptions = Object.fromEntries(
+    Object.keys(defaults.imageOptions).map(format => [
+      format,
+      mergeShallow(defaults.imageOptions[format], user.imageOptions?.[format])
+    ])
+  )
+
+  return build
+}
+
 function mergeConfig(defaults, user) {
   return {
-    siteUrl: user.siteUrl || defaults.siteUrl,
-    subdir: normalizeSubdir(user.subdir || defaults.subdir),
-    outDir: user.outDir !== undefined ? user.outDir : defaults.outDir,
-    cacheDir: user.cacheDir !== undefined ? user.cacheDir : defaults.cacheDir,
-    server: { ...defaults.server, ...(user.server || {}) },
-    build: {
-      ...defaults.build,
-      ...(user.build || {}),
-      imageOptions: {
-        webp: { ...defaults.build.imageOptions.webp, ...(user.build?.imageOptions?.webp || {}) },
-        jpeg: { ...defaults.build.imageOptions.jpeg, ...(user.build?.imageOptions?.jpeg || {}) },
-        png: { ...defaults.build.imageOptions.png, ...(user.build?.imageOptions?.png || {}) },
-        avif: { ...defaults.build.imageOptions.avif, ...(user.build?.imageOptions?.avif || {}) }
-      },
-      imageInfo: {
-        ...defaults.build.imageInfo,
-        ...(user.build?.imageInfo || {})
-      },
-      imageOverrides: {
-        ...defaults.build.imageOverrides,
-        ...(user.build?.imageOverrides || {})
-      },
-      html: {
-        ...defaults.build.html,
-        ...(user.build?.html || {})
-      }
-    }
+    siteUrl: user.siteUrl ?? defaults.siteUrl,
+    subdir: normalizeSubdir(user.subdir ?? defaults.subdir),
+    outDir: user.outDir ?? defaults.outDir,
+    cacheDir: user.cacheDir ?? defaults.cacheDir,
+    server: mergeShallow(defaults.server, user.server),
+    build: mergeBuild(defaults.build, user.build)
   }
 }
 
@@ -89,7 +97,7 @@ function normalizeImageConfig(build) {
  */
 function validateConfig(config) {
   const root = config.root
-  const resolvedOutDir = isAbsolute(config.outDir) ? config.outDir : resolve(root, config.outDir)
+  const resolvedOutDir = resolveFromRoot(root, config.outDir)
 
   assertSafeToWipe(resolvedOutDir, {
     label: 'outDir',
@@ -109,6 +117,19 @@ function validateConfig(config) {
   return config
 }
 
+/**
+ * CLI のオプションを設定に上書きする。
+ *
+ * 設定ファイルの読み込みと同じ場所で当てることで、以降は「config は解決済み」として
+ * 扱える。ビルダーを作ったあとに context.config を書き換えると、その値を
+ * 既に読んでしまった箇所とずれる
+ */
+function applyInlineConfig(config, inline) {
+  if (inline.siteUrl !== undefined && inline.siteUrl !== null) config.siteUrl = inline.siteUrl
+  if (inline.port !== undefined && inline.port !== null) config.server.port = inline.port
+  if (inline.host !== undefined && inline.host !== null) config.server.host = inline.host
+}
+
 export async function loadConfig(root = process.cwd(), inlineConfig = {}) {
   const userConfig = await loadUserConfig(root)
   const config = mergeConfig(defaultConfig, userConfig)
@@ -116,9 +137,7 @@ export async function loadConfig(root = process.cwd(), inlineConfig = {}) {
   // CLI は `pugkit build .` のように相対パスを渡してくる。
   // 絶対パス前提で使う箇所（esbuild の absWorkingDir など）があるのでここで一度だけ解決する
   config.root = resolve(root)
-  if (inlineConfig.siteUrl !== undefined && inlineConfig.siteUrl !== null) {
-    config.siteUrl = inlineConfig.siteUrl
-  }
+  applyInlineConfig(config, inlineConfig)
   validateConfig(config)
   return config
 }

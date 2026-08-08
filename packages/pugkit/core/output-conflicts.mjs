@@ -3,6 +3,7 @@ import { relative } from 'node:path'
 import { imageOutputPaths } from '../tasks/image.mjs'
 import { svgOutputPath, SVG_GLOB, SVG_IGNORE } from '../tasks/svg.mjs'
 import { spriteOutputPath } from '../tasks/svg-sprite.mjs'
+import { publicOutputPath } from '../tasks/copy.mjs'
 import { IMAGE_GLOB, IMAGE_IGNORE } from '../tasks/image.mjs'
 
 /**
@@ -26,8 +27,10 @@ async function collectOwners(context) {
   const owners = new Map()
   const conflicts = []
 
-  const claim = (output, source) => {
-    const key = normalize(output)
+  // 突き合わせの鍵は「出力ルートからの相対パス」。絶対パスの導出は各タスクの
+  // *OutputPath に任せ、ここはそれを共通の形に直すだけにする
+  const claim = (absoluteOutput, source) => {
+    const key = normalize(relative(paths.output, absoluteOutput))
     const existing = owners.get(key)
     if (existing && existing !== source) conflicts.push({ output: key, a: existing, b: source })
     else owners.set(key, source)
@@ -40,10 +43,10 @@ async function collectOwners(context) {
   ])
 
   for (const rel of images) {
-    for (const out of imageOutputPaths(rel, config, paths)) claim(out.relative, `src/${normalize(rel)}`)
+    for (const out of imageOutputPaths(rel, config, paths)) claim(out.absolute, `src/${normalize(rel)}`)
   }
 
-  for (const rel of svgs) claim(svgOutputPath(rel), `src/${normalize(rel)}`)
+  for (const rel of svgs) claim(svgOutputPath(rel, paths), `src/${normalize(rel)}`)
 
   // スプライトは icons ディレクトリごとに 1 ファイルを生成する
   const iconDirs = new Set(
@@ -51,9 +54,10 @@ async function collectOwners(context) {
       normalize(rel).replace(/\/icons\/.*$/, '/icons')
     )
   )
-  for (const dir of iconDirs) claim(relative(paths.output, spriteOutputPath(dir, paths)), `sprite(${dir})`)
+  for (const dir of iconDirs) claim(spriteOutputPath(dir, paths), `sprite(${dir})`)
 
-  for (const rel of publicFiles) claim(rel, `public/${normalize(rel)}`)
+  // copy は public からの相対パスをそのまま出力ルート下に置く（tasks/copy.mjs と同じ規則）
+  for (const rel of publicFiles) claim(publicOutputPath(rel, paths), `public/${normalize(rel)}`)
 
   return conflicts
 }

@@ -4,6 +4,7 @@ import { relative, resolve } from 'node:path'
 import { optimize } from 'svgo'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
+import { FILE_CONCURRENCY, runWithConcurrency } from '../utils/concurrency.mjs'
 
 export const SVG_GLOB = '**/*.svg'
 // icons はスプライト用なので個別出力の対象外
@@ -14,7 +15,7 @@ export const SVG_IGNORE = ['**/_*/**', '**/icons/**']
  * 消したはずのファイルが配信され続けるので、ここ一箇所に置く
  */
 export function svgOutputPath(relativePath, paths) {
-  return paths ? resolve(paths.output, relativePath) : relativePath
+  return resolve(paths.output, relativePath)
 }
 
 /**
@@ -23,7 +24,6 @@ export function svgOutputPath(relativePath, paths) {
 export async function svgTask(context, options = {}) {
   const { paths } = context
 
-  // 特定のファイルが指定されている場合（watch時）
   // 変更されたファイルだけ（dev の監視時）
   if (options.changed) {
     await optimizeSvg(options.changed, context)
@@ -45,8 +45,7 @@ export async function svgTask(context, options = {}) {
 
   logger.info('svg', `Optimizing ${svgs.length} SVG file(s)`)
 
-  // 並列処理
-  await Promise.all(svgs.map(file => optimizeSvg(file, context)))
+  await runWithConcurrency(svgs, FILE_CONCURRENCY, file => optimizeSvg(file, context))
 
   logger.success('svg', `Optimized ${svgs.length} SVG file(s)`)
 }

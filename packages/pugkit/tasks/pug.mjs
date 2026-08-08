@@ -6,6 +6,7 @@ import { createBuilderVars } from '../transform/builder-vars.mjs'
 import { createImageInfoHelper } from '../transform/image-size.mjs'
 import { generatePage } from '../generate/page.mjs'
 import { logger } from '../utils/logger.mjs'
+import { FILE_CONCURRENCY, runWithConcurrency } from '../utils/concurrency.mjs'
 
 export async function pugTask(context) {
   const { paths } = context
@@ -17,7 +18,7 @@ export async function pugTask(context) {
   }
 
   logger.info('pug', `Building ${filesToBuild.length} file(s)`)
-  await runWithConcurrency(filesToBuild, 8, file => processFile(file, context))
+  await runWithConcurrency(filesToBuild, FILE_CONCURRENCY, file => processFile(file, context))
   logger.success('pug', `Built ${filesToBuild.length} file(s)`)
 }
 
@@ -27,17 +28,6 @@ async function resolveFiles(paths) {
     absolute: true,
     ignore: ['**/_*/**', '**/_*.pug']
   })
-}
-
-
-async function runWithConcurrency(items, concurrency, fn) {
-  let i = 0
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (i < items.length) {
-      await fn(items[i++])
-    }
-  })
-  await Promise.all(workers)
 }
 
 /**

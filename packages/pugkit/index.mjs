@@ -1,8 +1,8 @@
 import { loadConfig } from './config/index.mjs'
 import { Builder } from './core/builder.mjs'
 import pugTask from './tasks/pug.mjs'
-import sassTask from './tasks/sass.mjs'
-import scriptTask from './tasks/script.mjs'
+import sassTask, { disposeDevCompiler } from './tasks/sass.mjs'
+import scriptTask, { disposeDevContext } from './tasks/script.mjs'
 import copyTask from './tasks/copy.mjs'
 import imageTask from './tasks/image.mjs'
 import svgTask from './tasks/svg.mjs'
@@ -16,8 +16,9 @@ export async function createBuilder(root = process.cwd(), mode = 'development', 
 
   builder.registerTasks({
     pug: pugTask,
-    sass: sassTask,
-    script: scriptTask,
+    // Sass と esbuild は dev で常駐プロセスを持つので、止め方も一緒に渡す
+    sass: { run: sassTask, dispose: disposeDevCompiler },
+    script: { run: scriptTask, dispose: disposeDevContext },
     image: imageTask,
     svg: svgTask,
     sprite: spriteTask,
@@ -33,8 +34,6 @@ export async function build(root = process.cwd()) {
   const builder = await createBuilder(root, 'production')
   await builder.build()
 }
-
-
 
 export { Builder, loadConfig }
 export { BuildContext } from './core/context.mjs'

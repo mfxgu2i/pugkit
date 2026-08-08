@@ -14,8 +14,14 @@ import { createTempProject, minimalProjectFiles } from '../helpers/project.mjs'
  */
 const ENTRY = new URL('../../index.mjs', import.meta.url).href
 
-/** process.exit を呼ばずに終わるか。終わらなければ 'timeout' */
-function runUntilExit(source, timeoutMs = 20000) {
+/**
+ * process.exit を呼ばずに終わるか。終わらなければ 'timeout'。
+ *
+ * 既定を長めに取るのは、待ち時間が「終わるまで」ではなく上限だから。
+ * 正常時は待たずに済み、短くしても速くならない一方、他のテストと同時に走ったときの
+ * 揺れ（実測で 8〜20 秒）を拾って偽の失敗になる
+ */
+function runUntilExit(source, timeoutMs = 60000) {
   const child = spawn(process.execPath, ['--input-type=module', '-e', source], { stdio: 'ignore' })
 
   return new Promise(resolve => {

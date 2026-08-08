@@ -43,7 +43,7 @@ export function spriteOutputPath(iconDir, paths) {
 /**
  * SVGスプライト生成タスク
  */
-export async function spriteTask(context, options = {}) {
+export async function spriteTask(context) {
   const { paths } = context
 
   // iconsディレクトリを検索（「_」始まりのディレクトリ配下はビルド対象外）

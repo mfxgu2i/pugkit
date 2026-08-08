@@ -5,17 +5,15 @@ import sharp from 'sharp'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
 import { densityOutputs, hasScaledVariant, scaleDown, sourceDensityOf } from '../utils/image-density.mjs'
+import { CONVERTIBLE_GLOB, UNHANDLED_GLOB } from '../utils/image-formats.mjs'
+import { FILE_CONCURRENCY, runWithConcurrency } from '../utils/concurrency.mjs'
 
 // libvips の内部キャッシュを制限してメモリ消費を抑える
 sharp.cache({ memory: 50, files: 20, items: 200 })
 sharp.concurrency(1)
 
-export const IMAGE_GLOB = '**/*.{jpg,jpeg,png,gif}'
+export const IMAGE_GLOB = CONVERTIBLE_GLOB
 export const IMAGE_IGNORE = ['**/_*/**']
-
-// src に置かれても、どのタスクの担当にもならない画像形式。
-// imageInfo() は寸法を読んで参照を書くので、放置すると無警告のリンク切れになる
-const UNHANDLED_GLOB = '**/*.{webp,avif}'
 
 /**
  * 画像の出力先。生成側と watcher の削除側で規則がずれると、
@@ -37,18 +35,19 @@ export function imageOutputPaths(relativePath, config, paths) {
 export async function imageTask(context, options = {}) {
   const { paths } = context
 
-  const images = await glob(IMAGE_GLOB, {
-    cwd: paths.src,
-    absolute: true,
-    ignore: IMAGE_IGNORE
-  })
-
-  // 変更されたファイルだけ（dev の監視時）
+  // 変更されたファイルだけ（dev の監視時）。
+  // 全件 glob より先に返す。保存のたびに走るので、使わない一覧は取らない
   if (options.changed) {
     await processImage(options.changed, context)
     logger.success('image', `Processed ${relative(paths.src, options.changed)}`)
     return
   }
+
+  const images = await glob(IMAGE_GLOB, {
+    cwd: paths.src,
+    absolute: true,
+    ignore: IMAGE_IGNORE
+  })
 
   if (images.length === 0) {
     logger.skip('image', 'No images found')
@@ -59,8 +58,7 @@ export async function imageTask(context, options = {}) {
 
   logger.info('image', `Processing ${images.length} image(s)`)
 
-  // 並列処理
-  await Promise.all(images.map(file => processImage(file, context)))
+  await runWithConcurrency(images, FILE_CONCURRENCY, file => processImage(file, context))
 
   logger.success('image', `Processed ${images.length} image(s)`)
 }

@@ -1,16 +1,16 @@
 import http from 'node:http'
-import path from 'node:path'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
 import sirv from 'sirv'
 import { logger } from '../utils/logger.mjs'
+import { serverAddress } from '../config/defaults.mjs'
 import { publicOverrideFor } from '../utils/page-conflict.mjs'
 import { subdirPrefix } from '../utils/subdir.mjs'
 import { SSE_PATH, computeMorphSignature, createReloadTag } from './dev/client-script.mjs'
 import { resolvePugSource } from './dev/page-source.mjs'
+import { resolvePageFile } from './dev/page-candidates.mjs'
 import { createLazyPageBuilder } from './dev/lazy-builder.mjs'
 import { buildErrorPage, guardStaticServe, injectReload, sendHtml } from './dev/response.mjs'
-
 
 /**
  * 開発サーバータスク（SSE + 遅延ビルド + sirv）
@@ -22,8 +22,7 @@ export async function serverTask(context, options = {}) {
     await mkdir(paths.output, { recursive: true })
   }
 
-  const port = config.server?.port ?? 5555
-  const host = config.server?.host ?? 'localhost'
+  const { port, host } = serverAddress(config)
   const subdir = subdirPrefix(config.subdir)
   const startPath = (config.server?.startPath || '/').replace(/^\//, '')
   const fullStartPath = subdir ? `${subdir}/${startPath}` : `/${startPath}`
@@ -106,21 +105,11 @@ export async function serverTask(context, options = {}) {
     }
 
     // ── 非Pugの既存HTML（public 由来）: 読み出し + スクリプト注入 ───
-    const isInside = (p, root) => {
-      const abs = path.resolve(p)
-      return abs === root || abs.startsWith(root + path.sep)
-    }
-    // 候補順は sirv・resolvePugSource と揃える（フラットファイル優先、
-    // 末尾スラッシュは先に除去して同順）。ここだけ順序が違うと、同じ形の URL でも
-    // Pug ページと public 由来の HTML で別の階層のファイルが選ばれてしまう
-    const base = decoded !== '/' ? decoded.replace(/\/+$/, '') : decoded
-    const htmlCandidatesIn = root =>
-      (base === '/'
-        ? [path.join(root, 'index.html')]
-        : [path.join(root, base), path.join(root, `${base}.html`), path.join(root, base, 'index.html')]
-      ).filter(p => p.endsWith('.html') && isInside(p, root) && existsSync(p))
-
-    const htmlFile = htmlCandidatesIn(serveRoot)[0]
+    // 候補順は resolvePugSource と同じ規則から導く（page-candidates.mjs）。
+    // ここだけ順序が違うと、同じ形の URL でも Pug ページと public 由来の HTML で
+    // 別の階層のファイルが選ばれてしまう。
+    // subdir を外さないのは、配信ルート（outputRoot）配下に subdir ごと書かれるため
+    const htmlFile = resolvePageFile(decoded, serveRoot, '.html')
 
     if (htmlFile) {
       readFile(htmlFile, 'utf-8')

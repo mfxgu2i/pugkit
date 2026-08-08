@@ -1,7 +1,9 @@
+import { DEFAULT_OUT_DIR } from '../utils/paths.mjs'
+
 export const defaultConfig = {
   siteUrl: '',
   subdir: '',
-  outDir: 'dist',
+  outDir: DEFAULT_OUT_DIR,
   // dev のアセット出力先。null で node_modules/.pugkit/dev
   cacheDir: null,
   server: {
@@ -55,5 +57,20 @@ export const defaultConfig = {
         chromaSubsampling: '4:4:4'
       }
     }
+  }
+}
+
+/**
+ * dev サーバーの待ち受け先を取り出す。
+ *
+ * 起動前に空きを確かめる側（core/watcher.mjs）と実際に待ち受ける側（core/server.mjs）が
+ * 別々に既定値を持つと、確認したポートと待ち受けるポートが食い違いうる。
+ * loadConfig を通っていない config（テストや API 利用）でも同じ値になるよう、
+ * 既定の当て方ごとここに置く
+ */
+export function serverAddress(config) {
+  return {
+    port: config.server?.port ?? defaultConfig.server.port,
+    host: config.server?.host ?? defaultConfig.server.host
   }
 }
