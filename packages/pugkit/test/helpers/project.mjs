@@ -11,9 +11,11 @@ import { onTestFinished } from 'vitest'
  * onTestFinished で自動的に削除されるため後始末の書き忘れも起きない。
  *
  * @param {Record<string, string>} files ルートからの相対パス -> 内容
+ * @param {{ prefix?: string }} options prefix でルート名を変えられる
+ *   （「.」始まりのディレクトリに置いたプロジェクトの検証に使う）
  */
-export async function createTempProject(files = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'pugkit-test-'))
+export async function createTempProject(files = {}, { prefix = 'pugkit-test-' } = {}) {
+  const root = await mkdtemp(join(tmpdir(), prefix))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
 
   await writeFiles(root, files)

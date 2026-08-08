@@ -83,7 +83,10 @@ export class FileWatcher {
     this.watcher = chokidar
       .watch([paths.src, paths.public], {
         ignoreInitial: true,
-        ignored: [/(^|[\/\\])\./, /node_modules/, /\.git/],
+        // 除外は絶対パス全体に当たる。「.」始まりを一律に外すと、プロジェクトを
+        // 「.」始まりのディレクトリに置いた場合に監視が丸ごと効かなくなる。
+        // 拾いすぎた分は classify が対象外（null）に落とすので害はない
+        ignored: [/node_modules/, /\.git/],
         persistent: true,
         // 書き込み安定待ちは検知レイテンシに直結する。テキストファイル中心の
         // ソースでは 50ms の安定確認で十分（旧: 100ms 安定 + 100ms ポーリングで

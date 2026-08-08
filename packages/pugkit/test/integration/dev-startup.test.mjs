@@ -223,3 +223,52 @@ describe('壊れたアセットがあるとき', () => {
     expect(await outputOf(context)).toContain('assets/css/style.css')
   })
 })
+
+describe('監視の対象', () => {
+  /**
+   * 除外の判定は絶対パス全体に当たる。「.」始まりを一律に除外すると、
+   * プロジェクトを「.」始まりのディレクトリに置いた人の監視が丸ごと死ぬ。
+   * public のドットファイル（.well-known 等）も、起動時にコピーされるのに
+   * 以後の変更だけ検知されない、という非対称になる。
+   */
+  // start() は chokidar の初期走査の完了を待たない。待たずに書き込むと
+  // 監視が始まる前の変更になり、イベントが届かないことがある
+  const untilWatching = watcher => new Promise(resolve => watcher.watcher.once('ready', resolve))
+  const waitForWatch = () => new Promise(resolve => setTimeout(resolve, 1200))
+
+  it('public のドットファイルの変更を検知する', async () => {
+    const { project, context, watcher } = await startWatcher(
+      minimalProjectFiles({ 'public/.well-known/acme-challenge/token': 'v1\n' })
+    )
+    await untilWatching(watcher)
+    const served = () =>
+      import('node:fs/promises').then(f =>
+        f.readFile(`${context.paths.outputRoot}/.well-known/acme-challenge/token`, 'utf8')
+      )
+    expect((await served()).trim()).toBe('v1')
+
+    await project.write({ 'public/.well-known/acme-challenge/token': 'v2\n' })
+    await waitForWatch()
+
+    expect((await served()).trim()).toBe('v2')
+  })
+
+  it('「.」始まりのディレクトリに置いたプロジェクトでも監視できる', async () => {
+    const project = await createTempProject(minimalProjectFiles(), { prefix: '.pugkit-hidden-' })
+    const builder = await createBuilder(project.root, 'development')
+    builder.context.config.server.port = 0
+    const watcher = new FileWatcher(builder.context, runTaskOf(builder))
+    await watcher.start()
+    onTestFinished(() => watcher.stop())
+    await untilWatching(watcher)
+
+    const page = project.path('src/index.pug')
+    builder.context.cache.setPageHtml(page, '<html></html>')
+
+    await project.write({ 'src/index.pug': 'extends /_partials/_layout.pug\nblock content\n  h1 Edited\n' })
+    await waitForWatch()
+
+    // 変更が届いていればキャッシュが無効化されている
+    expect(builder.context.cache.getPageHtml(page)).toBeUndefined()
+  })
+})
