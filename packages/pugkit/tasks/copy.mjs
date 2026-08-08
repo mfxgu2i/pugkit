@@ -21,25 +21,23 @@ function warnPageConflicts(files, paths) {
   }
 }
 
+async function copyOne(file, paths) {
+  const outputPath = resolve(paths.output, relative(paths.public, file))
+  await ensureFileDir(outputPath)
+  await copyFile(file, outputPath)
+}
+
 /**
  * ファイルコピータスク
  */
 export async function copyTask(context, options = {}) {
   const { paths } = context
 
-  // 特定のファイルが指定されている場合（watch時）
-  if (options.files && Array.isArray(options.files)) {
-    logger.info('copy', `Copying ${options.files.length} file(s)`)
-    warnPageConflicts(options.files, paths)
-    await Promise.all(
-      options.files.map(async file => {
-        const relativePath = relative(paths.public, file)
-        const outputPath = resolve(paths.output, relativePath)
-        await ensureFileDir(outputPath)
-        await copyFile(file, outputPath)
-      })
-    )
-    logger.success('copy', `Copied ${options.files.length} file(s)`)
+  // 変更されたファイルだけ（dev の監視時）
+  if (options.changed) {
+    warnPageConflicts([options.changed], paths)
+    await copyOne(options.changed, paths)
+    logger.success('copy', `Copied ${relative(paths.public, options.changed)}`)
     return
   }
 
@@ -58,15 +56,7 @@ export async function copyTask(context, options = {}) {
   logger.info('copy', `Copying ${files.length} file(s)`)
   warnPageConflicts(files, paths)
 
-  await Promise.all(
-    files.map(async file => {
-      const relativePath = relative(paths.public, file)
-      const outputPath = resolve(paths.output, relativePath)
-
-      await ensureFileDir(outputPath)
-      await copyFile(file, outputPath)
-    })
-  )
+  await Promise.all(files.map(file => copyOne(file, paths)))
 
   logger.success('copy', `Copied ${files.length} file(s)`)
 }

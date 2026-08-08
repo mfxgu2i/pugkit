@@ -84,7 +84,7 @@ describe('dev の差分ビルド', () => {
     await builder.runTask('script')
 
     await project.write({ 'src/assets/js/shared.js': "export const v = 'V2'\n" })
-    await builder.runTask('script', { files: [project.path('src/assets/js/shared.js')] })
+    await builder.runTask('script', { changed: project.path('src/assets/js/shared.js') })
 
     expect(await readOut(builder, 'main.js')).toContain('V2')
   })
@@ -104,7 +104,7 @@ describe('dev の差分ビルド', () => {
 
     await new Promise(resolve => setTimeout(resolve, 10)) // mtime の解像度を確保する
     await project.write({ 'src/assets/js/_lib/util.js': 'export const tag = 2\n' })
-    await builder.runTask('script', { files: [project.path('src/assets/js/_lib/util.js')] })
+    await builder.runTask('script', { changed: project.path('src/assets/js/_lib/util.js') })
 
     expect(await readOut(builder, 'main.js')).toContain('2')
     expect((await stat(`${builder.context.paths.outputRoot}/assets/js/other.js`)).mtimeMs).toBe(before)

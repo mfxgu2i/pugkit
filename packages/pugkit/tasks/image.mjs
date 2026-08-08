@@ -35,11 +35,10 @@ export async function imageTask(context, options = {}) {
   // HTML から参照されるため、無変換でコピーする
   const optimization = config.build.imageOptimization || 'copy'
 
-  // 特定のファイルが指定されている場合（watch時）
-  if (options.files && Array.isArray(options.files)) {
-    logger.info('image', `Processing ${options.files.length} image(s)`)
-    await Promise.all(options.files.map(file => processImage(file, context, optimization)))
-    logger.success('image', `Processed ${options.files.length} image(s)`)
+  // 変更されたファイルだけ（dev の監視時）
+  if (options.changed) {
+    await processImage(options.changed, context, optimization)
+    logger.success('image', `Processed ${relative(paths.src, options.changed)}`)
     return
   }
 

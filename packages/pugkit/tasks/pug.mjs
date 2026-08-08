@@ -7,11 +7,10 @@ import { createImageInfoHelper } from '../transform/image-size.mjs'
 import { generatePage } from '../generate/page.mjs'
 import { logger } from '../utils/logger.mjs'
 
-export async function pugTask(context, options = {}) {
-  const { paths, cache, isProduction } = context
-  const { files: targetFiles } = options
+export async function pugTask(context) {
+  const { paths } = context
 
-  const filesToBuild = await resolveFiles(paths, targetFiles)
+  const filesToBuild = await resolveFiles(paths)
   if (filesToBuild.length === 0) {
     logger.skip('pug', 'No files to build')
     return
@@ -22,18 +21,12 @@ export async function pugTask(context, options = {}) {
   logger.success('pug', `Built ${filesToBuild.length} file(s)`)
 }
 
-async function resolveFiles(paths, targetFiles) {
-  if (targetFiles?.length > 0) {
-    return targetFiles.filter(file => !basename(file).startsWith('_'))
-  }
-
-  const allFiles = await glob('**/*.pug', {
+async function resolveFiles(paths) {
+  return glob('**/*.pug', {
     cwd: paths.src,
     absolute: true,
     ignore: ['**/_*/**', '**/_*.pug']
   })
-
-  return allFiles.filter(file => !basename(file).startsWith('_'))
 }
 
 

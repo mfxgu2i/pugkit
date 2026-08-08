@@ -65,8 +65,8 @@ export async function sassTask(context, options = {}) {
   // 2. dev モードでのインクリメンタルビルド
   let filesToBuild = allEntryFiles
 
-  if (isDevelopment && options.files?.length > 0) {
-    filesToBuild = resolveRebuildTargets(options.files[0], allEntryFiles, sassGraph)
+  if (isDevelopment && options.changed) {
+    filesToBuild = resolveRebuildTargets(options.changed, allEntryFiles, sassGraph)
 
     if (filesToBuild.length === 0) {
       logger.skip('sass', 'No entry depends on the changed file')

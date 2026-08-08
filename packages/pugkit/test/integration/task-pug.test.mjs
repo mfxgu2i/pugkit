@@ -99,18 +99,6 @@ describe('pugTask', () => {
     expect(output).toContain('index.html')
     expect(output).not.toContain('_draft.html')
   })
-
-  it('watcher から名指しされてもアンダースコア始まりは出力しない', async () => {
-    await project.write({ 'src/_draft.pug': 'p draft\n' })
-    const context = createContext('production')
-
-    // パーシャル変更時、watcher は影響ページと一緒にパーシャル自身も渡してくる
-    await pugTask(context, { files: [project.path('src/_draft.pug'), project.path('src/index.pug')] })
-
-    const output = await listFiles(project.path('dist'))
-    expect(output).toContain('index.html')
-    expect(output).not.toContain('_draft.html')
-  })
 })
 
 describe('依存グラフの更新', () => {

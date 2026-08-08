@@ -67,8 +67,8 @@ export async function scriptTask(context, options = {}) {
   // 2. dev モードでのインクリメンタルビルド
   let filesToBuild = allEntryFiles
 
-  if (isDevelopment && options.files?.length > 0) {
-    filesToBuild = resolveRebuildTargets(options.files[0], allEntryFiles, scriptGraph)
+  if (isDevelopment && options.changed) {
+    filesToBuild = resolveRebuildTargets(options.changed, allEntryFiles, scriptGraph)
 
     if (filesToBuild.length === 0) {
       logger.skip('script', 'No entry depends on the changed file')

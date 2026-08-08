@@ -100,7 +100,7 @@ describe('dev の差分ビルド', () => {
 
     await new Promise(r => setTimeout(r, 10)) // mtime の解像度を確保する
     await project.write({ 'src/assets/css/_vars.scss': '$c: green;\n' })
-    await runTask('sass', { files: [project.path('src/assets/css/_vars.scss')] })
+    await runTask('sass', { changed: project.path('src/assets/css/_vars.scss') })
 
     expect(await read('assets/css/style.css')).toContain('green')
     // 依存していないエントリは触られない
@@ -114,7 +114,7 @@ describe('dev の差分ビルド', () => {
 
     await new Promise(r => setTimeout(r, 10))
     await project.write({ 'src/assets/css/style.scss': '.a { color: rebeccapurple; }\n' })
-    await runTask('sass', { files: [project.path('src/assets/css/style.scss')] })
+    await runTask('sass', { changed: project.path('src/assets/css/style.scss') })
 
     expect(await read('assets/css/style.css')).toContain('rebeccapurple')
     expect(await mtimeOf(context, 'assets/css/other.css')).toBe(otherBefore)
@@ -124,7 +124,7 @@ describe('dev の差分ビルド', () => {
     const { project, context, runTask } = await startWatcher()
 
     await project.write({ 'src/assets/js/main.js': 'console.log("updated")\n' })
-    await runTask('script', { files: [project.path('src/assets/js/main.js')] })
+    await runTask('script', { changed: project.path('src/assets/js/main.js') })
 
     const js = await import('node:fs/promises').then(f =>
       f.readFile(`${context.paths.outputRoot}/assets/js/main.js`, 'utf8')
@@ -152,7 +152,7 @@ describe('依存で決める差分ビルド', () => {
     const { project, context, runTask } = await startWatcher(sharedEntryProject())
 
     await project.write({ 'src/assets/css/tokens.scss': '$brand: blue;\n.tokens { --x: 2; }\n' })
-    await runTask('sass', { files: [project.path('src/assets/css/tokens.scss')] })
+    await runTask('sass', { changed: project.path('src/assets/css/tokens.scss') })
 
     expect(await readCss(context, 'style.css')).toContain('blue')
   })
@@ -166,7 +166,7 @@ describe('依存で決める差分ビルド', () => {
     )
 
     await project.write({ 'src/assets/css/_mixins/tone.scss': '$c: green;\n' })
-    await runTask('sass', { files: [project.path('src/assets/css/_mixins/tone.scss')] })
+    await runTask('sass', { changed: project.path('src/assets/css/_mixins/tone.scss') })
 
     expect(await readCss(context, 'style.css')).toContain('green')
   })
@@ -199,7 +199,7 @@ describe('壊れたアセットがあるとき', () => {
     expect(await outputOf(context)).not.toContain('assets/css/style.css')
 
     await project.write({ 'src/assets/css/style.scss': '.a { color: rebeccapurple; }\n' })
-    await runTask('sass', { files: [project.path('src/assets/css/style.scss')] })
+    await runTask('sass', { changed: project.path('src/assets/css/style.scss') })
 
     expect(await outputOf(context)).toContain('assets/css/style.css')
   })

@@ -276,7 +276,7 @@ export class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     logger.info('change', `sass: ${relPath}`)
     try {
-      await this.runTask('sass', { files: [filePath] })
+      await this.runTask('sass', { changed: filePath })
       this.injectCSS()
     } catch (error) {
       logger.error('watch', `Sass build failed: ${error.message}`)
@@ -301,7 +301,7 @@ export class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     logger.info('change', `script: ${relPath}`)
     try {
-      await this.runTask('script', { files: [filePath] })
+      await this.runTask('script', { changed: filePath })
       this.reload()
     } catch (error) {
       logger.error('watch', `Script build failed: ${error.message}`)
@@ -327,7 +327,7 @@ export class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     logger.info(event, `svg: ${relPath}`)
     try {
-      await this.runTask('svg', { files: [filePath] })
+      await this.runTask('svg', { changed: filePath })
       this.invalidateAssetDependents(filePath, event)
       this.reload()
     } catch (error) {
@@ -380,7 +380,7 @@ export class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     logger.info(event, `image: ${relPath}`)
     try {
-      await this.runTask('image', { files: [filePath] })
+      await this.runTask('image', { changed: filePath })
       this.invalidateAssetDependents(filePath, event)
       this.reload()
     } catch (error) {
@@ -414,7 +414,7 @@ export class FileWatcher {
     }
 
     try {
-      await this.runTask('copy', { files: [filePath] })
+      await this.runTask('copy', { changed: filePath })
       this.reload()
     } catch (error) {
       logger.error('watch', `Copy failed: ${error.message}`)
