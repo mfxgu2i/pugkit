@@ -36,6 +36,17 @@ async function getDevContext(esbuildConfig) {
 }
 
 /**
+ * 常駐ビルドコンテキストを破棄する。プロセスを抱えたままだと dev を止めても終われない。
+ * 参照を捨てるので、次に使うときは作り直しになる
+ */
+export async function disposeDevContext() {
+  const ctx = _devCtx
+  _devCtx = null
+  _devCtxKey = null
+  if (ctx) await ctx.dispose()
+}
+
+/**
  * esbuild（TypeScript/JavaScript）ビルドタスク
  */
 export async function scriptTask(context, options = {}) {

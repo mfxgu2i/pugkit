@@ -26,6 +26,22 @@ function getDevCompiler() {
 }
 
 /**
+ * 常駐コンパイラを終了する。プロセスを抱えたままだと dev を止めても終われない。
+ * 参照を捨てるので、次に使うときは初期化からやり直す
+ */
+export async function disposeDevCompiler() {
+  const pending = _devCompilerPromise
+  _devCompilerPromise = null
+  if (!pending) return
+
+  try {
+    await (await pending).dispose()
+  } catch {
+    // 初期化に失敗していた場合。破棄すべきものが無いので何もしない
+  }
+}
+
+/**
  * Sassビルドタスク
  */
 export async function sassTask(context, options = {}) {

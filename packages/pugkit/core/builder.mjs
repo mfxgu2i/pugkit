@@ -17,6 +17,8 @@ export class Builder {
   constructor(config, mode = 'development') {
     this.context = new BuildContext(config, mode)
     this.tasks = {}
+    // watch() で作られる。close() で止めるために保持する
+    this.watcher = null
   }
 
   /**
@@ -59,8 +61,26 @@ export class Builder {
    */
   async watch() {
     // 監視の開始が先。サーバーはその後に待ち受けを始める
-    if (this.tasks.watch) await this.tasks.watch(this.context, { runTask: this.runTask.bind(this) })
+    if (this.tasks.watch) this.watcher = await this.tasks.watch(this.context, { runTask: this.runTask.bind(this) })
     if (this.tasks.server) await this.tasks.server(this.context)
+  }
+
+  /**
+   * dev を止めて、抱えている常駐プロセスも終わらせる。
+   *
+   * Sass と esbuild の常駐プロセスはモジュール単位で共有されるので、
+   * 停止の指示はプロセス全体の話になる。watcher.stop() に含めると、
+   * 同一プロセスで別の dev が動いている場合にそちらまで巻き込む
+   */
+  async close() {
+    await this.watcher?.stop()
+    this.context.server?.close()
+
+    const [{ disposeDevCompiler }, { disposeDevContext }] = await Promise.all([
+      import('../tasks/sass.mjs'),
+      import('../tasks/script.mjs')
+    ])
+    await Promise.all([disposeDevCompiler(), disposeDevContext()])
   }
 
   /**
