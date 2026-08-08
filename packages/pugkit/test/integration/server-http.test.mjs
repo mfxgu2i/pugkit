@@ -238,10 +238,11 @@ describe('Pug 由来でない HTML', () => {
     await server.builder.runTask('copy')
 
     const html = await (await server.get('/legacy.html')).text()
-    // 属性そのものを見る。スクリプト本体には属性名が文字列として現れる
+    // 開始タグだけを見る。スクリプト本体には属性名が文字列として現れる
     const openingTag = html.match(/<script data-pugkit-live-reload[^>]*>/)?.[0]
 
-    expect(openingTag).toBe('<script data-pugkit-live-reload>')
+    expect(openingTag).toBeDefined()
+    expect(openingTag).not.toContain('data-pugkit-signature')
   })
 })
 

@@ -51,154 +51,41 @@ export function computeMorphSignature(html) {
 }
 
 /**
- * HTMLに挿入するライブリロードクライアントスクリプト。
- *
- * - domDiff: Pug 変更時に location.reload() ではなく、新しい HTML を取得して
- *   表示中の DOM へ差分適用する。スクロール位置・フォーム入力・スライダーの
- *   状態や遅延読み込み済み画像が保持され、リロード特有のちらつきが起きない。
- *   <script> の変更・取得失敗・差分適用エラー時はフルリロードに退避する。
- * - scroll: エラーページでは無効化する。保存済みの位置を消費せず温存し、
- *   エラーページ自身の位置（≒先頭）も保存しないことで、修正後のリロードで
- *   エラー前のスクロール位置に戻れるようにする。
+ * 注入するクライアントスクリプト。実ファイルを読むだけで、組み立ては行わない。
+ * 設定はタグの data 属性で渡す（client/live-reload.js を参照）。
  */
-function createLiveReloadScript({ scroll = true, domDiff = true } = {}) {
-  const restoreScroll = scroll
-    ? `try {
-    var saved = sessionStorage.getItem(scrollKey);
-    if (saved !== null) {
-      sessionStorage.removeItem(scrollKey);
-      // ブラウザ標準の復元（直前ドキュメントの位置＝エラーページ等で 0 になり得る）が
-      // load 後にこちらの復元を上書きするため、保存値があるときは手動復元に切り替える
-      if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-      var pos = saved.split(',');
-      var sx = parseInt(pos[0], 10) || 0;
-      var sy = parseInt(pos[1], 10) || 0;
-      window.scrollTo(sx, sy);
-      window.addEventListener('load', function() {
-        window.scrollTo(sx, sy);
-        setTimeout(function() {
-          window.scrollTo(sx, sy);
-          if ('scrollRestoration' in history) history.scrollRestoration = 'auto';
-        }, 50);
-      });
-    }
-  } catch (e) {}`
-    : ''
-  const saveScrollBody = scroll
-    ? `try {
-      sessionStorage.setItem(scrollKey, window.scrollX + ',' + window.scrollY);
-    } catch (e) {}`
-    : ''
-
-  const idiomorphSource = domDiff ? loadIdiomorphSource() : null
-  const useMorph = idiomorphSource !== null
-
-  return `(function() {
-  // リロード前に保存したスクロール位置を復元する（編集のたびに先頭へ戻るのを防ぐ）
-  var scrollKey = '__pugkit_scroll:' + location.pathname;
-  ${restoreScroll}
-  function saveScroll() {
-    ${saveScrollBody}
+let clientSource
+function loadClientSource() {
+  if (clientSource === undefined) {
+    clientSource = readFileSync(new URL('../client/live-reload.js', import.meta.url), 'utf8')
   }
-  function fullReload() {
-    saveScroll();
-    location.reload();
-  }
-${useMorph ? idiomorphSource : ''}
-  // このスクリプトが動く時点（body 末尾）の DOM ＝ サーバー生成そのまま。
-  // ここに無い要素は実行時に差し込まれたもの（解析タグ・同意バナー・チャット等）
-  // として扱い、差分適用で消さないようにする
-  var serverNodes = typeof WeakSet === 'function' ? new WeakSet() : null;
-  function markServerNodes(root) {
-    if (!serverNodes || root.nodeType !== 1) return;
-    serverNodes.add(root);
-    var all = root.querySelectorAll('*');
-    for (var i = 0; i < all.length; i++) serverNodes.add(all[i]);
-  }
-  // このタブが今表示している HTML の指紋。他のタブが何回取得しても影響されない
-  var selfSignature = document.currentScript && document.currentScript.getAttribute('${SIGNATURE_ATTR}');
-  function signatureOf(doc) {
-    var tag = doc.querySelector('script[${SIGNATURE_ATTR}]');
-    return tag && tag.getAttribute('${SIGNATURE_ATTR}');
-  }
-  function applyMorph() {
-    return fetch(location.href, { cache: 'no-store' }).then(function(res) {
-      if (!res.ok) throw new Error('status ' + res.status);
-      return res.text();
-    }).then(function(html) {
-      var doc = new DOMParser().parseFromString(html, 'text/html');
-      if (!doc.body) throw new Error('parse failed');
-      // morph では <script> が再実行されず head の変更も反映できない。
-      // それらが変わっていればフルリロードに退避する
-      if (!selfSignature || signatureOf(doc) !== selfSignature) throw new Error('needs full reload');
-      // 差分適用は body に限定する。head は解析タグが実行時に差し込んだ要素を
-      // 巻き込むため触らない（head の変更は上の指紋比較でフルリロードになる）
-      Idiomorph.morph(document.body, doc.body, {
-        ignoreActiveValue: true,
-        callbacks: {
-          beforeNodeMorphed: function(oldNode) {
-            // <noscript> の中身はライブ DOM ではテキスト、DOMParser では要素として
-            // 解釈される。差分を取ると中の iframe/img が実体化して実際に読み込まれる
-            if (oldNode.nodeType === 1 && oldNode.tagName === 'NOSCRIPT') return false;
-          },
-          beforeNodeRemoved: function(node) {
-            // 実行時に差し込まれた要素は残す。サーバー生成の要素は Pug から
-            // 消されたということなので通常どおり削除する
-            if (serverNodes && node.nodeType === 1 && !serverNodes.has(node)) return false;
-          },
-          afterNodeAdded: function(node) {
-            markServerNodes(node);
-          }
-        }
-      });
-      window.dispatchEvent(new CustomEvent('pugkit:morphed'));
-    });
-  }
-  if (typeof Idiomorph !== 'undefined') markServerNodes(document.body);
-  var es = new EventSource('${SSE_PATH}');
-  es.addEventListener('reload', function(e) {
-    var kind = (e && e.data) || 'full';
-    if (kind !== 'html' || typeof Idiomorph === 'undefined') {
-      fullReload();
-      return;
-    }
-    applyMorph().catch(function(err) {
-      if (window.console && console.debug) console.debug('[pugkit] full reload:', err && err.message);
-      fullReload();
-    });
-  });
-  es.addEventListener('css-update', function() {
-    document.querySelectorAll('link[rel="stylesheet"]').forEach(function(link) {
-      var url = new URL(link.href);
-      if (url.origin !== location.origin) return;
-      url.searchParams.set('t', Date.now());
-      link.href = url.toString();
-    });
-  });
-  es.onerror = function() {
-    es.close();
-    setTimeout(function() {
-      saveScroll();
-      location.reload();
-    }, 1000);
-  };
-  window.addEventListener('beforeunload', function() {
-    es.close();
-  });
-})();
-`
+  return clientSource
 }
 
 /**
- * 注入するスクリプトタグ。指紋を属性として持たせ、タブ自身が
- * 「今表示している HTML の指紋」を覚えられるようにする。
+ * 注入するスクリプトタグ。
+ *
+ * 指紋を属性として持たせ、タブ自身が「今表示している HTML の指紋」を覚えられるようにする。
  * サーバーは直近の指紋を覚えないので、同じページを何タブ開いても判定が狂わない。
+ *
+ * - domDiff: Pug の変更を location.reload() ではなく DOM の差分適用で反映する。
+ *   スクロール位置・フォーム入力・遅延読み込み済み画像が保持される。
+ *   idiomorph を読めないときは同梱せず、クライアントはフルリロードに退避する。
+ * - scroll: エラーページでは無効にする。保存済みの位置を消費せず温存し、
+ *   エラーページ自身の位置（≒先頭）も保存しないことで、修正後のリロードで
+ *   エラー前の位置に戻れるようにする。
  */
-function createReloadTag(script, signature) {
-  const sig = signature ? ` ${SIGNATURE_ATTR}="${signature}"` : ''
-  // 目印を付けて、注入した分だけを機械的に取り除けるようにする
-  // （スクリプト本体の書き方に依存すると、整形しただけで剥がせなくなる）
-  return `<script ${RELOAD_ATTR}${sig}>\n${script}</script>`
+function createReloadTag({ signature = '', scroll = true, domDiff = true } = {}) {
+  const idiomorph = domDiff ? loadIdiomorphSource() : null
+  const attrs = [
+    RELOAD_ATTR,
+    `data-sse="${SSE_PATH}"`,
+    ...(signature ? [`${SIGNATURE_ATTR}="${signature}"`] : []),
+    ...(scroll ? [] : ['data-scroll="0"']),
+    ...(idiomorph ? [] : ['data-dom-diff="0"'])
+  ].join(' ')
+
+  return `<script ${attrs}>\n${idiomorph ?? ''}\n${loadClientSource()}</script>`
 }
 
 /**
@@ -389,11 +276,10 @@ export async function serverTask(context, options = {}) {
 
   // DOM 差分更新（domDiff）はデフォルト有効。無効化するとフルリロードに戻る
   const domDiff = config.server?.domDiff !== false
-  const liveReloadScript = createLiveReloadScript({ domDiff })
   // 指紋を持たないタグは常にフルリロードになる。
   // エラーページと、Pug 由来でない既存 HTML（内容の作られ方を pugkit が知らない）が対象
-  const errorPageTag = createReloadTag(createLiveReloadScript({ scroll: false, domDiff: false }))
-  const staticPageTag = createReloadTag(liveReloadScript)
+  const errorPageTag = createReloadTag({ scroll: false, domDiff: false })
+  const staticPageTag = createReloadTag({ domDiff })
 
   const clients = new Set()
   const getPage = createLazyPageBuilder(context)
@@ -456,7 +342,7 @@ export async function serverTask(context, options = {}) {
         .then(html => {
           // 指紋は判定結果ではなく値として渡す。差分適用してよいかは、
           // それぞれのタブが自分の持つ指紋と比べて決める
-          sendHtml(res, 200, injectReload(html, createReloadTag(liveReloadScript, computeMorphSignature(html))))
+          sendHtml(res, 200, injectReload(html, createReloadTag({ signature: computeMorphSignature(html), domDiff })))
         })
         .catch(error => {
           if (!res.headersSent) sendHtml(res, 500, buildErrorPage(pugFile, error, paths, errorPageTag))
