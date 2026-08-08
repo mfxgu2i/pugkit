@@ -99,7 +99,8 @@ export default defineConfig({
 | `cacheDir`                           | dev のアセット出力先。`null` で `node_modules/.pugkit/dev`（`node_modules` が無ければ `.pugkit/dev`）。**指定先は dev 起動のたびに中身が削除される** | `string` \| `null`                              | `null`        |
 | `server.port`                        | 開発サーバーのポート番号                                                                              | `number`                                        | `5555`        |
 | `server.host`                        | 開発サーバーのホスト                                                                                  | `string`                                        | `'localhost'` |
-| `server.startPath`                   | サーバー起動時に開くパス                                                                              | `string`                                        | `'/'`         |
+| `server.startPath`                   | 起動ログに表示する URL のパス                                                                         | `string`                                        | `'/'`         |
+| `server.domDiff`                     | ライブリロードで DOM の差分適用を使うか（`false` で常にフルリロード）                                 | `boolean`                                       | `true`        |
 | `build.imageOptimization`            | 画像最適化の方式                                                                                      | `'avif'` \| `'webp'` \| `'compress'` \| `false` | `'webp'`      |
 | `build.imageOptions.avif`            | AVIF変換オプション（[Sharp AVIF options](https://sharp.pixelplumbing.com/api-output#avif)）           | `object`                                        | -             |
 | `build.imageOptions.webp`            | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）           | `object`                                        | -             |

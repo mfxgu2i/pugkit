@@ -108,8 +108,11 @@ export class Builder {
 
     await cleanDir(this.context.paths.outputRoot)
 
+    // 出力を消したら、それを前提にしていた状態も一緒に捨てる
     this.context.cache.clear()
-    this.context.graph.clear()
+    for (const graph of [this.context.graph, this.context.sassGraph, this.context.scriptGraph, this.context.imageGraph]) {
+      graph.clear()
+    }
 
     logger.success('clean', 'Completed')
   }
