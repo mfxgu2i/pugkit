@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { isAbsolute } from 'node:path'
 import { loadConfig } from '../../config/main.mjs'
 import { createTempProject } from '../helpers/project.mjs'
 
@@ -111,5 +112,31 @@ describe('outDir の安全確認', () => {
     })
 
     await expect(loadConfig(project.root)).resolves.toBeDefined()
+  })
+})
+
+describe('root の解決', () => {
+  /**
+   * CLI は `pugkit build .` のように相対パスを受け取る。root が相対のままだと、
+   * それを絶対パス前提で使う箇所（esbuild の absWorkingDir など）が壊れる。
+   * paths を組み立てる前に一度だけ絶対化する。
+   */
+  it.each([['.'], ['./']])('相対パス %s を絶対パスにする', async input => {
+    const project = await createTempProject()
+    const previous = process.cwd()
+    process.chdir(project.root)
+    try {
+      const config = await loadConfig(input)
+
+      expect(isAbsolute(config.root)).toBe(true)
+    } finally {
+      process.chdir(previous)
+    }
+  })
+
+  it('絶対パスはそのまま保つ', async () => {
+    const project = await createTempProject()
+
+    expect((await loadConfig(project.root)).root).toBe(project.root)
   })
 })

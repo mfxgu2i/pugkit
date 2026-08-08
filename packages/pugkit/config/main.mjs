@@ -79,7 +79,9 @@ function validateConfig(config) {
 export async function loadConfig(root = process.cwd(), inlineConfig = {}) {
   const userConfig = await loadUserConfig(root)
   const config = mergeConfig(defaultConfig, userConfig)
-  config.root = root
+  // CLI は `pugkit build .` のように相対パスを渡してくる。
+  // 絶対パス前提で使う箇所（esbuild の absWorkingDir など）があるのでここで一度だけ解決する
+  config.root = resolve(root)
   if (inlineConfig.siteUrl !== undefined && inlineConfig.siteUrl !== null) {
     config.siteUrl = inlineConfig.siteUrl
   }
