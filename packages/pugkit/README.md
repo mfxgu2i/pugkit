@@ -293,6 +293,14 @@ build: {
 
 > 旧 `debug` オプションは廃止されました。dev は常にソースマップ付き非圧縮出力になります。
 
+## AI Agent Skill
+
+pugkitの規約（`Builder`による相対パス、`imageInfo()`の使用など）をAIコーディングエージェントに伝える公式の[Agent Skill](https://github.com/agentskills/agentskills)を同梱しています。Claude CodeをはじめとするAgent Skills対応のエージェンティックコーディングツールで使用できます。
+
+```sh
+$ npx skills add mfxgu2i/pugkit
+```
+
 ## Tech Stack
 
 - [Pug](https://pugjs.org/) - HTMLテンプレートエンジン

@@ -41,3 +41,11 @@ pugkitが生成するHTMLは、納品案件・WordPressやMovableTypeなどのCM
 ```bash
 npm create pugkit@latest
 ```
+
+## AI Agent Skill
+
+pugkitの規約（`Builder`による相対パス、`imageInfo()`の使用など）をAIコーディングエージェントに伝える公式の[Agent Skill](https://github.com/agentskills/agentskills)を同梱しています。Claude CodeをはじめとするAgent Skills対応のエージェンティックコーディングツールで使用できます。
+
+```bash
+npx skills add mfxgu2i/pugkit
+```
