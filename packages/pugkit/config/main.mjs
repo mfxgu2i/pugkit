@@ -1,5 +1,6 @@
 import { resolve, isAbsolute } from 'node:path'
 import { assertSafeToWipe } from '../utils/safe-dir.mjs'
+import { normalizeSubdir } from '../utils/subdir.mjs'
 import { existsSync } from 'node:fs'
 import { defaultConfig } from './defaults.mjs'
 
@@ -15,14 +16,6 @@ async function loadUserConfig(root) {
     console.warn(`Failed to load pugkit.config.mjs: ${error.message}`)
     return {}
   }
-}
-
-/**
- * subdir は出力先パスの組み立てにも使うため、前後のスラッシュを落として保持する。
- * 先頭スラッシュが残ると resolve() が絶対パスとして扱い、出力先が outDir の外に出てしまう
- */
-export function normalizeSubdir(value) {
-  return String(value ?? '').replace(/^[/\\]+|[/\\]+$/g, '')
 }
 
 function mergeConfig(defaults, user) {

@@ -1,3 +1,4 @@
+import { subdirPrefix } from '../utils/subdir.mjs'
 import { relative } from 'node:path'
 
 export function createBuilderVars(filePath, paths, config) {
@@ -15,7 +16,7 @@ export function createBuilderVars(filePath, paths, config) {
   }
 
   const siteUrl = config.siteUrl || ''
-  const subdir = config.subdir ? '/' + config.subdir.replace(/^\/|\/$/g, '') : ''
+  const subdir = subdirPrefix(config.subdir)
   const origin = siteUrl.replace(/\/$/, '')
   const base = origin + subdir
   const pathname = autoPageUrl ? (autoPageUrl.startsWith('/') ? autoPageUrl : '/' + autoPageUrl) : '/'

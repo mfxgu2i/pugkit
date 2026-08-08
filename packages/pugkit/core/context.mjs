@@ -1,5 +1,6 @@
 import { resolve, isAbsolute } from 'node:path'
 import { assertSafeToWipe } from '../utils/safe-dir.mjs'
+import { normalizeSubdir } from '../utils/subdir.mjs'
 import { existsSync } from 'node:fs'
 import { CacheManager } from './cache.mjs'
 import { DependencyGraph } from './graph.mjs'
@@ -67,8 +68,7 @@ export class BuildContext {
     const isDevelopment = mode === 'development'
     const resolvedOutDir = isDevelopment ? resolveDevOutDir(config) : buildOutDir
 
-    // 先頭スラッシュが残っていると resolve() が絶対パス扱いし、出力先が outDir の外に出る
-    const subdir = String(config.subdir ?? '').replace(/^[/\\]+|[/\\]+$/g, '')
+    const subdir = normalizeSubdir(config.subdir)
 
     this.paths = {
       root: config.root,

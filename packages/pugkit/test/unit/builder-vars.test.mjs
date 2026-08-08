@@ -105,3 +105,20 @@ describe('createBuilderVars', () => {
     expect(result.url.href).toBe('/')
   })
 })
+
+describe('subdir の正規化', () => {
+  // 正規化は loadConfig で済んでいるが、ここでも独自に整形すると
+  // 規則が食い違う。実装を分けない限り、弱い方だけが残って気づけない
+  it.each([
+    ['sub', '/sub'],
+    ['/sub', '/sub'],
+    ['sub/', '/sub'],
+    ['//sub//', '/sub'],
+    ['/a/b/', '/a/b'],
+    ['', '']
+  ])('subdir: %s -> %s', (input, expected) => {
+    const vars = createBuilderVars('/proj/src/index.pug', { src: '/proj/src' }, { subdir: input })
+
+    expect(vars.subdir).toBe(expected)
+  })
+})

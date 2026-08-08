@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto'
 import sirv from 'sirv'
 import { logger } from '../utils/logger.mjs'
 import { publicOverrideFor } from '../utils/page-conflict.mjs'
+import { subdirPrefix } from '../utils/subdir.mjs'
 import { buildPageHtml } from '../tasks/pug.mjs'
 
 const SSE_PATH = '/__pugkit_sse'
@@ -380,7 +381,7 @@ export async function serverTask(context, options = {}) {
 
   const port = config.server?.port ?? 5555
   const host = config.server?.host ?? 'localhost'
-  const subdir = config.subdir ? '/' + config.subdir.replace(/^\/|\/$/g, '') : ''
+  const subdir = subdirPrefix(config.subdir)
   const startPath = (config.server?.startPath || '/').replace(/^\//, '')
   const fullStartPath = subdir ? `${subdir}/${startPath}` : `/${startPath}`
 

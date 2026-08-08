@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeSubdir } from '../../config/main.mjs'
+import { normalizeSubdir } from '../../utils/subdir.mjs'
 
 /**
  * subdir は URL の組み立てと出力先パスの組み立ての両方に使う。
