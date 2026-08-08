@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createLazyPageBuilder } from '../../core/server.mjs'
+import { createLazyPageBuilder } from '../../core/dev/lazy-builder.mjs'
 import { CacheManager } from '../../core/cache.mjs'
 
 /**

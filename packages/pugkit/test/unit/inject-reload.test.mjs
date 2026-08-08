@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { injectReload } from '../../core/server.mjs'
+import { injectReload } from '../../core/dev/response.mjs'
 
 /**
  * ライブリロードスクリプトの注入。

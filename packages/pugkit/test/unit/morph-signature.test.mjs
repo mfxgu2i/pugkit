@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeMorphSignature } from '../../core/server.mjs'
+import { computeMorphSignature } from '../../core/dev/client-script.mjs'
 
 /**
  * body の差分適用では反映できない部分の指紋。

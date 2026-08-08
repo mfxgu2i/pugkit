@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { resolve } from 'node:path'
-import { resolvePugSource } from '../../core/server.mjs'
+import { resolvePugSource } from '../../core/dev/page-source.mjs'
 import { createTempProject } from '../helpers/project.mjs'
 
 /**

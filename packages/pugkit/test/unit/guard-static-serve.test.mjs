@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PassThrough, Readable } from 'node:stream'
-import { guardStaticServe } from '../../core/server.mjs'
+import { guardStaticServe } from '../../core/dev/response.mjs'
 
 /**
  * 静的配信は「存在を確認してから読み出す」ため、その間にファイルが消えると失敗する。
