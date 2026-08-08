@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { resolve } from 'node:path'
 import { stat, readFile } from 'node:fs/promises'
 import sharp from 'sharp'
-import { imageTask } from '../../tasks/image.mjs'
+import { imageOutputPath, imageTask } from '../../tasks/image.mjs'
 import { createTempProject, listFiles } from '../helpers/project.mjs'
 
 /**
@@ -98,5 +98,24 @@ describe('imageOptimization', () => {
     const output = await listFiles(distDir)
     expect(output).toEqual(expect.arrayContaining(['normal.jpg', 'mv.jpg']))
     expect(output.filter(f => f.endsWith('.webp'))).toEqual([])
+  })
+})
+
+describe('出力先の規則', () => {
+  /**
+   * 生成側と、watcher の削除側で規則がずれると、
+   * 消したはずの画像が配信され続ける（スプライトで実際に起きた形）。
+   * 規則は imageOutputPath 一つに集約し、両方から使う。
+   */
+  const paths = { src: '/proj/src', output: '/proj/dist' }
+
+  it.each([
+    ['webp', 'img/a.jpg', '/proj/dist/img/a.webp'],
+    ['webp', 'img/a.PNG', '/proj/dist/img/a.webp'],
+    ['avif', 'img/a.jpg', '/proj/dist/img/a.avif'],
+    ['compress', 'img/a.jpg', '/proj/dist/img/a.jpg'],
+    ['copy', 'img/a.png', '/proj/dist/img/a.png']
+  ])('imageOptimization: %s のとき %s -> %s', (optimization, relativePath, expected) => {
+    expect(imageOutputPath(relativePath, optimization, paths)).toBe(expected)
   })
 })

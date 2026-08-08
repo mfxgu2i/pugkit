@@ -7,6 +7,7 @@ import { logger } from '../utils/logger.mjs'
 import { resetDevCache } from '../utils/file.mjs'
 import { clearImageSizeCache } from '../transform/image-size.mjs'
 import { spriteOutputPath } from '../tasks/svg-sprite.mjs'
+import { imageOutputPath } from '../tasks/image.mjs'
 
 // Pug（HTML）だけは遅延ビルド + メモリ配信なので事前生成しない。
 // 他は実ファイルとして配信するため、出力先が空の状態でも表示できるよう起動時に作る
@@ -396,11 +397,7 @@ export class FileWatcher {
     imageGraph.removeFile(filePath)
     affected.forEach(file => cache.invalidatePageHtml(file))
 
-    const optimization = config.build.imageOptimization
-    const ext = extname(filePath)
-    const newExt = optimization === 'avif' || optimization === 'webp' ? `.${optimization}` : ext
-    const destRelPath = relPath.replace(new RegExp(`\\${ext}$`, 'i'), newExt)
-    const distPath = resolve(paths.output, destRelPath)
+    const distPath = imageOutputPath(relPath, config.build.imageOptimization, paths)
     await this.deleteDistFile(distPath, relPath)
   }
 

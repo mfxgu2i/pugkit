@@ -9,6 +9,22 @@ import { ensureFileDir } from '../utils/file.mjs'
 sharp.cache({ memory: 50, files: 20, items: 200 })
 sharp.concurrency(1)
 
+// 変換対象の拡張子。これ以外は元の形式のまま出力する
+const CONVERTIBLE_EXT_RE = /\.(jpg|jpeg|png|gif)$/i
+
+/**
+ * 画像の出力先。生成側と watcher の削除側で規則がずれると、
+ * 消したはずの画像が配信され続けるので、ここ一箇所に置く。
+ */
+export function imageOutputPath(relativePath, optimization, paths) {
+  const converted =
+    optimization === 'avif' || optimization === 'webp'
+      ? relativePath.replace(CONVERTIBLE_EXT_RE, `.${optimization}`)
+      : relativePath
+
+  return resolve(paths.output, converted)
+}
+
 /**
  * 画像最適化タスク
  */
@@ -45,7 +61,7 @@ export async function imageTask(context, options = {}) {
     const outputMap = new Map()
     for (const file of images) {
       const rel = relative(paths.src, file)
-      const outPath = rel.replace(/\.(jpg|jpeg|png|gif)$/i, `.${optimization}`)
+      const outPath = imageOutputPath(rel, optimization, paths)
       if (outputMap.has(outPath)) {
         logger.warn('image', `Output conflict: "${outputMap.get(outPath)}" and "${rel}" both map to "${outPath}"`)
       } else {
@@ -73,7 +89,7 @@ async function processImage(filePath, context, optimization, retries = 3, retryD
   try {
     // 最適化なし: 変換せずそのままコピーする
     if (optimization === 'copy') {
-      const outputPath = resolve(paths.output, relativePath)
+      const outputPath = imageOutputPath(relativePath, optimization, paths)
       await ensureFileDir(outputPath)
       await writeFile(outputPath, await readFile(filePath))
       return
@@ -81,21 +97,15 @@ async function processImage(filePath, context, optimization, retries = 3, retryD
 
     const image = sharp(filePath)
 
-    let outputPath
+    const outputPath = imageOutputPath(relativePath, optimization, paths)
     let outputImage
 
     if (optimization === 'avif') {
-      // AVIF変換
-      outputPath = resolve(paths.output, relativePath.replace(/\.(jpg|jpeg|png|gif)$/i, '.avif'))
       outputImage = image.avif({ ...config.build.imageOptions.avif, ...overrides })
     } else if (optimization === 'webp') {
-      // WebP変換
-      outputPath = resolve(paths.output, relativePath.replace(/\.(jpg|jpeg|png|gif)$/i, '.webp'))
       outputImage = image.webp({ ...config.build.imageOptions.webp, ...overrides })
     } else {
       // 元の形式で圧縮
-      outputPath = resolve(paths.output, relativePath)
-
       if (ext === '.jpg' || ext === '.jpeg') {
         outputImage = image.jpeg({ ...config.build.imageOptions.jpeg, ...overrides })
       } else if (ext === '.png') {
