@@ -5,6 +5,7 @@ import { DEFAULT_OUT_DIR, resolveFromRoot } from '../utils/paths.mjs'
 import { existsSync } from 'node:fs'
 import { CacheManager } from './cache.mjs'
 import { DependencyGraph } from './graph.mjs'
+import { ResourceStore } from './resources.mjs'
 
 /**
  * dev の出力先は起動のたびに中身を作り直すため、消してはいけない場所を弾く。
@@ -55,6 +56,8 @@ export class BuildContext {
     this.sassGraph = new DependencyGraph()
     this.scriptGraph = new DependencyGraph()
     this.imageGraph = new DependencyGraph() // Pug -> 画像ファイルの依存グラフ（dev時に構築）
+    // Sass / esbuild の常駐リソース。Builder.close() で破棄する
+    this.resources = new ResourceStore()
 
     const buildOutDir = resolveFromRoot(config.root, config.outDir ?? DEFAULT_OUT_DIR)
 

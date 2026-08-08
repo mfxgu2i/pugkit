@@ -10,35 +10,52 @@ import { logger } from '../utils/logger.mjs'
 import { resolveRebuildTargets } from '../utils/rebuild-targets.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
 
-// dev では Embedded Sass のコンパイラプロセスを常駐させ、
-// 再コンパイルごとのプロセス起動コストを避ける（プロセス終了時に自動破棄される）
-let _devCompilerPromise = null
-
-function getDevCompiler() {
-  if (!_devCompilerPromise) {
-    _devCompilerPromise = sass.initAsyncCompiler()
-    // 初期化失敗を永続キャッシュせず、次回の呼び出しで再試行できるようにする
-    _devCompilerPromise.catch(() => {
-      _devCompilerPromise = null
-    })
-  }
-  return _devCompilerPromise
-}
+const SASS_COMPILER = 'sass:compiler'
 
 /**
- * 常駐コンパイラを終了する。プロセスを抱えたままだと dev を止めても終われない。
- * 参照を捨てるので、次に使うときは初期化からやり直す
+ * dev で常駐させる Embedded Sass のコンパイラ。
+ * 再コンパイルごとのプロセス起動コストを避ける。
+ *
+ * セッション（BuildContext）ごとに1つ。context.resources が寿命を持つ
  */
-export async function disposeDevCompiler() {
-  const pending = _devCompilerPromise
-  _devCompilerPromise = null
-  if (!pending) return
-
-  try {
-    await (await pending).dispose()
-  } catch {
-    // 初期化に失敗していた場合。破棄すべきものが無いので何もしない
+class DevSassCompiler {
+  constructor() {
+    this.pending = null
   }
+
+  compiler() {
+    if (!this.pending) {
+      const pending = sass.initAsyncCompiler()
+      // 初期化失敗を永続キャッシュせず、次回の呼び出しで再試行できるようにする。
+      // 自分がまだ現役のときだけ捨てる。遅れて失敗した古い初期化が、
+      // その後に作られたコンパイラを取り違えて捨てないようにする
+      pending.catch(() => {
+        if (this.pending === pending) this.pending = null
+      })
+      this.pending = pending
+    }
+    return this.pending
+  }
+
+  /**
+   * 常駐コンパイラを終了する。プロセスを抱えたままだと dev を止めても終われない。
+   * 参照を捨てるので、次に使うときは初期化からやり直す
+   */
+  async dispose() {
+    const pending = this.pending
+    this.pending = null
+    if (!pending) return
+
+    try {
+      await (await pending).dispose()
+    } catch {
+      // 初期化に失敗していた場合。破棄すべきものが無いので何もしない
+    }
+  }
+}
+
+function getDevCompiler(context) {
+  return context.resources.get(SASS_COMPILER, () => new DevSassCompiler()).compiler()
 }
 
 /**
@@ -88,7 +105,7 @@ export async function sassTask(context, options = {}) {
   // ここは同時実行数を絞らない。対象はパーシャルを除いたエントリだけで元々少なく、
   // 多重化は常駐コンパイラ側が持っている。ファイル数がそのまま並列数になる
   // image / svg / copy とは事情が違う（utils/concurrency.mjs を参照）
-  const compiler = isDevelopment ? await getDevCompiler() : await sass.initAsyncCompiler()
+  const compiler = isDevelopment ? await getDevCompiler(context) : await sass.initAsyncCompiler()
 
   try {
     await Promise.all(filesToBuild.map(file => compileSassFile(file, context, isDevBuild, compiler)))

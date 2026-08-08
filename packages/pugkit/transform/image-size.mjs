@@ -8,24 +8,23 @@ import {
   sourceDensityOf,
   supportsDensity
 } from '../utils/image-density.mjs'
+import { logger as defaultLogger } from '../utils/logger.mjs'
 
-// 同じ画像は複数ページから参照されるので、読み取り結果をセッション中は使い回す。
-// 保持するのは寸法だけで、画像のバイト列は残さない
-// （読むのはヘッダだけなのに全体を抱えると、写真の多いサイトで際限なく増える）
-const _imageSizeCache = new Map()
-
-function readImageSizeCached(filePath) {
-  const cached = _imageSizeCache.get(filePath)
+/**
+ * 画像の実寸を読む。同じ画像は複数ページから参照されるので、
+ * 読み取り結果はセッション中（= BuildContext の寿命）使い回す。
+ *
+ * 保持するのは寸法だけで、画像のバイト列は残さない
+ * （読むのはヘッダだけなのに全体を抱えると、写真の多いサイトで際限なく増える）
+ */
+function readImageSize(filePath, cache) {
+  const cached = cache.getImageSize(filePath)
   if (cached) return cached
 
   const { width, height, type } = sizeOf(readFileSync(filePath))
   const size = { width, height, type }
-  _imageSizeCache.set(filePath, size)
+  cache.setImageSize(filePath, size)
   return size
-}
-
-export function clearImageSizeCache() {
-  _imageSizeCache.clear()
 }
 
 /**
@@ -65,8 +64,15 @@ function createImageResolver(filePath, paths) {
  *
  * 出力名の規則は utils/image-density.mjs に置き、生成側（tasks/image.mjs）と共有する。
  * ここで独自に組み立てると、書いた width/height と実際の画像がずれて CLS になる
+ *
+ * 寸法のキャッシュは context.cache が持つ。モジュール変数に置くと同じプロセスで
+ * 2つ目のビルドを走らせたときに互いのキャッシュを消し合う
+ *
+ * @param context BuildContext（paths / config / cache を使う）
+ * @param logger 差し替え可能。既定は共通ロガー
  */
-export function createImageInfoHelper(filePath, paths, logger, config, { onAccess } = {}) {
+export function createImageInfoHelper(filePath, context, { onAccess, logger = defaultLogger } = {}) {
+  const { paths, config, cache } = context
   const optimization = config?.build?.imageOptimization
   const sourceDensity = sourceDensityOf(config)
   const artDirectionSuffix = config?.build?.imageInfo?.artDirectionSuffix ?? '_sp'
@@ -77,7 +83,7 @@ export function createImageInfoHelper(filePath, paths, logger, config, { onAcces
    * 返す src は最小密度（表示サイズ）側で、srcset の 1x と一致する
    */
   const describe = (src, found) => {
-    const { width, height, type } = readImageSizeCached(found.path)
+    const { width, height, type } = readImageSize(found.path, cache)
 
     // 縮小版が実在しないものは密度 1 として扱う。そうしないと 1x の無い
     // srcset="... 2x" だけを書くことになる（SVG / GIF / public 配下 / 極小画像）

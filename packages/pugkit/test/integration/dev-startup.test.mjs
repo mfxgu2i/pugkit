@@ -1,7 +1,6 @@
 import { describe, expect, it, onTestFinished } from 'vitest'
-import { createBuilder } from '../../index.mjs'
 import { FileWatcher } from '../../core/watcher.mjs'
-import { createTempProject, listFiles, minimalProjectFiles } from '../helpers/project.mjs'
+import { createTempProject, listFiles, minimalProjectFiles, createTestBuilder } from '../helpers/project.mjs'
 import { DEV_CACHE_MARKER } from '../../utils/file.mjs'
 
 /**
@@ -16,15 +15,18 @@ async function startWatcher(files = minimalProjectFiles()) {
   const project = await createTempProject({
     ...files,
     'public/robots.txt': 'User-agent: *\n',
-    'src/assets/icons/arrow.svg': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>\n'
+    'src/assets/icons/arrow.svg':
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>\n'
   })
-  const builder = await createBuilder(project.root, 'development')
+  const builder = await createTestBuilder(project.root, 'development')
   // start() はキャッシュを消す前にポートの空きを確認する。
   // 0 なら OS 割り当てになるので、並列実行しても既定ポートを取り合わない
   builder.context.config.server.port = 0
   const watcher = new FileWatcher(builder.context, runTaskOf(builder))
 
   await watcher.start()
+  // builder.watch() を通していないので builder.close() は watcher を知らない。
+  // 監視の停止はここで別に登録する（常駐リソースの破棄は createTestBuilder が持つ）
   onTestFinished(() => watcher.stop())
 
   return { project, context: builder.context, watcher, runTask: runTaskOf(builder) }
@@ -40,14 +42,14 @@ describe('dev サーバーの起動', () => {
   it('前回セッションの残骸を配信しない', async () => {
     const project = await createTempProject(minimalProjectFiles())
     // 1回目のセッションが作った古い生成物
-    const builder1 = await createBuilder(project.root, 'development')
+    const builder1 = await createTestBuilder(project.root, 'development')
     builder1.context.config.server.port = 0
     const watcher1 = new FileWatcher(builder1.context, runTaskOf(builder1))
     await watcher1.start()
     await watcher1.stop()
     await project.write({ [`${builder1.context.paths.outputRoot}/stale.css`]: 'body{}' })
 
-    const builder2 = await createBuilder(project.root, 'development')
+    const builder2 = await createTestBuilder(project.root, 'development')
     builder2.context.config.server.port = 0
     const watcher2 = new FileWatcher(builder2.context, runTaskOf(builder2))
     await watcher2.start()
@@ -77,7 +79,6 @@ describe('dev サーバーの起動', () => {
 
     expect((await listFiles(context.paths.outputRoot)).filter(f => f.endsWith('.html'))).toEqual([])
   })
-
 })
 
 describe('dev の差分ビルド', () => {
@@ -236,7 +237,7 @@ describe('監視の対象', () => {
 
   it('「.」始まりのディレクトリに置いたプロジェクトでも監視できる', async () => {
     const project = await createTempProject(minimalProjectFiles(), { prefix: '.pugkit-hidden-' })
-    const builder = await createBuilder(project.root, 'development')
+    const builder = await createTestBuilder(project.root, 'development')
     builder.context.config.server.port = 0
     const watcher = new FileWatcher(builder.context, runTaskOf(builder))
     await watcher.start()

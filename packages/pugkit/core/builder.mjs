@@ -14,30 +14,23 @@ export class Builder {
   constructor(config, mode = 'development') {
     this.context = new BuildContext(config, mode)
     this.tasks = {}
-    // 常駐プロセスを抱えるタスクの後始末。close() でまとめて呼ぶ
-    this.disposers = []
     // watch() で作られる。close() で止めるために保持する
     this.watcher = null
   }
 
   /**
-   * タスクを登録する。
-   *
-   * 関数そのものか、後始末を伴う場合は `{ run, dispose }` を受ける。
-   * dispose を登録側から渡すことで、core が特定のタスクを名指ししなくて済む
-   * （どのタスクが常駐プロセスを持つかは、そのタスク自身の事情）
+   * タスクを登録
    */
-  registerTask(name, task) {
-    this.tasks[name] = typeof task === 'function' ? task : task.run
-    if (typeof task !== 'function' && task.dispose) this.disposers.push(task.dispose)
+  registerTask(name, fn) {
+    this.tasks[name] = fn
   }
 
   /**
    * 複数タスクを登録
    */
   registerTasks(tasks) {
-    Object.entries(tasks).forEach(([name, task]) => {
-      this.registerTask(name, task)
+    Object.entries(tasks).forEach(([name, fn]) => {
+      this.registerTask(name, fn)
     })
   }
 
@@ -76,16 +69,15 @@ export class Builder {
   /**
    * dev を止めて、抱えている常駐プロセスも終わらせる。
    *
-   * dispose はタスク登録時に受け取ったものを呼ぶだけで、中身は知らない。
-   * watcher.stop() に含めないのは、常駐プロセス（Sass / esbuild）がモジュール単位で
-   * 共有されるため。停止はプロセス全体の話になり、同一プロセスで別の dev が
-   * 動いている場合にそちらまで巻き込む
+   * 常駐プロセス（Sass / esbuild）は context.resources が持つので、core は
+   * 「どのタスクが何を抱えているか」を知らずに捨てられる。
+   * リソースはセッション単位なので、同一プロセスで動く別のビルダーは巻き込まない
    */
   async close() {
     await this.watcher?.stop()
     this.context.server?.close()
 
-    await Promise.all(this.disposers.map(dispose => dispose()))
+    await this.context.resources.disposeAll()
   }
 
   /**

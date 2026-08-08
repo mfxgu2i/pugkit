@@ -62,7 +62,7 @@ export async function buildPageHtml(filePath, context) {
     // dev 時のみ: imageGraph に Pug->画像 の依存を記録して画像変更時の最小再ビルドに使う
     const accessedImages = new Set()
     const onAccess = context.isDevelopment ? imgPath => accessedImages.add(imgPath) : undefined
-    const imageInfo = createImageInfoHelper(filePath, paths, logger, config, { onAccess })
+    const imageInfo = createImageInfoHelper(filePath, context, { onAccess })
 
     const html = template({ Builder: builderVars, imageInfo })
 

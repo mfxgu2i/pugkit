@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { FileWatcher } from '../../core/watcher.mjs'
 import { CacheManager } from '../../core/cache.mjs'
 import { DependencyGraph } from '../../core/graph.mjs'
@@ -292,7 +292,6 @@ describe('画像の変更', () => {
     expect(existsSync(resolve(context.paths.output, 'assets/hero.webp'))).toBe(false)
     expect(existsSync(resolve(context.paths.output, 'assets/hero@half.webp'))).toBe(false)
   })
-
 })
 
 describe('SVG の変更', () => {
@@ -368,5 +367,125 @@ describe('リロード通知の種類', () => {
     await watcher.onSassChange(at('assets/css/style.scss'))
     expect(context.server.reloads).toEqual([])
     expect(context.server.cssUpdates).toBe(1)
+  })
+})
+
+/**
+ * 再生成の共通経路（rebuild）。
+ *
+ * 種別ごとの差分は REBUILD_SPECS の表に持たせている。表の書き間違いは
+ * 「走るタスクが違う」「ログの名前が違う」という形で出るが、どちらも
+ * 例外にならないので、ここで固定しないと気づけない。
+ */
+describe('アセットの再生成', () => {
+  /** 呼ばれたタスク名と options を記録する */
+  function createRunTaskSpy(behavior = () => Promise.resolve()) {
+    const calls = []
+    const runTask = (name, options) => {
+      calls.push({ name, options })
+      return behavior(name)
+    }
+    return { calls, runTask }
+  }
+
+  it.each([
+    ['onSassChange', 'sass', at('assets/css/style.scss')],
+    ['onScriptChange', 'script', at('assets/js/main.js')],
+    ['onSvgChange', 'svg', at('assets/img/logo.svg')],
+    ['onImageChange', 'image', at('assets/img/hero.jpg')]
+  ])('%s は %s タスクに変更ファイルを渡す', async (handler, task, filePath) => {
+    const spy = createRunTaskSpy()
+    watcher = new FileWatcher(context, spy.runTask)
+
+    await watcher[handler](filePath, 'change')
+
+    expect(spy.calls).toEqual([{ name: task, options: { changed: filePath } }])
+  })
+
+  it('スプライトは変更ファイルを渡さず全体を作り直す', async () => {
+    const spy = createRunTaskSpy()
+    watcher = new FileWatcher(context, spy.runTask)
+
+    await watcher.onSpriteChange(at('assets/icons/arrow.svg'), 'change')
+
+    expect(spy.calls).toEqual([{ name: 'sprite', options: undefined }])
+  })
+
+  it('public の変更は copy タスクを走らせる', async () => {
+    const spy = createRunTaskSpy()
+    watcher = new FileWatcher(context, spy.runTask)
+    const filePath = `${context.paths.public}/robots.txt`
+
+    await watcher.onPublicChange(filePath, 'change')
+
+    expect(spy.calls).toEqual([{ name: 'copy', options: { changed: filePath } }])
+  })
+
+  /**
+   * 1つのアセットが壊れても dev サーバーと他のアセットは動かし続ける。
+   * ここで投げると watcher のイベントハンドラが未処理の rejection になり、
+   * 「保存したら dev が落ちた」という直しようのない状態になる
+   */
+  it('タスクが失敗しても投げず、後処理も走らせない', async () => {
+    const spy = createRunTaskSpy(() => Promise.reject(new Error('boom')))
+    watcher = new FileWatcher(context, spy.runTask)
+
+    await expect(watcher.onImageChange(at('assets/img/hero.jpg'), 'change')).resolves.toBeUndefined()
+    expect(context.server.reloads).toEqual([])
+  })
+
+  it('Sass が失敗したら CSS の差し替えも通知しない', async () => {
+    const spy = createRunTaskSpy(() => Promise.reject(new Error('boom')))
+    watcher = new FileWatcher(context, spy.runTask)
+
+    await watcher.onSassChange(at('assets/css/style.scss'))
+
+    expect(context.server.cssUpdates).toBe(0)
+  })
+})
+
+/**
+ * 再生成のログ文言。
+ *
+ * 種別名（REBUILD_SPECS のキー）はデータ構造の識別子であると同時に、
+ * そのまま利用者のターミナルに出る（`image: assets/img/hero.jpg`）。
+ * キーをリネームすると表示が黙って変わるので、ここで固定して気づけるようにする。
+ * label も同じで、書き間違えても例外にならない。
+ */
+describe('再生成のログ', () => {
+  const cases = [
+    { handler: 'onSassChange', kind: 'sass', label: 'Sass build', file: () => at('assets/css/style.scss') },
+    { handler: 'onScriptChange', kind: 'script', label: 'Script build', file: () => at('assets/js/main.js') },
+    { handler: 'onSvgChange', kind: 'svg', label: 'SVG processing', file: () => at('assets/img/logo.svg') },
+    { handler: 'onImageChange', kind: 'image', label: 'Image processing', file: () => at('assets/img/hero.jpg') },
+    { handler: 'onSpriteChange', kind: 'sprite', label: 'Sprite generation', file: () => at('assets/icons/a.svg') },
+    { handler: 'onPublicChange', kind: 'public', label: 'Copy', file: () => `${context.paths.public}/robots.txt` }
+  ]
+
+  /** 出力先の基準は public だけ違う。ログに出る相対パスもそれに従う */
+  const relOf = ({ kind, file }) =>
+    file().slice((kind === 'public' ? context.paths.public : context.paths.src).length + 1)
+
+  it.each(cases)('$kind: 変更したファイルを種別名つきで出す', async testCase => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    watcher = new FileWatcher(context, () => Promise.resolve())
+
+    await watcher[testCase.handler](testCase.file(), 'change')
+    const lines = log.mock.calls.map(args => args.join(' '))
+    log.mockRestore()
+
+    expect(lines.some(line => line.includes(`${testCase.kind}: ${relOf(testCase)}`))).toBe(true)
+  })
+
+  it.each(cases)('$kind: 失敗は "$label failed" として出す', async testCase => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    watcher = new FileWatcher(context, () => Promise.reject(new Error('boom')))
+
+    await watcher[testCase.handler](testCase.file(), 'change')
+    const lines = error.mock.calls.map(args => args.join(' '))
+    vi.restoreAllMocks()
+
+    expect(lines.some(line => line.includes(`${testCase.label} failed: boom`))).toBe(true)
   })
 })

@@ -2,7 +2,8 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { resolve } from 'node:path'
 import { writeFile, mkdir } from 'node:fs/promises'
 import sharp from 'sharp'
-import { clearImageSizeCache, createImageInfoHelper } from '../../transform/image-size.mjs'
+import { createImageInfoHelper as createHelper } from '../../transform/image-size.mjs'
+import { CacheManager } from '../../core/cache.mjs'
 import { createTempProject } from '../helpers/project.mjs'
 
 // リポジトリ内の固定パスに書くと、テストを並列に走らせたとき互いのフィクスチャを消し合う
@@ -10,6 +11,18 @@ let testDataDir
 let imagesDir
 let mockPugFile
 let paths
+// 寸法キャッシュは BuildContext が持つ。テストの間は1つを共有して、
+// 「セッション中は使い回す」という本番と同じ条件で確かめる
+let cache
+
+/**
+ * テストは paths と config を最小構成で組み立てる。context の形はここで吸収する。
+ * logger は null にして、意図的に壊した参照の警告で出力を埋めないようにする
+ */
+const createImageInfoHelper = (pugFile, config, options) =>
+  createHelper(pugFile, { paths, config, cache }, { logger: null, ...options })
+
+const clearImageSizeCache = () => cache.clearImageSizes()
 
 const config = (optimization, density = 1, extra = {}) => ({
   build: { imageOptimization: optimization, imageSourceDensity: density, ...extra }
@@ -34,6 +47,7 @@ beforeEach(async () => {
   // 「/」始まりの参照は paths.src からの絶対解決になる
   mockPugFile = project.path('index.pug')
   paths = { src: testDataDir, public: project.path('public') }
+  cache = new CacheManager('development')
 
   await createJpeg(resolve(imagesDir, 'hero.jpg'), 800, 600)
   await createJpeg(resolve(imagesDir, 'responsive.jpg'), 800, 600)
@@ -48,7 +62,7 @@ beforeEach(async () => {
 describe('createImageInfoHelper', () => {
   describe('基本情報の取得', () => {
     it('width / height / format を返す', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
+      const imageInfo = createImageInfoHelper(mockPugFile, webpConfig)
       const result = imageInfo('/images/hero.jpg')
       expect(result.width).toBe(800)
       expect(result.height).toBe(600)
@@ -57,7 +71,7 @@ describe('createImageInfoHelper', () => {
     })
 
     it('ファイルが存在しない場合は fallback を返す', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
+      const imageInfo = createImageInfoHelper(mockPugFile, webpConfig)
       const result = imageInfo('/images/not-found.jpg')
       expect(result.src).toBe('/images/not-found.jpg')
       expect(result.width).toBeUndefined()
@@ -70,17 +84,17 @@ describe('createImageInfoHelper', () => {
 
   describe('src のパス解決', () => {
     it('imageOptimization: avif のとき src が .avif パスになる', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, avifConfig)
+      const imageInfo = createImageInfoHelper(mockPugFile, avifConfig)
       expect(imageInfo('/images/hero.jpg').src).toBe('/images/hero.avif')
     })
 
     it('imageOptimization: webp のとき src が .webp パスになる', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
+      const imageInfo = createImageInfoHelper(mockPugFile, webpConfig)
       expect(imageInfo('/images/hero.jpg').src).toBe('/images/hero.webp')
     })
 
     it('imageOptimization: compress のとき src は元パスのまま', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, compressConfig)
+      const imageInfo = createImageInfoHelper(mockPugFile, compressConfig)
       expect(imageInfo('/images/hero.jpg').src).toBe('/images/hero.jpg')
     })
 
@@ -91,7 +105,7 @@ describe('createImageInfoHelper', () => {
         '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8"></svg>'
       )
 
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
+      const imageInfo = createImageInfoHelper(mockPugFile, webpConfig)
       const result = imageInfo('/images/only-public.svg')
 
       expect(result.width).toBe(12)
@@ -110,12 +124,12 @@ describe('createImageInfoHelper', () => {
     })
 
     it('webp モードでも拡張子を読み替えない', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 2))
       expect(imageInfo('/images/logo.jpg').src).toBe('/images/logo.jpg')
     })
 
     it('密度も適用しない（原寸をそのまま返す）', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 2))
       const result = imageInfo('/images/logo.jpg')
 
       expect(result).toMatchObject({ width: 240, height: 80 })
@@ -125,7 +139,7 @@ describe('createImageInfoHelper', () => {
 
   describe('imageSourceDensity', () => {
     it('density 1 では原寸を返し srcset は 1 枚だけ', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 1))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 1))
       const result = imageInfo('/images/hero.jpg')
 
       expect(result).toMatchObject({ src: '/images/hero.webp', width: 800, height: 600 })
@@ -133,26 +147,26 @@ describe('createImageInfoHelper', () => {
     })
 
     it('density 2 では src と width/height が表示サイズになる', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 2))
       const result = imageInfo('/images/hero.jpg')
 
       expect(result).toMatchObject({ src: '/images/hero@half.webp', width: 400, height: 300 })
     })
 
     it('density 2 の srcset は 1x が縮小版、2x が無印（原寸）', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 2))
       expect(imageInfo('/images/hero.jpg').srcset).toBe('/images/hero@half.webp 1x, /images/hero.webp 2x')
     })
 
     it('compress モードでも密度は効く', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('compress', 2))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('compress', 2))
       expect(imageInfo('/images/hero.jpg').srcset).toBe('/images/hero@half.jpg 1x, /images/hero.jpg 2x')
     })
 
     it('縮小しても寸法が変わらない画像は 1 枚扱いになる', async () => {
       await createJpeg(resolve(imagesDir, 'tiny.jpg'), 1, 1)
 
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 2))
       const result = imageInfo('/images/tiny.jpg')
 
       expect(result).toMatchObject({ src: '/images/tiny.webp', width: 1, height: 1 })
@@ -160,7 +174,7 @@ describe('createImageInfoHelper', () => {
     })
 
     it('不正な密度は 1 として扱う（全画像が半分になる事故を防ぐ）', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 3))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 3))
       expect(imageInfo('/images/hero.jpg')).toMatchObject({ width: 800, height: 600 })
     })
 
@@ -168,7 +182,7 @@ describe('createImageInfoHelper', () => {
       await createJpeg(resolve(imagesDir, 'sibling.jpg'), 800, 600)
       await createJpeg(resolve(imagesDir, 'sibling@2x.jpg'), 1600, 1200)
 
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 1))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 1))
       const result = imageInfo('/images/sibling.jpg')
 
       expect(result.retina).toBeUndefined()
@@ -184,7 +198,7 @@ describe('createImageInfoHelper', () => {
     it('空白を含むファイル名でも候補が壊れない', async () => {
       await createJpeg(resolve(imagesDir, 'hero image.jpg'), 800, 600)
 
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 2))
       const { srcset } = imageInfo('/images/hero image.jpg')
 
       expect(srcset).toBe('/images/hero%20image@half.webp 1x, /images/hero%20image.webp 2x')
@@ -195,7 +209,7 @@ describe('createImageInfoHelper', () => {
     it('カンマを含むファイル名でも候補が壊れない', async () => {
       await createJpeg(resolve(imagesDir, 'photo,1.jpg'), 800, 600)
 
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 2))
       const { srcset } = imageInfo('/images/photo,1.jpg')
 
       expect(srcset).toBe('/images/photo%2C1@half.webp 1x, /images/photo%2C1.webp 2x')
@@ -205,7 +219,7 @@ describe('createImageInfoHelper', () => {
     it('日本語はそのまま残す（区切りにならないので読みやすさを優先）', async () => {
       await createJpeg(resolve(imagesDir, 'メインビジュアル.jpg'), 800, 600)
 
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 2))
       const { srcset } = imageInfo('/images/メインビジュアル.jpg')
 
       expect(srcset).toBe('/images/メインビジュアル@half.webp 1x, /images/メインビジュアル.webp 2x')
@@ -214,7 +228,7 @@ describe('createImageInfoHelper', () => {
 
   describe('アートディレクション variant 自動検出', () => {
     it('デフォルト（imageInfo.artDirectionSuffix: "_sp"）: avif モードで _sp が検出される', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, avifConfig)
+      const imageInfo = createImageInfoHelper(mockPugFile, avifConfig)
       const result = imageInfo('/images/responsive.jpg')
       expect(result.variant).not.toBeNull()
       expect(result.variant.src).toBe('/images/responsive_sp.avif')
@@ -225,8 +239,6 @@ describe('createImageInfoHelper', () => {
     it('imageInfo.artDirectionSuffix: "_tb" のとき _tb が検出される', () => {
       const imageInfo = createImageInfoHelper(
         mockPugFile,
-        paths,
-        null,
         config('webp', 1, { imageInfo: { artDirectionSuffix: '_tb' } })
       )
       const result = imageInfo('/images/responsive.jpg')
@@ -237,12 +249,12 @@ describe('createImageInfoHelper', () => {
     })
 
     it('バリアント画像が存在しない場合は null', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
+      const imageInfo = createImageInfoHelper(mockPugFile, webpConfig)
       expect(imageInfo('/images/hero.jpg').variant).toBeNull()
     })
 
     it('variant にも密度が適用される（source の width/height が実寸の 2 倍になるのを防ぐ）', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 2))
       const { variant } = imageInfo('/images/responsive.jpg')
 
       expect(variant).toMatchObject({ src: '/images/responsive_sp@half.webp', width: 188, height: 150 })
@@ -250,14 +262,14 @@ describe('createImageInfoHelper', () => {
     })
 
     it('density 1 でも variant.srcset は必ず出す（source が無視されるのを防ぐ）', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 1))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 1))
       expect(imageInfo('/images/responsive.jpg').variant.srcset).toBe('/images/responsive_sp.webp 1x')
     })
   })
 
   describe('SVG', () => {
     it('isSvg: true / variant: null、src は変換されない', () => {
-      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, config('webp', 2))
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 2))
       const result = imageInfo('/images/icon.svg')
       expect(result.isSvg).toBe(true)
       expect(result.src).toBe('/images/icon.svg')
@@ -271,7 +283,7 @@ describe('createImageInfoHelper', () => {
 describe('onAccess コールバック', () => {
   it('variant が存在する場合 onAccess にメイン・variant 両方が登録される', () => {
     const accessed = []
-    const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })
+    const imageInfo = createImageInfoHelper(mockPugFile, webpConfig, { onAccess: p => accessed.push(p) })
     imageInfo('/images/responsive.jpg')
     expect(accessed).toContain(resolve(imagesDir, 'responsive.jpg'))
     expect(accessed).toContain(resolve(imagesDir, 'responsive_sp.jpg'))
@@ -279,13 +291,13 @@ describe('onAccess コールバック', () => {
 
   it('画像が見つからない場合 onAccess は呼ばれない', () => {
     const accessed = []
-    const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })
+    const imageInfo = createImageInfoHelper(mockPugFile, webpConfig, { onAccess: p => accessed.push(p) })
     imageInfo('/images/not-found.jpg')
     expect(accessed).toHaveLength(0)
   })
 
   it('onAccess なしで呼んでもエラーにならない', () => {
-    const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
+    const imageInfo = createImageInfoHelper(mockPugFile, webpConfig)
     expect(() => imageInfo('/images/hero.jpg')).not.toThrow()
   })
 })
@@ -296,7 +308,7 @@ describe('寸法のキャッシュ', () => {
    * watcher は画像が変わったときに clearImageSizeCache() を呼ぶ責務を持つ。
    * ここが効いていないと dev の HTML に古い width/height が焼き込まれたままになる。
    */
-  const infoOf = src => createImageInfoHelper(mockPugFile, paths, null, compressConfig)(src)
+  const infoOf = src => createImageInfoHelper(mockPugFile, compressConfig)(src)
 
   beforeEach(() => clearImageSizeCache())
 

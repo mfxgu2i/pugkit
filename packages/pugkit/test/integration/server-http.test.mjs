@@ -2,8 +2,7 @@ import { describe, expect, it, onTestFinished } from 'vitest'
 import net from 'node:net'
 import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { dirname, relative } from 'node:path'
-import { createBuilder } from '../../index.mjs'
-import { createTempProject, minimalProjectFiles } from '../helpers/project.mjs'
+import { createTempProject, minimalProjectFiles, createTestBuilder } from '../helpers/project.mjs'
 
 /**
  * dev サーバーを実際に listen させて HTTP 越しに確認する。
@@ -13,14 +12,13 @@ import { createTempProject, minimalProjectFiles } from '../helpers/project.mjs'
  */
 async function startDevServer(files = minimalProjectFiles()) {
   const project = await createTempProject(files)
-  const builder = await createBuilder(project.root, 'development')
+  const builder = await createTestBuilder(project.root, 'development')
   const { context } = builder
 
   context.config.server.port = 0
   await builder.tasks.server(context)
 
   const { port } = context.server
-  onTestFinished(() => context.server.close())
 
   return {
     project,
@@ -193,7 +191,7 @@ describe('配信ルートの封じ込め', () => {
     そのまま: escape => `/${escape}`,
     スラッシュ重複: escape => `/${escape.replace(/\//g, '//')}`,
     エンコード: escape => `/${escape.replace(/\//g, '%2f')}`,
-    'カレント経由': escape => `/./${escape}`
+    カレント経由: escape => `/./${escape}`
   }
 
   it.each(Object.keys(shapes))('%s の形でも配信ルートの外を読み出せない', async shape => {
