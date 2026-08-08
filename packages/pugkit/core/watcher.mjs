@@ -1,84 +1,200 @@
 import chokidar from 'chokidar'
 import { rm } from 'node:fs/promises'
-import { relative, resolve, basename, extname } from 'node:path'
+import { existsSync } from 'node:fs'
+import { relative, resolve, basename, dirname, extname, sep } from 'node:path'
+import net from 'node:net'
 import { logger } from '../utils/logger.mjs'
+import { resetDevCache } from '../utils/file.mjs'
 import { clearImageSizeCache } from '../transform/image-size.mjs'
+import { spriteOutputPath } from '../tasks/svg-sprite.mjs'
+import { imageOutputPath } from '../tasks/image.mjs'
+import { sassOutputPath } from '../tasks/sass.mjs'
+import { scriptOutputPath } from '../tasks/script.mjs'
+
+// Pug（HTML）だけは遅延ビルド + メモリ配信なので事前生成しない。
+// 他は実ファイルとして配信するため、出力先が空の状態でも表示できるよう起動時に作る
+const INITIAL_DEV_TASKS = ['sass', 'script', 'image', 'svg', 'sprite', 'copy']
+
+const IMAGE_EXT_RE = /\.(jpg|jpeg|png|gif)$/i
+
+// 自分のハンドラで graph（Pug への焼き込み）を見る種別。二重に無効化しない
+const HANDLES_EMBEDDING = new Set(['svg', 'image', 'public'])
+
+const DEFAULT_PORT = 5555
+const DEFAULT_HOST = 'localhost'
 
 /**
  * ファイル監視タスク
  */
 export async function watcherTask(context, options = {}) {
-  const watcher = new FileWatcher(context)
+  const watcher = new FileWatcher(context, options.runTask)
   await watcher.start()
+  return watcher
 }
 
 /**
  * ファイルウォッチャー
+ *
+ * Pug は遅延ビルド方式: 変更イベントではキャッシュ無効化とリロード通知のみ行い、
+ * ビルドはブラウザが該当ページをリクエストした時に dev サーバー側で実行される。
+ * Sass / Script は従来どおりイベント駆動でインクリメンタルビルドする。
+ *
+ * @param runTask タスク名で実行する関数。未指定なら再ビルドを伴う処理は行わない
  */
-class FileWatcher {
-  constructor(context) {
+export class FileWatcher {
+  constructor(context, runTask) {
     this.context = context
+    this.runTask = runTask ?? (() => Promise.resolve())
     this.watcher = null
   }
 
   async start() {
-    const { paths } = this.context
+    const { paths, config } = this.context
 
-    // 初回ビルド（依存関係グラフ構築のため）
-    logger.info('watch', 'Building initial dependency graph...')
+    // 待ち受けに失敗するなら、キャッシュを作り直す前に知らせる。
+    // 別の dev サーバーからキャッシュを守るのはこの確認ではなく resetDevCache の役目
+    // （ポートを変えれば2つ目が起動できてしまうため）
+    await this.assertPortAvailable(config.server?.port ?? DEFAULT_PORT, config.server?.host ?? DEFAULT_HOST)
 
-    const initialTasks = []
-    if (this.context.taskRegistry?.pug) {
-      initialTasks.push(this.context.taskRegistry.pug(this.context))
+    // dev の出力先はツール専用のキャッシュなので毎回作り直してよい。
+    // 前回セッションの残骸（削除済みソースの生成物）が配信されるのを防ぎ、
+    // 「dev で見えているもの = 現在の src」を保証する
+    try {
+      await resetDevCache(paths.outputRoot)
+    } catch (error) {
+      if (error.code === 'EACCES' || error.code === 'EPERM') {
+        throw new Error(
+          `dev の出力先 "${paths.outputRoot}" に書き込めません。cacheDir に書き込み可能なパスを指定してください`
+        )
+      }
+      throw error
     }
-    if (this.context.taskRegistry?.sass) {
-      initialTasks.push(this.context.taskRegistry.sass(this.context))
-    }
-    if (this.context.taskRegistry?.script) {
-      initialTasks.push(this.context.taskRegistry.script(this.context))
-    }
-    await Promise.all(initialTasks)
+
+    // Pug 以外は初期ビルドする。Pug（HTML）だけは遅延ビルド + メモリ配信なので
+    // 事前生成が不要で、依存グラフもページが最初にリクエストされた時に構築される。
+    // 一方 CSS / JS / 画像 / SVG / public は実ファイルとして配信するため、
+    // 出力ディレクトリが空の状態でも表示できるよう起動時に生成しておく
+    // 1つ壊れていても他のアセットと dev サーバーは動かす。起動後に同じファイルを
+    // 壊したときと同じ扱いにする（ここで中止すると、dev キャッシュを作り直した直後に
+    // 落ちるため「直そうとして起動しても起動しない」状態になる）
+    await Promise.all(
+      INITIAL_DEV_TASKS.map(name =>
+        this.runTask(name).catch(error => logger.error('watch', `${name} の初期ビルドに失敗しました: ${error.message}`))
+      )
+    )
 
     this.watcher = chokidar
       .watch([paths.src, paths.public], {
         ignoreInitial: true,
-        ignored: [/(^|[\/\\])\./, /node_modules/, /\.git/],
+        // 除外は絶対パス全体に当たる。「.」始まりを一律に外すと、プロジェクトを
+        // 「.」始まりのディレクトリに置いた場合に監視が丸ごと効かなくなる。
+        // 拾いすぎた分は classify が対象外（null）に落とすので害はない
+        ignored: [/node_modules/, /\.git/],
         persistent: true,
-        awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 100 }
+        // 書き込み安定待ちは検知レイテンシに直結する。テキストファイル中心の
+        // ソースでは 50ms の安定確認で十分（旧: 100ms 安定 + 100ms ポーリングで
+        // 実効 100〜200ms）。途中書き込みを読んでもエラーページ → 次の保存で
+        // 自動復帰する構造のためリスクは限定的
+        awaitWriteFinish: { stabilityThreshold: 50, pollInterval: 20 }
       })
-      .on('change', filePath => this.handleChange(filePath))
-      .on('add', filePath => this.handleAdd(filePath))
-      .on('unlink', filePath => this.handleUnlink(filePath))
+      .on('change', filePath => this.handle('change', filePath))
+      .on('add', filePath => this.handle('add', filePath))
+      .on('unlink', filePath => this.handle('unlink', filePath))
 
     logger.info('watch', 'File watching started')
   }
 
-  // ---- ルーティング ----
-  handleChange(filePath) {
-    if (this.isPublic(filePath)) return this.onPublicChange(filePath, 'change')
-    if (filePath.endsWith('.pug')) return this.onPugChange(filePath)
-    if (filePath.endsWith('.scss')) return this.onSassChange(filePath)
-    if (this.isScript(filePath)) return this.onScriptChange(filePath)
-    if (filePath.endsWith('.svg') && !this.isIcons(filePath)) return this.onSvgChange(filePath, 'change')
-    if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageChange(filePath, 'change')
+  /**
+   * 変更されたファイルの種別を決める。
+   *
+   * 判定の順序そのものが仕様。特に「_」始まりの除外は、
+   * スプライト対象の判定より後・通常アセットより前でなければならない。
+   * 対象外なら null。
+   */
+  classify(filePath) {
+    if (this.isPublic(filePath)) return 'public'
+    if (filePath.endsWith('.pug')) return 'pug'
+    if (filePath.endsWith('.scss')) return 'sass'
+    if (this.isScript(filePath)) return 'script'
+    if (filePath.endsWith('.svg') && this.isIcons(filePath)) return 'sprite'
+    if (this.isHiddenAsset(filePath)) return null
+    if (filePath.endsWith('.svg')) return 'svg'
+    if (IMAGE_EXT_RE.test(filePath)) return 'image'
+    return null
   }
 
-  handleAdd(filePath) {
-    if (this.isPublic(filePath)) return this.onPublicChange(filePath, 'add')
-    if (filePath.endsWith('.pug')) return this.onPugChange(filePath)
-    if (filePath.endsWith('.scss')) return this.onSassChange(filePath)
-    if (this.isScript(filePath)) return this.onScriptChange(filePath)
-    if (filePath.endsWith('.svg') && !this.isIcons(filePath)) return this.onSvgChange(filePath, 'add')
-    if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageChange(filePath, 'add')
+  /**
+   * 種別ごとの反応。change と add は同じ扱いで、イベント名だけ渡す
+   * （画像の add は「参照先が後から置かれた」ケースの判定に使う）。
+   */
+  handle(event, filePath) {
+    const kind = this.classify(filePath)
+
+    // include は .pug 以外も受け付け、中身をテンプレートに焼き込む
+    // （クリティカル CSS のインライン化、インライン JS、データファイルなど）。
+    // アセットとしての種別が何であっても、焼き込まれている分の無効化が要る。
+    // Pug 自身と、アセット経由で graph を見る種別は各ハンドラが担当する
+    const embedded = kind === 'pug' || HANDLES_EMBEDDING.has(kind) ? [] : this.invalidateEmbedded(filePath)
+
+    if (!kind) {
+      if (embedded.length > 0) this.reload('html')
+      return
+    }
+
+    const handlers = {
+      public: { change: () => this.onPublicChange(filePath, event), unlink: () => this.onPublicUnlink(filePath) },
+      pug: { change: () => this.onPugChange(filePath), unlink: () => this.onPugUnlink(filePath) },
+      sass: { change: () => this.onSassChange(filePath), unlink: () => this.onSassUnlink(filePath) },
+      script: { change: () => this.onScriptChange(filePath), unlink: () => this.onScriptUnlink(filePath) },
+      // スプライトは icons ディレクトリ全体から1ファイルを作るので削除も再生成でよい
+      sprite: { change: () => this.onSpriteChange(filePath, event), unlink: () => this.onSpriteChange(filePath, event) },
+      svg: { change: () => this.onSvgChange(filePath, event), unlink: () => this.onSvgUnlink(filePath) },
+      image: { change: () => this.onImageChange(filePath, event), unlink: () => this.onImageUnlink(filePath) }
+    }
+
+    const handled = handlers[kind][event === 'unlink' ? 'unlink' : 'change']()
+
+    // Sass は CSS を差し替えるだけでリロードを通知しない。
+    // 焼き込まれている分はそれでは古いままなので、別に知らせる
+    if (kind !== 'sass' || embedded.length === 0) return handled
+    return Promise.resolve(handled).then(() => this.reload('html'))
   }
 
-  handleUnlink(filePath) {
-    if (this.isPublic(filePath)) return this.onPublicUnlink(filePath)
-    if (filePath.endsWith('.pug')) return this.onPugUnlink(filePath)
-    if (filePath.endsWith('.scss')) return this.onSassUnlink(filePath)
-    if (this.isScript(filePath)) return this.onScriptUnlink(filePath)
-    if (filePath.endsWith('.svg') && !this.isIcons(filePath)) return this.onSvgUnlink(filePath)
-    if (/\.(jpg|jpeg|png|gif)$/i.test(filePath)) return this.onImageUnlink(filePath)
+  /**
+   * include で Pug に焼き込まれているファイルの、親ページを無効化する。
+   * 依存は graph に登録済みなので、拡張子ではなく依存関係で判断する。
+   */
+  invalidateEmbedded(filePath) {
+    const { cache, graph } = this.context
+    const parents = graph.getAffectedParents(filePath)
+
+    for (const file of parents) {
+      cache.invalidatePugTemplate(file)
+      cache.invalidatePageHtml(file)
+    }
+
+    return parents
+  }
+
+  /**
+   * ポートが使用可能か確認する。使用中なら起動を中止する。
+   */
+  assertPortAvailable(port, host) {
+    return new Promise((resolve, reject) => {
+      const tester = net
+        .createServer()
+        .once('error', error => {
+          if (error.code === 'EADDRINUSE') {
+            reject(
+              new Error(`ポート ${port} は既に使用されています。別の dev サーバーが起動していないか確認してください`)
+            )
+            return
+          }
+          reject(error)
+        })
+        .once('listening', () => tester.close(() => resolve()))
+        .listen(port, host)
+    })
   }
 
   // ---- 判定ヘルパー ----
@@ -96,38 +212,68 @@ class FileWatcher {
     return filePath.replace(/\\/g, '/').includes('/icons/')
   }
 
+  /**
+   * 「_」始まりのファイル・ディレクトリ配下のアセット。
+   * build では glob の ignore で出力対象外なので dev でも出力しない
+   */
+  isHiddenAsset(filePath) {
+    return relative(this.context.paths.src, filePath)
+      .split(sep)
+      .some(segment => segment.startsWith('_'))
+  }
+
+  /**
+   * imageInfo() が寸法を読む対象。変換タスクの対象（IMAGE_EXT_RE）より広く、
+   * すでに webp/avif/svg になっているものも含む
+   */
+  isImageAsset(filePath) {
+    return /\.(jpg|jpeg|png|gif|svg|webp|avif)$/i.test(filePath)
+  }
+
   // ---- Pug ----
 
-  async onPugChange(filePath) {
-    const { paths, graph, cache, taskRegistry } = this.context
+  onPugChange(filePath) {
+    const { paths, graph, cache } = this.context
     const relPath = relative(paths.src, filePath)
     logger.info('change', `pug: ${relPath}`)
-    try {
-      const affectedFiles = graph.getAffectedParents(filePath)
-      if (affectedFiles.length > 0) logger.info('pug', `Rebuilding ${affectedFiles.length} affected file(s)`)
-      cache.invalidatePugTemplate(filePath)
-      affectedFiles.forEach(f => cache.invalidatePugTemplate(f))
-      if (taskRegistry?.pug) {
-        await taskRegistry.pug(this.context, { files: [filePath, ...affectedFiles] })
-      }
-      this.reload()
-    } catch (error) {
-      logger.error('watch', `Pug build failed: ${error.message}`)
+
+    // 影響を受ける親ページを含めてキャッシュ無効化のみ行う。
+    // ビルドはリクエスト時に行われるため、ここでは何もビルドしない
+    const affected = graph.getAffectedParents(filePath)
+    if (affected.length > 0) logger.info('pug', `Invalidated ${affected.length} affected page(s)`)
+
+    for (const file of [filePath, ...affected]) {
+      cache.invalidatePugTemplate(file)
+      cache.invalidatePageHtml(file)
     }
+
+    this.reload('html')
   }
 
   async onPugUnlink(filePath) {
     const { paths, cache, graph, imageGraph } = this.context
     const relPath = relative(paths.src, filePath)
+
+    // removeFile の前に影響親を取得する（後だと逆引きが消えて取得できない）
+    const affected = graph.getAffectedParents(filePath)
+    for (const file of affected) {
+      cache.invalidatePugTemplate(file)
+      cache.invalidatePageHtml(file)
+    }
+
     cache.invalidatePugTemplate(filePath)
-    graph.clearDependencies(filePath)
-    imageGraph.clearDependencies(filePath)
+    cache.invalidatePageHtml(filePath)
+    graph.removeFile(filePath)
+    imageGraph.removeFile(filePath)
+
     if (basename(filePath).startsWith('_')) {
       logger.info('unlink', relPath)
+      this.reload('html')
       return
     }
-    const distPath = resolve(paths.dist, relPath.replace(/\.pug$/, '.html'))
-    await this.deleteDistFile(distPath, relPath)
+
+    logger.info('unlink', relPath)
+    this.reload('full')
   }
 
   // ---- Sass ----
@@ -136,7 +282,7 @@ class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     logger.info('change', `sass: ${relPath}`)
     try {
-      if (this.context.taskRegistry?.sass) await this.context.taskRegistry.sass(this.context, { files: [filePath] })
+      await this.runTask('sass', { changed: filePath })
       this.injectCSS()
     } catch (error) {
       logger.error('watch', `Sass build failed: ${error.message}`)
@@ -146,13 +292,13 @@ class FileWatcher {
   async onSassUnlink(filePath) {
     const { paths, sassGraph } = this.context
     const relPath = relative(paths.src, filePath)
-    sassGraph.clearDependencies(filePath)
+    sassGraph.removeFile(filePath)
     if (basename(filePath).startsWith('_')) {
       logger.info('unlink', relPath)
       return
     }
-    const distPath = resolve(paths.dist, relPath.replace(/\.scss$/, '.css'))
-    await this.deleteDistFile(distPath, relPath)
+    const outputPath = sassOutputPath(relPath, paths)
+    await this.deleteOutputFile(outputPath, relPath, { withSourceMap: true })
   }
 
   // ---- Script ----
@@ -161,7 +307,7 @@ class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     logger.info('change', `script: ${relPath}`)
     try {
-      if (this.context.taskRegistry?.script) await this.context.taskRegistry.script(this.context, { files: [filePath] })
+      await this.runTask('script', { changed: filePath })
       this.reload()
     } catch (error) {
       logger.error('watch', `Script build failed: ${error.message}`)
@@ -171,34 +317,66 @@ class FileWatcher {
   async onScriptUnlink(filePath) {
     const { paths, scriptGraph } = this.context
     const relPath = relative(paths.src, filePath)
-    scriptGraph.clearDependencies(filePath)
+    scriptGraph.removeFile(filePath)
     if (basename(filePath).startsWith('_')) {
       logger.info('unlink', relPath)
       return
     }
-    const distPath = resolve(paths.dist, relPath.replace(/\.ts$/, '.js'))
-    await this.deleteDistFile(distPath, relPath)
+    const outputPath = scriptOutputPath(relPath, paths)
+    await this.deleteOutputFile(outputPath, relPath, { withSourceMap: true })
   }
 
   // ---- SVG ----
 
   async onSvgChange(filePath, event) {
+    clearImageSizeCache()
     const relPath = relative(this.context.paths.src, filePath)
     logger.info(event, `svg: ${relPath}`)
     try {
-      if (this.context.taskRegistry?.svg) {
-        await this.context.taskRegistry.svg(this.context, { files: [filePath] })
-      }
+      await this.runTask('svg', { changed: filePath })
+      this.invalidateAssetDependents(filePath, event)
       this.reload()
     } catch (error) {
       logger.error('watch', `SVG processing failed: ${error.message}`)
     }
   }
 
-  async onSvgUnlink(filePath) {
+  // ---- SVG スプライト（icons/ 配下） ----
+
+  async onSpriteChange(filePath, event) {
     const relPath = relative(this.context.paths.src, filePath)
-    const distPath = resolve(this.context.paths.dist, relPath)
-    await this.deleteDistFile(distPath, relPath)
+    logger.info(event, `sprite: ${relPath}`)
+    try {
+      // スプライトは icons ディレクトリ全体から1ファイルを生成するため常に全再生成
+      await this.runTask('sprite')
+      if (event === 'unlink') await this.removeOrphanedSprite(filePath)
+      // <use href> の参照先が変わるので取り直しが必要
+      this.reload('full')
+    } catch (error) {
+      logger.error('watch', `Sprite generation failed: ${error.message}`)
+    }
+  }
+
+  /**
+   * icons ディレクトリごと消えたときのスプライトの後始末。
+   * ディレクトリが残っていればタスクの再生成が処理するが、消えていると
+   * glob から見えないので、消えたアイコンのパスから出力先を辿る
+   */
+  async removeOrphanedSprite(iconFile) {
+    const { paths } = this.context
+    const iconDir = dirname(iconFile)
+    if (existsSync(iconDir)) return
+
+    await rm(spriteOutputPath(relative(paths.src, iconDir), paths), { force: true })
+  }
+
+  async onSvgUnlink(filePath) {
+    clearImageSizeCache()
+    const relPath = relative(this.context.paths.src, filePath)
+    this.invalidateAssetDependents(filePath)
+    this.context.imageGraph.removeFile(filePath)
+    const outputPath = resolve(this.context.paths.output, relPath)
+    await this.deleteOutputFile(outputPath, relPath)
   }
 
   // ---- Image ----
@@ -208,15 +386,8 @@ class FileWatcher {
     const relPath = relative(this.context.paths.src, filePath)
     logger.info(event, `image: ${relPath}`)
     try {
-      if (this.context.taskRegistry?.image) {
-        await this.context.taskRegistry.image(this.context, { files: [filePath] })
-      }
-      // imageGraph から影響を受ける Pug ファイルのみ再ビルド
-      // グラフ未構築（初回 dev 起動直後など）の場合は全 Pug を再ビルド
-      if (this.context.taskRegistry?.pug) {
-        const affected = this.context.imageGraph.getAffectedParents(filePath)
-        await this.context.taskRegistry.pug(this.context, { files: affected.length > 0 ? affected : undefined })
-      }
+      await this.runTask('image', { changed: filePath })
+      this.invalidateAssetDependents(filePath, event)
       this.reload()
     } catch (error) {
       logger.error('watch', `Image processing failed: ${error.message}`)
@@ -225,23 +396,15 @@ class FileWatcher {
 
   async onImageUnlink(filePath) {
     clearImageSizeCache()
-    const { paths, config } = this.context
+    const { paths, config, cache, imageGraph } = this.context
     const relPath = relative(paths.src, filePath)
-    const optimization = config.build.imageOptimization
-    const ext = extname(filePath)
-    const newExt = optimization === 'avif' || optimization === 'webp' ? `.${optimization}` : ext
-    const destRelPath = relPath.replace(new RegExp(`\\${ext}$`, 'i'), newExt)
-    const distPath = resolve(paths.dist, destRelPath)
-    await this.deleteDistFile(distPath, relPath)
-    // imageGraph から影響を受ける Pug ファイルのみ再ビルド
-    if (this.context.taskRegistry?.pug) {
-      const affected = this.context.imageGraph.getAffectedParents(filePath)
-      this.context.imageGraph.clearDependencies(filePath)
-      if (affected.length > 0) {
-        await this.context.taskRegistry.pug(this.context, { files: affected })
-        this.reload()
-      }
-    }
+
+    const affected = imageGraph.getAffectedParents(filePath)
+    imageGraph.removeFile(filePath)
+    affected.forEach(file => cache.invalidatePageHtml(file))
+
+    const outputPath = imageOutputPath(relPath, config.build.imageOptimization, paths)
+    await this.deleteOutputFile(outputPath, relPath)
   }
 
   // ---- Public ----
@@ -249,8 +412,15 @@ class FileWatcher {
   async onPublicChange(filePath, event) {
     const relPath = relative(this.context.paths.public, filePath)
     logger.info(event, `public: ${relPath}`)
+
+    // public 配下の画像も imageInfo から参照され得る（src に無ければ public を見る）
+    if (this.isImageAsset(filePath)) {
+      clearImageSizeCache()
+      this.invalidateAssetDependents(filePath, event)
+    }
+
     try {
-      if (this.context.taskRegistry?.copy) await this.context.taskRegistry.copy(this.context, { files: [filePath] })
+      await this.runTask('copy', { changed: filePath })
       this.reload()
     } catch (error) {
       logger.error('watch', `Copy failed: ${error.message}`)
@@ -259,23 +429,63 @@ class FileWatcher {
 
   async onPublicUnlink(filePath) {
     const relPath = relative(this.context.paths.public, filePath)
-    const distPath = resolve(this.context.paths.dist, relPath)
-    await this.deleteDistFile(distPath, relPath)
+
+    if (this.isImageAsset(filePath)) {
+      clearImageSizeCache()
+      this.invalidateAssetDependents(filePath)
+      this.context.imageGraph.removeFile(filePath)
+    }
+
+    const outputPath = resolve(this.context.paths.output, relPath)
+    await this.deleteOutputFile(outputPath, relPath)
   }
 
   // ---- 共通ヘルパー ----
 
-  reload() {
-    if (this.context.server) {
-      setTimeout(() => {
-        this.context.server.reload()
-      }, 100)
+  /**
+   * アセット（画像・SVG）に依存するページのキャッシュを無効化する。
+   * - imageGraph 経由（imageInfo で参照）: HTML キャッシュのみ無効化
+   * - graph 経由（include でテンプレートに焼き込み）: テンプレートごと無効化
+   * - add イベントで依存が見つからない場合、「参照されているがまだ存在しなかった
+   *   アセットが後から追加された」可能性があるため、全ページ HTML を無効化する
+   *   （コンパイルは伴わないためコストは実質ゼロ）
+   */
+  invalidateAssetDependents(filePath, event) {
+    const { cache, graph, imageGraph } = this.context
+
+    const renderAffected = imageGraph.getAffectedParents(filePath)
+    renderAffected.forEach(file => cache.invalidatePageHtml(file))
+
+    const templateAffected = graph.getAffectedParents(filePath)
+    templateAffected.forEach(file => {
+      cache.invalidatePugTemplate(file)
+      cache.invalidatePageHtml(file)
+    })
+
+    if (event === 'add' && renderAffected.length === 0 && templateAffected.length === 0) {
+      cache.clearPageHtml()
     }
   }
 
-  async deleteDistFile(distPath, relPath) {
+  /**
+   * リロード通知。HTML はメモリ配信（リクエスト時ビルド）になり dist の書き込み完了を
+   * 待つ必要がなくなったため即時に送る。
+   *
+   * kind 'html' は Pug 由来の変更で、クライアントは DOM 差分更新で反映する。
+   * JS・画像・SVG・public の変更は HTML 以外のリソースを取り直す必要があるため
+   * 'full'（フルリロード）にする。
+   */
+  reload(kind = 'full') {
+    if (this.context.server) {
+      this.context.server.reload(kind)
+    }
+  }
+
+  async deleteOutputFile(outputPath, relPath, { withSourceMap = false } = {}) {
     try {
-      await rm(distPath, { force: true })
+      await rm(outputPath, { force: true })
+      // ソースマップを置き去りにすると削除済みファイルの .map だけ配信され続ける
+      if (withSourceMap) await rm(`${outputPath}.map`, { force: true })
       logger.info('unlink', relPath)
       this.reload()
     } catch (error) {

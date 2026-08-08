@@ -5,7 +5,6 @@ export default defineConfig({
   siteUrl: 'https://example.com/',
   subdir: '',
   outDir: 'dist',
-  debug: false,
   server: {
     port: 5555,
     host: 'localhost',

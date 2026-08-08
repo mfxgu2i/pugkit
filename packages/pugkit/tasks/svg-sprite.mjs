@@ -1,6 +1,6 @@
 import { glob } from 'glob'
-import { readFile, writeFile } from 'node:fs/promises'
-import { resolve, dirname, basename, relative } from 'node:path'
+import { readFile, rm, writeFile } from 'node:fs/promises'
+import { resolve, dirname, basename } from 'node:path'
 import { optimize } from 'svgo'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
@@ -33,15 +33,24 @@ const SPRITE_SVGO_CONFIG = {
 }
 
 /**
+ * icons ディレクトリ（src からの相対パス）に対応するスプライトの出力先。
+ * 生成側と後始末側で規則がずれると、消したはずのアイコンが配信され続ける
+ */
+export function spriteOutputPath(iconDir, paths) {
+  return resolve(paths.output, dirname(iconDir), 'icons.svg')
+}
+
+/**
  * SVGスプライト生成タスク
  */
 export async function spriteTask(context, options = {}) {
-  const { paths, isProduction } = context
+  const { paths } = context
 
-  // iconsディレクトリを検索
+  // iconsディレクトリを検索（「_」始まりのディレクトリ配下はビルド対象外）
   const iconDirs = await glob('**/icons', {
     cwd: paths.src,
-    absolute: false
+    absolute: false,
+    ignore: ['**/_*/**']
   })
 
   if (iconDirs.length === 0) {
@@ -54,8 +63,7 @@ export async function spriteTask(context, options = {}) {
   // 各iconsディレクトリでスプライト生成
   for (const iconDir of iconDirs) {
     const inputDir = resolve(paths.src, iconDir)
-    const outputDir = resolve(paths.dist, dirname(iconDir))
-    const outputPath = resolve(outputDir, 'icons.svg')
+    const outputPath = spriteOutputPath(iconDir, paths)
 
     const count = await generateSprite(inputDir, outputPath)
     if (count) {
@@ -80,6 +88,9 @@ async function generateSprite(iconDir, outputPath) {
   })
 
   if (svgFiles.length === 0) {
+    // 作り直さないだけだと、消したアイコンを参照する <use> が解決し続けてしまう。
+    // pugkit が生成したファイルなので clean: false でも消してよい
+    await rm(outputPath, { force: true })
     return 0
   }
 
@@ -98,7 +109,10 @@ async function generateSprite(iconDir, outputPath) {
     const viewBox = viewBoxMatch ? viewBoxMatch[1] : '0 0 24 24'
 
     // <svg>タグを<symbol>に変換
-    svg = svg.replace(/<svg[^>]*>/, `<symbol id="${fileName}" viewBox="${viewBox}">`).replace(/<\/svg>/, '</symbol>')
+    // ファイル名は利用者の入力なので、置換文字列にすると $& などが特殊解釈される
+    svg = svg
+      .replace(/<svg[^>]*>/, () => `<symbol id="${fileName}" viewBox="${viewBox}">`)
+      .replace(/<\/svg>/, '</symbol>')
 
     // fill/strokeをcurrentColorに統一
     svg = svg

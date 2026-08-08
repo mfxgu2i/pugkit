@@ -1,21 +1,15 @@
-import { describe, expect, it, beforeAll, afterAll } from 'vitest'
-import { resolve, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { describe, expect, it, beforeEach } from 'vitest'
+import { resolve } from 'node:path'
+import { writeFile } from 'node:fs/promises'
 import sharp from 'sharp'
-import { createImageInfoHelper, createImageSizeHelper } from '../../transform/image-size.mjs'
+import { clearImageSizeCache, createImageInfoHelper } from '../../transform/image-size.mjs'
+import { createTempProject } from '../helpers/project.mjs'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const testDataDir = resolve(__dirname, '../_data')
-const imagesDir = resolve(testDataDir, 'images')
-
-// /始まりの場合は paths.src からの絶対解決になる
-const mockPugFile = resolve(testDataDir, 'index.pug')
-
-const paths = {
-  src: testDataDir,
-  public: resolve(testDataDir, 'public')
-}
+// リポジトリ内の固定パスに書くと、テストを並列に走らせたとき互いのフィクスチャを消し合う
+let testDataDir
+let imagesDir
+let mockPugFile
+let paths
 
 const avifConfig = { build: { imageOptimization: 'avif' } }
 const webpConfig = { build: { imageOptimization: 'webp' } }
@@ -30,25 +24,23 @@ async function createJpeg(filePath, width = 100, height = 80) {
     .toFile(filePath)
 }
 
-beforeAll(async () => {
-  await mkdir(imagesDir, { recursive: true })
-  // 基本画像
+beforeEach(async () => {
+  const project = await createTempProject({ 'images/.keep': '', 'index.pug': 'p x' })
+  testDataDir = project.root
+  imagesDir = project.path('images')
+  // 「/」始まりの参照は paths.src からの絶対解決になる
+  mockPugFile = project.path('index.pug')
+  paths = { src: testDataDir, public: project.path('public') }
+
   await createJpeg(resolve(imagesDir, 'hero.jpg'), 800, 600)
-  // retina @2x
   await createJpeg(resolve(imagesDir, 'hero@2x.jpg'), 1600, 1200)
-  // アートディレクション _sp / _tb
   await createJpeg(resolve(imagesDir, 'responsive.jpg'), 800, 600)
   await createJpeg(resolve(imagesDir, 'responsive_sp.jpg'), 375, 300)
   await createJpeg(resolve(imagesDir, 'responsive_tb.jpg'), 768, 500)
-  // SVG
   await writeFile(
     resolve(imagesDir, 'icon.svg'),
     '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"></svg>'
   )
-})
-
-afterAll(async () => {
-  await rm(imagesDir, { recursive: true, force: true })
 })
 
 describe('createImageInfoHelper', () => {
@@ -96,6 +88,21 @@ describe('createImageInfoHelper', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, paths, null, noOptConfig)
       const result = imageInfo('/images/hero.jpg')
       expect(result.src).toBe('/images/hero.jpg')
+    })
+
+    it('src に無ければ public も探す', async () => {
+      const { mkdir, writeFile } = await import('node:fs/promises')
+      await mkdir(resolve(paths.public, 'images'), { recursive: true })
+      await writeFile(
+        resolve(paths.public, 'images/only-public.svg'),
+        '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8"></svg>'
+      )
+
+      const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
+      const result = imageInfo('/images/only-public.svg')
+
+      expect(result.width).toBe(12)
+      expect(result.height).toBe(8)
     })
   })
 
@@ -187,29 +194,7 @@ describe('createImageInfoHelper', () => {
 })
 
 describe('onAccess コールバック', () => {
-  it('createImageSizeHelper: 画像が見つかったとき onAccess が絶対パスで呼ばれる', () => {
-    const accessed = []
-    const imageSize = createImageSizeHelper(mockPugFile, paths, null, { onAccess: p => accessed.push(p) })
-    imageSize('/images/hero.jpg')
-    expect(accessed).toHaveLength(1)
-    expect(accessed[0]).toBe(resolve(imagesDir, 'hero.jpg'))
-  })
-
-  it('createImageSizeHelper: 画像が見つからないとき onAccess は呼ばれない', () => {
-    const accessed = []
-    const imageSize = createImageSizeHelper(mockPugFile, paths, null, { onAccess: p => accessed.push(p) })
-    imageSize('/images/not-found.jpg')
-    expect(accessed).toHaveLength(0)
-  })
-
-  it('createImageInfoHelper: メイン画像で onAccess が呼ばれる', () => {
-    const accessed = []
-    const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })
-    imageInfo('/images/hero.jpg')
-    expect(accessed).toContain(resolve(imagesDir, 'hero.jpg'))
-  })
-
-  it('createImageInfoHelper: retina が存在する場合 onAccess にメイン・retina 両方が登録される', () => {
+  it('retina が存在する場合 onAccess にメイン・retina 両方が登録される', () => {
     const accessed = []
     const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })
     imageInfo('/images/hero.jpg')
@@ -217,7 +202,7 @@ describe('onAccess コールバック', () => {
     expect(accessed).toContain(resolve(imagesDir, 'hero@2x.jpg'))
   })
 
-  it('createImageInfoHelper: variant が存在する場合 onAccess にメイン・variant 両方が登録される', () => {
+  it('variant が存在する場合 onAccess にメイン・variant 両方が登録される', () => {
     const accessed = []
     const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })
     imageInfo('/images/responsive.jpg')
@@ -225,7 +210,7 @@ describe('onAccess コールバック', () => {
     expect(accessed).toContain(resolve(imagesDir, 'responsive_sp.jpg'))
   })
 
-  it('createImageInfoHelper: 画像が見つからない場合 onAccess は呼ばれない', () => {
+  it('画像が見つからない場合 onAccess は呼ばれない', () => {
     const accessed = []
     const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig, { onAccess: p => accessed.push(p) })
     imageInfo('/images/not-found.jpg')
@@ -235,5 +220,43 @@ describe('onAccess コールバック', () => {
   it('onAccess なしで呼んでもエラーにならない', () => {
     const imageInfo = createImageInfoHelper(mockPugFile, paths, null, webpConfig)
     expect(() => imageInfo('/images/hero.jpg')).not.toThrow()
+  })
+})
+
+describe('寸法のキャッシュ', () => {
+  /**
+   * 同じ画像は複数ページから参照されるので、読み取り結果をセッション中は使い回す。
+   * watcher は画像が変わったときに clearImageSizeCache() を呼ぶ責務を持つ。
+   * ここが効いていないと dev の HTML に古い width/height が焼き込まれたままになる。
+   */
+  const infoOf = src => createImageInfoHelper(mockPugFile, paths, null, compressConfig)(src)
+
+  beforeEach(() => clearImageSizeCache())
+
+  it('差し替えても、キャッシュを消すまでは前の寸法を返す', async () => {
+    expect(infoOf('/images/hero.jpg').width).toBe(800)
+
+    await createJpeg(resolve(imagesDir, 'hero.jpg'), 320, 240)
+
+    expect(infoOf('/images/hero.jpg').width).toBe(800)
+  })
+
+  it('キャッシュを消すと新しい寸法を返す', async () => {
+    infoOf('/images/hero.jpg')
+    await createJpeg(resolve(imagesDir, 'hero.jpg'), 320, 240)
+
+    clearImageSizeCache()
+
+    expect(infoOf('/images/hero.jpg')).toMatchObject({ width: 320, height: 240 })
+  })
+
+  it('retina・variant の寸法もキャッシュを消せば追随する', async () => {
+    createImageInfoHelper(mockPugFile, paths, null, compressConfig)('/images/responsive.jpg')
+    await createJpeg(resolve(imagesDir, 'responsive_sp.jpg'), 100, 80)
+
+    clearImageSizeCache()
+
+    const info = createImageInfoHelper(mockPugFile, paths, null, compressConfig)('/images/responsive.jpg')
+    expect(info.variant).toMatchObject({ width: 100, height: 80 })
   })
 })

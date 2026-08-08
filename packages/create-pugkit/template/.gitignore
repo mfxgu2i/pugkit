@@ -61,6 +61,7 @@ logs
 *.swo
 
 # ツール・キャッシュ
+.pugkit/
 .cache/
 .parcel-cache/
 .eslintcache

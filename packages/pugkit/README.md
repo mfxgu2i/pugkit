@@ -75,7 +75,6 @@ export default defineConfig({
   siteUrl: 'https://example.com/',
   subdir: '',
   outDir: 'dist',
-  debug: false,
   server: {
     port: 5555,
     host: 'localhost',
@@ -96,12 +95,12 @@ export default defineConfig({
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------- |
 | `siteUrl`                            | サイトのベースURL（`Builder.url` に使用）                                                             | `string`                                        | `''`          |
 | `subdir`                             | サブディレクトリのパス                                                                                | `string`                                        | `''`          |
-| `outDir`                             | ビルド出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可          | `string`                                        | `'dist'`      |
-| `debug`                              | デバッグモード（開発時のみ有効）                                                                      | `boolean`                                       | `false`       |
+| `outDir`                             | **build の**出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可。dev は書き込まない | `string`                                        | `'dist'`      |
+| `cacheDir`                           | dev のアセット出力先。`null` で `node_modules/.pugkit/dev`（`node_modules` が無ければ `.pugkit/dev`）。**指定先は dev 起動のたびに中身が削除される** | `string` \| `null`                              | `null`        |
 | `server.port`                        | 開発サーバーのポート番号                                                                              | `number`                                        | `5555`        |
 | `server.host`                        | 開発サーバーのホスト                                                                                  | `string`                                        | `'localhost'` |
-| `server.startPath`                   | サーバー起動時に開くパス                                                                              | `string`                                        | `'/'`         |
-| `build.clean`                        | ビルド前に `outDir` をクリーンするか（`false` にすると他リソースと共存可能）                          | `boolean`                                       | `true`        |
+| `server.startPath`                   | 起動ログに表示する URL のパス                                                                         | `string`                                        | `'/'`         |
+| `server.domDiff`                     | ライブリロードで DOM の差分適用を使うか（`false` で常にフルリロード）                                 | `boolean`                                       | `true`        |
 | `build.imageOptimization`            | 画像最適化の方式                                                                                      | `'avif'` \| `'webp'` \| `'compress'` \| `false` | `'webp'`      |
 | `build.imageOptions.avif`            | AVIF変換オプション（[Sharp AVIF options](https://sharp.pixelplumbing.com/api-output#avif)）           | `object`                                        | -             |
 | `build.imageOptions.webp`            | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）           | `object`                                        | -             |
@@ -168,7 +167,7 @@ if info.variant
   source(media='(max-width: 767px)' srcset=info.variant.src width=info.variant.width height=info.variant.height)
 ```
 
-> `imageInfo()` は `src/` 配下の画像のみ対応しています。`public/` 配下の画像は非対応です。
+> `imageInfo()` は `src/` 配下を探し、見つからなければ `public/` 配下も探します。
 
 ### Sass
 
@@ -332,14 +331,24 @@ build: {
 
 `public/` に置いたファイルはそのまま `outDir` のルートにコピーされます。faviconやOGP画像など最適化不要なファイルの置き場として使用します。
 
-### Debug Mode
+### Dev / Build の出力の違い
 
-`debug: true` のとき、開発モードでのみ以下の出力に切り替わります。
+| 対象 | dev                                       | build                        |
+| ---- | ----------------------------------------- | ---------------------------- |
+| HTML | リクエスト時ビルド + メモリ配信（ファイルに書き出さない） | 全ページビルドして書き出し   |
+| CSS  | expanded + ソースマップ                   | minify済み                   |
+| JS   | ソースマップ・`console.*` 保持            | minify済み・`console.*` 削除 |
+| 出力先 | `cacheDir`（既定 `node_modules/.pugkit/dev`） | `outDir`                     |
 
-| 対象 | 通常                         | debug: true                    |
-| ---- | ---------------------------- | ------------------------------ |
-| CSS  | minify済み                   | expanded + ソースマップ        |
-| JS   | minify済み・`console.*` 削除 | ソースマップ・`console.*` 保持 |
+> **`outDir` は build 専用です。** dev は `outDir` に書き込みも読み出しもしないため、dev のソースマップ等が本番成果物に混ざりません。
+>
+> **`outDir` は pugkit が占有します。** build のたびに中身を削除してから書き出すので、手で置いたファイル（`.htaccess`・PHP・アップロード等）は残りません。出力に含めたいものは `public/` に置いてください。
+>
+> dev が配信するのは `src` と `public` から導かれるものだけです。レガシー HTML など `outDir` にしか無いファイルを dev でも表示したい場合は `public/` に置いてください（build でも `outDir` にコピーされるので、dev と build で同じものが見えます）。
+>
+> **`cacheDir` に指定したディレクトリは dev 起動のたびに中身が削除されます。** 既存ファイルのある場所を指定しないでください（プロジェクトルート・`src`・`public`・`outDir` は起動時にエラーになります）。
+
+> 旧 `debug` オプションは廃止されました。dev は常にソースマップ付き非圧縮出力になります。
 
 ## Tech Stack
 

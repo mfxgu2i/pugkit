@@ -13,10 +13,11 @@ import { loadConfig } from '../config/index.mjs'
 /**
  * '400KB' / '1.5MB' / '102400' などをバイト数に変換
  */
-function parseThreshold(value) {
+export function parseThreshold(value) {
   if (typeof value === 'number') return value
   const str = String(value).trim().toUpperCase()
-  const match = str.match(/^([\d.]+)\s*(KB|MB|B)?$/)
+  // 小数点は1つまで。'1.2.3' を通すと parseFloat が黙って 1.2 と解釈してしまう
+  const match = str.match(/^(\d*\.?\d+)\s*(KB|MB|B)?$/)
   if (!match) throw new Error(`Invalid threshold value: "${value}"`)
   const num = parseFloat(match[1])
   const unit = match[2] || 'B'
@@ -25,15 +26,16 @@ function parseThreshold(value) {
   return Math.round(num)
 }
 
-function formatBytes(bytes) {
+export function formatBytes(bytes) {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`
   return `${bytes} B`
 }
 
-function formatRatio(original, compressed) {
-  const pct = ((original - compressed) / original) * 100
-  return `-${pct.toFixed(0)}%`
+export function formatRatio(original, compressed) {
+  // 圧縮後の方が大きくなることもあるので、符号は値そのものに任せる
+  const pct = ((compressed - original) / original) * 100
+  return `${pct > 0 ? '+' : ''}${pct.toFixed(0)}%`
 }
 
 function pad(str, len) {
@@ -116,7 +118,7 @@ async function simulateFormat(rawData, info, format, quality, imageOptions) {
     return (await image.jpeg({ ...imageOptions.jpeg, quality }).toBuffer()).length
   }
   if (format === 'png') {
-    return (await image.png(imageOptions.png).toBuffer()).length
+    return (await image.png({ ...imageOptions.png, quality }).toBuffer()).length
   }
   throw new Error(`Unknown format: ${format}`)
 }
@@ -124,7 +126,7 @@ async function simulateFormat(rawData, info, format, quality, imageOptions) {
 /**
  * 現在の config から "current format" と "current quality" を取得
  */
-function getCurrentFormatInfo(filePath, config) {
+export function getCurrentFormatInfo(filePath, config) {
   const optimization = config.build.imageOptimization
   if (optimization === 'webp') {
     return { format: 'webp', quality: config.build.imageOptions.webp.quality }

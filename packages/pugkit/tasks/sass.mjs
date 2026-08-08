@@ -1,28 +1,67 @@
 import { glob } from 'glob'
-import { readFile, writeFile } from 'node:fs/promises'
-import { relative, resolve, basename, extname } from 'node:path'
+import { writeFile } from 'node:fs/promises'
+import { relative, resolve, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as sass from 'sass'
+import * as sass from 'sass-embedded'
 import postcss from 'postcss'
 import autoprefixer from 'autoprefixer'
 import cssnano from 'cssnano'
 import { logger } from '../utils/logger.mjs'
+import { resolveRebuildTargets } from '../utils/rebuild-targets.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
+
+// dev では Embedded Sass のコンパイラプロセスを常駐させ、
+// 再コンパイルごとのプロセス起動コストを避ける（プロセス終了時に自動破棄される）
+let _devCompilerPromise = null
+
+function getDevCompiler() {
+  if (!_devCompilerPromise) {
+    _devCompilerPromise = sass.initAsyncCompiler()
+    // 初期化失敗を永続キャッシュせず、次回の呼び出しで再試行できるようにする
+    _devCompilerPromise.catch(() => {
+      _devCompilerPromise = null
+    })
+  }
+  return _devCompilerPromise
+}
+
+/**
+ * 常駐コンパイラを終了する。プロセスを抱えたままだと dev を止めても終われない。
+ * 参照を捨てるので、次に使うときは初期化からやり直す
+ */
+export async function disposeDevCompiler() {
+  const pending = _devCompilerPromise
+  _devCompilerPromise = null
+  if (!pending) return
+
+  try {
+    await (await pending).dispose()
+  } catch {
+    // 初期化に失敗していた場合。破棄すべきものが無いので何もしない
+  }
+}
+
+/**
+ * Sass の出力先。生成側と watcher の削除側で規則がずれないよう共有する
+ */
+export function sassOutputPath(relativePath, paths) {
+  return resolve(paths.output, relativePath.replace(/\.scss$/, '.css'))
+}
 
 /**
  * Sassビルドタスク
  */
 export async function sassTask(context, options = {}) {
-  const { paths, config, isProduction, isDevelopment, sassGraph, cache } = context
+  const { paths, isProduction, isDevelopment, sassGraph } = context
 
-  // debugモードはdevモード時のみ有効
-  const isDebugMode = !isProduction && config.debug
+  // dev は常に非圧縮 + ソースマップ、production は常に圧縮
+  const isDevBuild = !isProduction
 
   // 1. ビルド対象ファイルの取得（非パーシャル）
   const allEntryFiles = await glob('**/[^_]*.scss', {
     cwd: paths.src,
     absolute: true,
-    ignore: ['**/_*.scss']
+    ignore: ['**/_*.scss', '**/_*/**']
   })
 
   if (allEntryFiles.length === 0) {
@@ -33,35 +72,25 @@ export async function sassTask(context, options = {}) {
   // 2. dev モードでのインクリメンタルビルド
   let filesToBuild = allEntryFiles
 
-  if (isDevelopment && options.files?.length > 0) {
-    const changedFile = options.files[0]
-    const isPartial = basename(changedFile).startsWith('_')
+  if (isDevelopment && options.changed) {
+    filesToBuild = resolveRebuildTargets(options.changed, allEntryFiles, sassGraph)
 
-    if (isPartial) {
-      // パーシャル変更 → 依存グラフから影響を受けるエントリファイルを特定
-      const affected = sassGraph.getAffectedParents(changedFile)
-      filesToBuild = affected.filter(f => allEntryFiles.includes(f))
-
-      if (filesToBuild.length === 0) {
-        // グラフにまだ情報がない場合はフルビルド
-        filesToBuild = allEntryFiles
-      } else {
-        logger.info('sass', `Partial changed, rebuilding ${filesToBuild.length} affected file(s)`)
-      }
-    } else {
-      // 非パーシャル変更 → そのファイルだけリビルド
-      filesToBuild = allEntryFiles.filter(f => f === changedFile)
-      if (filesToBuild.length === 0) {
-        logger.skip('sass', 'Changed file is not a build target')
-        return
-      }
+    if (filesToBuild.length === 0) {
+      logger.skip('sass', 'No entry depends on the changed file')
+      return
     }
   }
 
   logger.info('sass', `Building ${filesToBuild.length} file(s)`)
 
-  // 3. 並列コンパイル
-  await Promise.all(filesToBuild.map(file => compileSassFile(file, context, isDebugMode)))
+  // 3. 並列コンパイル（dev は常駐コンパイラを再利用、build は使い捨てで確実に破棄）
+  const compiler = isDevelopment ? await getDevCompiler() : await sass.initAsyncCompiler()
+
+  try {
+    await Promise.all(filesToBuild.map(file => compileSassFile(file, context, isDevBuild, compiler)))
+  } finally {
+    if (!isDevelopment) await compiler.dispose()
+  }
 
   logger.success('sass', `Built ${filesToBuild.length} file(s)`)
 }
@@ -69,19 +98,19 @@ export async function sassTask(context, options = {}) {
 /**
  * 個別Sassファイルのコンパイル
  */
-async function compileSassFile(filePath, context, isDebugMode) {
-  const { paths, config, isProduction, sassGraph } = context
+async function compileSassFile(filePath, context, isDevBuild, compiler) {
+  const { paths, config, sassGraph } = context
 
   try {
     // Sassコンパイル
-    const result = sass.compile(filePath, {
+    const result = await compiler.compileAsync(filePath, {
       silenceDeprecations: ['legacy-js-api'],
-      style: isDebugMode ? 'expanded' : 'compressed',
+      style: isDevBuild ? 'expanded' : 'compressed',
       loadPaths: [resolve(paths.root, 'node_modules')],
       charset: false,
       quietDeps: true,
-      sourceMap: isDebugMode,
-      sourceMapIncludeSources: isDebugMode
+      sourceMap: isDevBuild,
+      sourceMapIncludeSources: isDevBuild
     })
 
     // 依存グラフを更新（loadedUrls からパーシャルの依存関係を構築）
@@ -102,8 +131,8 @@ async function compileSassFile(filePath, context, isDebugMode) {
     // PostCSS処理
     const postcssPlugins = [autoprefixer()]
 
-    // debugモード以外は常にminify
-    if (!isDebugMode) {
+    // production は常にminify
+    if (!isDevBuild) {
       postcssPlugins.push(
         cssnano({
           preset: [
@@ -120,13 +149,12 @@ async function compileSassFile(filePath, context, isDebugMode) {
       )
     }
 
-    const outputRelativePath = relative(paths.src, filePath).replace(/\.scss$/, '.css')
-    const outputPath = resolve(paths.dist, outputRelativePath)
+    const outputPath = sassOutputPath(relative(paths.src, filePath), paths)
 
     const postcssResult = await postcss(postcssPlugins).process(css, {
       from: filePath,
       to: outputPath,
-      map: isDebugMode ? { inline: false, annotation: true } : false
+      map: isDevBuild ? { inline: false, annotation: true } : false
     })
 
     css = postcssResult.css
@@ -135,8 +163,8 @@ async function compileSassFile(filePath, context, isDebugMode) {
     await ensureFileDir(outputPath)
     await writeFile(outputPath, css, 'utf8')
 
-    // debugモード時はソースマップを出力
-    if (isDebugMode && postcssResult.map) {
+    // dev はソースマップを出力
+    if (isDevBuild && postcssResult.map) {
       const mapPath = `${outputPath}.map`
       await writeFile(mapPath, postcssResult.map.toString(), 'utf8')
     }

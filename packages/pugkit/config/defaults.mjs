@@ -2,14 +2,15 @@ export const defaultConfig = {
   siteUrl: '',
   subdir: '',
   outDir: 'dist',
-  debug: false,
+  // dev のアセット出力先。null で node_modules/.pugkit/dev
+  cacheDir: null,
   server: {
     port: 5555,
     host: 'localhost',
-    startPath: '/'
+    startPath: '/',
+    domDiff: true
   },
   build: {
-    clean: true,
     imageOptimization: 'webp',
     imageInfo: {
       artDirectionSuffix: '_sp'

@@ -106,17 +106,19 @@ describe('createBuilderVars', () => {
   })
 })
 
-describe('createBuilderVars - Windows path normalization', () => {
-  it('should normalize backslashes in relativePath for depth calculation', () => {
-    const paths = { src: '/project/src' }
-    const config = { siteUrl: 'https://example.com', subdir: '' }
+describe('subdir の正規化', () => {
+  // 正規化は loadConfig で済んでいるが、ここでも独自に整形すると
+  // 規則が食い違う。実装を分けない限り、弱い方だけが残って気づけない
+  it.each([
+    ['sub', '/sub'],
+    ['/sub', '/sub'],
+    ['sub/', '/sub'],
+    ['//sub//', '/sub'],
+    ['/a/b/', '/a/b'],
+    ['', '']
+  ])('subdir: %s -> %s', (input, expected) => {
+    const vars = createBuilderVars('/proj/src/index.pug', { src: '/proj/src' }, { subdir: input })
 
-    const testPath1 = '/project/src/page.pug'
-    const result1 = createBuilderVars(testPath1, paths, config)
-    expect(result1.url.pathname).toBe('/page.html')
-
-    const testPath2 = '/project/src/nested/page.pug'
-    const result2 = createBuilderVars(testPath2, paths, config)
-    expect(result2.dir).toBe('../')
+    expect(vars.subdir).toBe(expected)
   })
 })

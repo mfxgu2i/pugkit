@@ -9,10 +9,14 @@
   "scripts": {
     "dev": "npm run dev --workspace=pugkit",
     "build": "npm run build --workspace=pugkit",
-    "test": "vitest",
+    "test": "vitest run",
     "test:ui": "vitest --ui",
     "publish:pugkit": "cd packages/pugkit && npm publish",
-    "publish:create-pugkit": "cd packages/create-pugkit && npm publish"
+    "publish:create-pugkit": "cd packages/create-pugkit && npm publish",
+    "test:watch": "vitest --project unit",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "vitest run --project e2e"
   },
   "repository": {
     "type": "git",

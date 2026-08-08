@@ -1,4 +1,6 @@
-import { resolve, isAbsolute, relative } from 'node:path'
+import { resolve, isAbsolute } from 'node:path'
+import { assertSafeToWipe } from '../utils/safe-dir.mjs'
+import { normalizeSubdir } from '../utils/subdir.mjs'
 import { existsSync } from 'node:fs'
 import { defaultConfig } from './defaults.mjs'
 
@@ -19,14 +21,13 @@ async function loadUserConfig(root) {
 function mergeConfig(defaults, user) {
   return {
     siteUrl: user.siteUrl || defaults.siteUrl,
-    subdir: user.subdir || defaults.subdir,
+    subdir: normalizeSubdir(user.subdir || defaults.subdir),
     outDir: user.outDir !== undefined ? user.outDir : defaults.outDir,
-    debug: user.debug !== undefined ? user.debug : defaults.debug,
+    cacheDir: user.cacheDir !== undefined ? user.cacheDir : defaults.cacheDir,
     server: { ...defaults.server, ...(user.server || {}) },
     build: {
       ...defaults.build,
       ...(user.build || {}),
-      clean: user.build?.clean !== undefined ? user.build.clean : defaults.build.clean,
       imageOptions: {
         webp: { ...defaults.build.imageOptions.webp, ...(user.build?.imageOptions?.webp || {}) },
         jpeg: { ...defaults.build.imageOptions.jpeg, ...(user.build?.imageOptions?.jpeg || {}) },
@@ -55,22 +56,28 @@ function mergeConfig(defaults, user) {
   }
 }
 
+/**
+ * build は outDir を丸ごと削除してから書き出す。指定を誤るとソースや依存が消え、
+ * しかも削除は成功扱いなので失ってから気づくことになる。警告ではなく中止する。
+ */
 function validateConfig(config) {
   const root = config.root
-  const outDir = config.outDir
-  const resolvedOutDir = isAbsolute(outDir) ? outDir : resolve(root, outDir)
+  const resolvedOutDir = isAbsolute(config.outDir) ? config.outDir : resolve(root, config.outDir)
 
-  // relative() を使うことでWindows（バックスラッシュ）でも正しく動作する
-  const isSameAsRoot = resolvedOutDir === root
-  const relToRoot = relative(resolvedOutDir, root)
-  const isParentOfRoot = relToRoot !== '' && !relToRoot.startsWith('..')
-
-  if (isSameAsRoot || isParentOfRoot) {
-    console.warn(
-      `[pugkit] outDir "${outDir}" はプロジェクトルートと同じか親ディレクトリです。` +
-        `ソースファイルが上書きされる可能性があるため、別のディレクトリを指定してください。`
-    )
-  }
+  assertSafeToWipe(resolvedOutDir, {
+    label: 'outDir',
+    protect: [
+      [root, 'プロジェクトルート'],
+      [resolve(root, 'src'), 'src'],
+      [resolve(root, 'public'), 'public'],
+      [resolve(root, 'node_modules'), 'node_modules']
+    ],
+    keepOut: [
+      [resolve(root, 'src'), 'src'],
+      [resolve(root, 'public'), 'public']
+    ],
+    keepOutReason: 'ビルド出力がソースに混ざります'
+  })
 
   return config
 }
@@ -83,16 +90,5 @@ export async function loadConfig(root = process.cwd(), inlineConfig = {}) {
     config.siteUrl = inlineConfig.siteUrl
   }
   validateConfig(config)
-  return config
-}
-
-export async function resolveConfig(inlineConfig = {}) {
-  const root = inlineConfig.root || process.cwd()
-  const config = await loadConfig(root)
-
-  if (inlineConfig.server) {
-    Object.assign(config.server, inlineConfig.server)
-  }
-
   return config
 }

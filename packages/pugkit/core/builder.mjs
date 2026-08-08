@@ -2,6 +2,14 @@ import { BuildContext } from './context.mjs'
 import { logger } from '../utils/logger.mjs'
 import { cleanDir } from '../utils/file.mjs'
 
+// ビルドの順序。同じ段のタスクは並列に走る。
+// Pug は Sass/Script の出力を参照するため中段に置く
+const BUILD_PHASES = [
+  ['sass', 'script', 'sprite'],
+  ['pug'],
+  ['image', 'svg', 'copy']
+]
+
 /**
  * メインビルダー
  */
@@ -9,6 +17,8 @@ export class Builder {
   constructor(config, mode = 'development') {
     this.context = new BuildContext(config, mode)
     this.tasks = {}
+    // watch() で作られる。close() で止めるために保持する
+    this.watcher = null
   }
 
   /**
@@ -34,85 +44,43 @@ export class Builder {
     const { context } = this
     const startTime = Date.now()
 
-    const shouldClean = context.config.build.clean
-
     logger.info('build', `Building in ${context.mode} mode`)
 
-    try {
-      // 1. クリーンアップ
-      if (shouldClean) {
-        await this.clean()
-      } else {
-        logger.info('build', 'Skipping clean (clean: false)')
-      }
+    await this.clean()
 
-      // 2. 並列ビルド（軽量タスク + スプライト）
-      const parallelTasks = []
-
-      if (this.tasks.sass) {
-        parallelTasks.push({ name: 'sass', fn: this.tasks.sass })
-      }
-      if (this.tasks.script) {
-        parallelTasks.push({ name: 'script', fn: this.tasks.script })
-      }
-      if (this.tasks.sprite) {
-        parallelTasks.push({ name: 'sprite', fn: this.tasks.sprite })
-      }
-
-      if (parallelTasks.length > 0) {
-        await context.runParallel(parallelTasks)
-      }
-
-      // 3. Pug（Sass/Scriptの出力を参照するため後）
-      if (this.tasks.pug) {
-        await context.runTask('pug', this.tasks.pug)
-      }
-
-      // 4. 最終処理（並列）
-      const finalTasks = []
-
-      if (this.tasks.image) {
-        finalTasks.push({ name: 'image', fn: this.tasks.image })
-      }
-      if (this.tasks.svg) {
-        finalTasks.push({ name: 'svg', fn: this.tasks.svg })
-      }
-      if (this.tasks.copy) {
-        finalTasks.push({ name: 'copy', fn: this.tasks.copy })
-      }
-
-      if (finalTasks.length > 0) {
-        await context.runParallel(finalTasks)
-      }
-
-      const elapsed = Date.now() - startTime
-      logger.success('build', `Completed in ${elapsed}ms`)
-    } catch (error) {
-      logger.error('build', error.message)
-      throw error
+    for (const phase of BUILD_PHASES) {
+      const tasks = phase.map(name => this.tasks[name]).filter(Boolean)
+      if (tasks.length > 0) await Promise.all(tasks.map(task => task(context)))
     }
+
+    logger.success('build', `Completed in ${Date.now() - startTime}ms`)
   }
 
   /**
    * 監視モード（開発）
    */
   async watch() {
-    const { context } = this
+    // 監視の開始が先。サーバーはその後に待ち受けを始める
+    if (this.tasks.watch) this.watcher = await this.tasks.watch(this.context, { runTask: this.runTask.bind(this) })
+    if (this.tasks.server) await this.tasks.server(this.context)
+  }
 
-    try {
-      // ファイル監視開始
-      if (this.tasks.watch) {
-        await context.runTask('watch', this.tasks.watch)
-      }
+  /**
+   * dev を止めて、抱えている常駐プロセスも終わらせる。
+   *
+   * Sass と esbuild の常駐プロセスはモジュール単位で共有されるので、
+   * 停止の指示はプロセス全体の話になる。watcher.stop() に含めると、
+   * 同一プロセスで別の dev が動いている場合にそちらまで巻き込む
+   */
+  async close() {
+    await this.watcher?.stop()
+    this.context.server?.close()
 
-      // 開発サーバー起動
-      if (this.tasks.server) {
-        await context.runTask('server', this.tasks.server)
-      }
-    } catch (error) {
-      logger.error('watch', error.message)
-      throw error
-    }
+    const [{ disposeDevCompiler }, { disposeDevContext }] = await Promise.all([
+      import('../tasks/sass.mjs'),
+      import('../tasks/script.mjs')
+    ])
+    await Promise.all([disposeDevCompiler(), disposeDevContext()])
   }
 
   /**
@@ -122,23 +90,29 @@ export class Builder {
     const task = this.tasks[taskName]
 
     if (!task) {
-      throw new Error(`Task not found: ${taskName}`)
+      throw new Error(
+        `タスク "${taskName}" は登録されていません。利用できるタスク: ${Object.keys(this.tasks).join(', ')}`
+      )
     }
 
-    await this.context.runTask(taskName, task, options)
+    await task(this.context, options)
   }
 
   /**
    * クリーンアップ
    */
   async clean() {
-    const distPath = this.context.paths.dist
-    logger.info('clean', 'Cleaning dist directory')
+    // subdir の中だけでなく outDir 全体を作り直す。
+    // subdir を変更したときに前の階層が残ると、src に無いページが本番に生き続ける
+    logger.info('clean', 'Cleaning output directory')
 
-    await cleanDir(distPath)
+    await cleanDir(this.context.paths.outputRoot)
 
+    // 出力を消したら、それを前提にしていた状態も一緒に捨てる
     this.context.cache.clear()
-    this.context.graph.clear()
+    for (const graph of [this.context.graph, this.context.sassGraph, this.context.scriptGraph, this.context.imageGraph]) {
+      graph.clear()
+    }
 
     logger.success('clean', 'Completed')
   }

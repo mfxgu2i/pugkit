@@ -12,10 +12,10 @@ export async function svgTask(context, options = {}) {
   const { paths } = context
 
   // 特定のファイルが指定されている場合（watch時）
-  if (options.files && Array.isArray(options.files)) {
-    logger.info('svg', `Optimizing ${options.files.length} SVG file(s)`)
-    await Promise.all(options.files.map(file => optimizeSvg(file, context)))
-    logger.success('svg', `Optimized ${options.files.length} SVG file(s)`)
+  // 変更されたファイルだけ（dev の監視時）
+  if (options.changed) {
+    await optimizeSvg(options.changed, context)
+    logger.success('svg', `Optimized ${relative(paths.src, options.changed)}`)
     return
   }
 
@@ -56,7 +56,7 @@ async function optimizeSvg(filePath, context) {
     })
 
     // 出力
-    const outputPath = resolve(paths.dist, relativePath)
+    const outputPath = resolve(paths.output, relativePath)
     await ensureFileDir(outputPath)
     await writeFile(outputPath, result.data, 'utf8')
   } catch (error) {

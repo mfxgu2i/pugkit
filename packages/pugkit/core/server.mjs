@@ -4,65 +4,57 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
 import sirv from 'sirv'
 import { logger } from '../utils/logger.mjs'
+import { publicOverrideFor } from '../utils/page-conflict.mjs'
+import { subdirPrefix } from '../utils/subdir.mjs'
+import { SSE_PATH, computeMorphSignature, createReloadTag } from './dev/client-script.mjs'
+import { resolvePugSource } from './dev/page-source.mjs'
+import { createLazyPageBuilder } from './dev/lazy-builder.mjs'
+import { buildErrorPage, guardStaticServe, injectReload, sendHtml } from './dev/response.mjs'
 
-const SSE_PATH = '/__pugkit_sse'
-
-/**
- * HTMLに挿入するライブリロードクライアントスクリプト。
- */
-const liveReloadScript = `<script>
-(function() {
-  var es = new EventSource('${SSE_PATH}');
-  es.addEventListener('reload', function() {
-    location.reload();
-  });
-  es.addEventListener('css-update', function() {
-    document.querySelectorAll('link[rel="stylesheet"]').forEach(function(link) {
-      var url = new URL(link.href);
-      if (url.origin !== location.origin) return;
-      url.searchParams.set('t', Date.now());
-      link.href = url.toString();
-    });
-  });
-  es.onerror = function() {
-    es.close();
-    setTimeout(function() { location.reload(); }, 1000);
-  };
-  window.addEventListener('beforeunload', function() {
-    es.close();
-  });
-})();
-</script>`
 
 /**
- * 開発サーバータスク（SSE + sirv）
+ * 開発サーバータスク（SSE + 遅延ビルド + sirv）
  */
 export async function serverTask(context, options = {}) {
   const { paths, config } = context
 
-  if (!existsSync(paths.dist)) {
-    await mkdir(paths.dist, { recursive: true })
+  if (!existsSync(paths.output)) {
+    await mkdir(paths.output, { recursive: true })
   }
 
   const port = config.server?.port ?? 5555
   const host = config.server?.host ?? 'localhost'
-  const subdir = config.subdir ? '/' + config.subdir.replace(/^\/|\/$/g, '') : ''
+  const subdir = subdirPrefix(config.subdir)
   const startPath = (config.server?.startPath || '/').replace(/^\//, '')
   const fullStartPath = subdir ? `${subdir}/${startPath}` : `/${startPath}`
 
-  const serveRoot = paths.outDir
+  const serveRoot = paths.outputRoot
+
+  // DOM 差分更新（domDiff）はデフォルト有効。無効化するとフルリロードに戻る
+  const domDiff = config.server?.domDiff !== false
+  // 指紋を持たないタグは常にフルリロードになる。
+  // エラーページと、Pug 由来でない既存 HTML（内容の作られ方を pugkit が知らない）が対象
+  const errorPageTag = createReloadTag({ scroll: false, domDiff: false })
+  const staticPageTag = createReloadTag({ domDiff })
 
   const clients = new Set()
+  const getPage = createLazyPageBuilder(context)
 
-  const staticServe = sirv(serveRoot, {
+  const sirvOptions = {
     dev: true,
     extensions: ['html'],
-    setHeaders(res, filePath) {
-      if (filePath.endsWith('.css') || filePath.endsWith('.js')) {
-        res.setHeader('Cache-Control', 'no-cache')
-      }
+    // dev では常に取り直させる。画像や SVG も差し替えた瞬間に反映したい
+    setHeaders(res) {
+      res.setHeader('Cache-Control', 'no-cache')
     }
-  })
+  }
+
+  // 配信するのは src から導かれるものだけ。build の出力先は参照しない
+  // （前回ビルドの成果物が現在のソースの代わりに見えたり、src から消したページが
+  //   復活したりする）。outDir にしか無いファイルは public/ に置けば dev でも扱える
+  const serveStatic = guardStaticServe(sirv(serveRoot, sirvOptions), error =>
+    logger.warn('server', `配信に失敗しました: ${error.message}`)
+  )
 
   const httpServer = http.createServer((req, res) => {
     const urlPath = req.url?.split('?')[0] ?? '/'
@@ -85,31 +77,58 @@ export async function serverTask(context, options = {}) {
       return
     }
 
-    // ── HTML へのライブリロードスクリプト注入 ───────────
-    const decoded = decodeURIComponent(urlPath)
-    const candidates = [
-      path.join(serveRoot, decoded === '/' ? 'index.html' : decoded.replace(/\/$/, '') + '/index.html'),
-      path.join(serveRoot, decoded === '/' ? 'index.html' : decoded + '.html'),
-      path.join(serveRoot, decoded)
-    ]
-    const htmlFile = candidates.find(p => p.endsWith('.html') && existsSync(p))
+    let decoded
+    try {
+      decoded = decodeURIComponent(urlPath)
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end('400 Bad Request')
+      return
+    }
+
+    // ── Pug ページ: リクエスト時遅延ビルド + メモリ配信 ──
+    // public に同名の HTML があれば build では copy が Pug の出力を上書きする。
+    // dev だけ Pug を返すと「dev で見たページが本番に出ない」ことになるので合わせる
+    const pugSource = resolvePugSource(decoded, paths, subdir)
+    const pugFile = pugSource && publicOverrideFor(pugSource, paths) ? null : pugSource
+
+    if (pugFile) {
+      getPage(pugFile)
+        .then(html => {
+          // 指紋は判定結果ではなく値として渡す。差分適用してよいかは、
+          // それぞれのタブが自分の持つ指紋と比べて決める
+          sendHtml(res, 200, injectReload(html, createReloadTag({ signature: computeMorphSignature(html), domDiff })))
+        })
+        .catch(error => {
+          if (!res.headersSent) sendHtml(res, 500, buildErrorPage(pugFile, error, paths, errorPageTag))
+        })
+      return
+    }
+
+    // ── 非Pugの既存HTML（public 由来）: 読み出し + スクリプト注入 ───
+    const isInside = (p, root) => {
+      const abs = path.resolve(p)
+      return abs === root || abs.startsWith(root + path.sep)
+    }
+    // 候補順は sirv・resolvePugSource と揃える（フラットファイル優先、
+    // 末尾スラッシュは先に除去して同順）。ここだけ順序が違うと、同じ形の URL でも
+    // Pug ページと public 由来の HTML で別の階層のファイルが選ばれてしまう
+    const base = decoded !== '/' ? decoded.replace(/\/+$/, '') : decoded
+    const htmlCandidatesIn = root =>
+      (base === '/'
+        ? [path.join(root, 'index.html')]
+        : [path.join(root, base), path.join(root, `${base}.html`), path.join(root, base, 'index.html')]
+      ).filter(p => p.endsWith('.html') && isInside(p, root) && existsSync(p))
+
+    const htmlFile = htmlCandidatesIn(serveRoot)[0]
 
     if (htmlFile) {
       readFile(htmlFile, 'utf-8')
         .then(html => {
-          html = html.includes('</body>')
-            ? html.replace('</body>', liveReloadScript + '</body>')
-            : html + liveReloadScript
-          const buf = Buffer.from(html, 'utf-8')
-          res.writeHead(200, {
-            'Content-Type': 'text/html; charset=utf-8',
-            'Content-Length': buf.length,
-            'Cache-Control': 'no-cache'
-          })
-          res.end(buf)
+          sendHtml(res, 200, injectReload(html, staticPageTag))
         })
         .catch(() => {
-          staticServe(req, res, () => {
+          serveStatic(req, res, () => {
             res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
             res.end('404 Not Found')
           })
@@ -118,7 +137,7 @@ export async function serverTask(context, options = {}) {
     }
 
     // ── sirv で静的ファイルを配信 ───────────────────────
-    staticServe(req, res, () => {
+    serveStatic(req, res, () => {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
       res.end('404 Not Found')
     })
@@ -136,8 +155,17 @@ export async function serverTask(context, options = {}) {
   }
 
   context.server = {
-    reload() {
-      broadcast('reload')
+    // 実際に待ち受けているポート（port: 0 を指定した場合は OS が割り当てた値）
+    get port() {
+      return httpServer.address()?.port ?? port
+    },
+    // 繋がっているブラウザの数。切断されたものが残り続けていないか確かめられる
+    get clientCount() {
+      return clients.size
+    },
+    // kind: 'html' = Pug 由来の変更（DOM 差分更新の対象）、'full' = フルリロードが必要
+    reload(kind = 'full') {
+      broadcast('reload', kind)
     },
     reloadCSS() {
       broadcast('css-update')

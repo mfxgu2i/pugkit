@@ -26,29 +26,34 @@ export class DependencyGraph {
   }
 
   /**
+   * このファイルについて依存関係を知っているか（親としても依存先としても）。
+   * 「依存が無い」と「まだ何も分かっていない」を区別するために使う
+   */
+  has(file) {
+    return this.edges.has(file) || this.reverseEdges.has(file)
+  }
+
+  /**
    * パーシャル変更時に再ビルドが必要な親ファイルを取得
    */
   getAffectedParents(dependency) {
     const affected = new Set()
+    // キューに入れる前に既訪問か確かめるので、各ノードは高々1回しか処理されない。
+    // 循環参照（JS の相互 import など）があっても停止する
+    const queued = new Set([dependency])
     const queue = [dependency]
-    const visited = new Set()
 
     while (queue.length > 0) {
-      const current = queue.shift()
+      const parents = this.reverseEdges.get(queue.shift())
+      if (!parents) continue
 
-      if (visited.has(current)) {
-        continue
-      }
-      visited.add(current)
-
-      const parents = this.reverseEdges.get(current)
-
-      if (parents) {
-        parents.forEach(parent => {
-          affected.add(parent)
-          // 連鎖的な依存もチェック
+      for (const parent of parents) {
+        affected.add(parent)
+        // 連鎖的な依存もたどる
+        if (!queued.has(parent)) {
+          queued.add(parent)
           queue.push(parent)
-        })
+        }
       }
     }
 
@@ -56,35 +61,42 @@ export class DependencyGraph {
   }
 
   /**
-   * ファイルの依存関係をクリア
+   * ファイルが持つ依存をクリアする（依存を登録し直す前に呼ぶ）。
+   *
+   * 「このファイルが誰に依存しているか」だけを消す。
+   * 「誰がこのファイルに依存しているか」は他のファイルが持つ情報なので触らない
+   * （消すと、そのファイルを作り直すまで復元されず、変更が反映されなくなる）。
    */
   clearDependencies(file) {
-    // 親としての依存をクリア
     const deps = this.edges.get(file)
-    if (deps) {
-      deps.forEach(dep => {
-        const parents = this.reverseEdges.get(dep)
-        if (parents) {
-          parents.delete(file)
-          if (parents.size === 0) {
-            this.reverseEdges.delete(dep)
-          }
-        }
-      })
-      this.edges.delete(file)
+    if (!deps) return
+
+    for (const dep of deps) {
+      const parents = this.reverseEdges.get(dep)
+      if (!parents) continue
+
+      parents.delete(file)
+      if (parents.size === 0) this.reverseEdges.delete(dep)
     }
 
-    // 依存としての親をクリア
+    this.edges.delete(file)
+  }
+
+  /**
+   * ファイルをグラフから完全に取り除く（ファイル自体が削除されたときに呼ぶ）。
+   * 双方向の辺を消す。
+   */
+  removeFile(file) {
+    this.clearDependencies(file)
+
     const parents = this.reverseEdges.get(file)
-    if (parents) {
-      parents.forEach(parent => {
-        const deps = this.edges.get(parent)
-        if (deps) {
-          deps.delete(file)
-        }
-      })
-      this.reverseEdges.delete(file)
+    if (!parents) return
+
+    for (const parent of parents) {
+      this.edges.get(parent)?.delete(file)
     }
+
+    this.reverseEdges.delete(file)
   }
 
   /**
