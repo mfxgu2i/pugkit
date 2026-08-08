@@ -43,6 +43,27 @@ describe('出力ディレクトリの作り直し', () => {
   })
 })
 
+describe('消してはいけない場所を outDir にしたとき', () => {
+  /**
+   * build は outDir を丸ごと削除してから書き出す。指定を誤ると
+   * ソースや依存が消える。しかも削除は成功扱いなので、失ってから気づくことになる。
+   *
+   * 設定の検査だけでなく「実際に消えないこと」も固定する
+   * （検査を通り抜ける経路が増えたときに気づけるように）
+   */
+  it.each([['src'], ['public'], ['node_modules']])('outDir が %s でも中身を消さない', async target => {
+    const project = await createTempProject({
+      ...minimalProjectFiles({ 'pugkit.config.mjs': `export default { outDir: '${target}' }\n` }),
+      'public/keep.txt': 'keep\n',
+      'node_modules/dep/index.js': 'module.exports = 1\n'
+    })
+
+    await expect(build(project.root)).rejects.toThrow()
+
+    expect(await listFiles(project.path(target))).not.toEqual([])
+  })
+})
+
 describe('廃止された build.clean', () => {
   // 設定が残っていても効かない。作り直しを止める手段はもう無い
   it('指定されていても出力ディレクトリを作り直す', async () => {

@@ -89,7 +89,14 @@ describe('outDir の安全確認', () => {
     ['空文字（プロジェクトルート）', "''"],
     ['カレント', "'.'"],
     ['親ディレクトリ', "'..'"],
-    ['さらに上', "'../..'"]
+    ['さらに上', "'../..'"],
+    // ソースや依存を丸ごと消してしまう指定。cacheDir 側と同じ守りが要る
+    ['src そのもの', "'src'"],
+    ['public そのもの', "'public'"],
+    ['node_modules そのもの', "'node_modules'"],
+    ['src を内包するパス', "'.'"],
+    ['src の配下', "'src/out'"],
+    ['public の配下', "'public/out'"]
   ])('%s は拒否する', async (_label, value) => {
     const project = await createTempProject({
       'pugkit.config.mjs': `export default { outDir: ${value} }\n`

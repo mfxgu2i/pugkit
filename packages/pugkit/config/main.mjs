@@ -1,4 +1,5 @@
-import { resolve, isAbsolute, relative } from 'node:path'
+import { resolve, isAbsolute } from 'node:path'
+import { assertSafeToWipe } from '../utils/safe-dir.mjs'
 import { existsSync } from 'node:fs'
 import { defaultConfig } from './defaults.mjs'
 
@@ -62,23 +63,28 @@ function mergeConfig(defaults, user) {
   }
 }
 
+/**
+ * build は outDir を丸ごと削除してから書き出す。指定を誤るとソースや依存が消え、
+ * しかも削除は成功扱いなので失ってから気づくことになる。警告ではなく中止する。
+ */
 function validateConfig(config) {
   const root = config.root
-  const outDir = config.outDir
-  const resolvedOutDir = isAbsolute(outDir) ? outDir : resolve(root, outDir)
+  const resolvedOutDir = isAbsolute(config.outDir) ? config.outDir : resolve(root, config.outDir)
 
-  // relative() を使うことでWindows（バックスラッシュ）でも正しく動作する
-  const isSameAsRoot = resolvedOutDir === root
-  const relToRoot = relative(resolvedOutDir, root)
-  const isParentOfRoot = relToRoot !== '' && !relToRoot.startsWith('..')
-
-  // build の clean はここを rm -rf するため、警告ではなく中止する
-  if (isSameAsRoot || isParentOfRoot) {
-    throw new Error(
-      `[pugkit] outDir "${outDir}" はプロジェクトルートと同じか親ディレクトリです。` +
-        `ソースファイルが削除されるため、別のディレクトリを指定してください。`
-    )
-  }
+  assertSafeToWipe(resolvedOutDir, {
+    label: 'outDir',
+    protect: [
+      [root, 'プロジェクトルート'],
+      [resolve(root, 'src'), 'src'],
+      [resolve(root, 'public'), 'public'],
+      [resolve(root, 'node_modules'), 'node_modules']
+    ],
+    keepOut: [
+      [resolve(root, 'src'), 'src'],
+      [resolve(root, 'public'), 'public']
+    ],
+    keepOutReason: 'ビルド出力がソースに混ざります'
+  })
 
   return config
 }

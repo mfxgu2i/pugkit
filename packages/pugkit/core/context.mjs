@@ -1,4 +1,5 @@
-import { resolve, isAbsolute, relative } from 'node:path'
+import { resolve, isAbsolute } from 'node:path'
+import { assertSafeToWipe } from '../utils/safe-dir.mjs'
 import { existsSync } from 'node:fs'
 import { CacheManager } from './cache.mjs'
 import { DependencyGraph } from './graph.mjs'
@@ -10,38 +11,22 @@ import { DependencyGraph } from './graph.mjs'
 function assertSafeDevOutDir(dir, config) {
   const root = config.root
   const outDir = config.outDir ?? 'dist'
-  const contains = (parent, child) => {
-    const rel = relative(parent, child)
-    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
-  }
-
-  // dir がこれらを内包すると、起動時の削除で巻き込んで消してしまう
-  const mustNotContain = [
-    [root, 'プロジェクトルート'],
-    [resolve(root, 'src'), 'src'],
-    [resolve(root, 'public'), 'public'],
-    [isAbsolute(outDir) ? outDir : resolve(root, outDir), 'outDir（build の出力先）']
+  const src = resolve(root, 'src')
+  const publicDir = resolve(root, 'public')
+  const buildOut = isAbsolute(outDir) ? outDir : resolve(root, outDir)
+  // 配下を禁じる対象。プロジェクトルート配下は既定値もそうなので許可する
+  const keepOut = [
+    [src, 'src'],
+    [publicDir, 'public'],
+    [buildOut, 'outDir（build の出力先）']
   ]
 
-  for (const [target, label] of mustNotContain) {
-    if (contains(dir, target)) {
-      throw new Error(`cacheDir に${label}を含むパスは指定できません。dev サーバー起動時に中身が削除されます: ${dir}`)
-    }
-  }
-
-  // これらの配下に置くと dev の生成物が src や build 成果物に混ざる
-  // （プロジェクトルート配下は既定値もそうなので許可する）
-  const mustNotBeInside = [
-    [resolve(root, 'src'), 'src'],
-    [resolve(root, 'public'), 'public'],
-    [isAbsolute(outDir) ? outDir : resolve(root, outDir), 'outDir（build の出力先）']
-  ]
-
-  for (const [target, label] of mustNotBeInside) {
-    if (contains(target, dir)) {
-      throw new Error(`cacheDir に${label}の配下は指定できません。dev の生成物が混ざります: ${dir}`)
-    }
-  }
+  assertSafeToWipe(dir, {
+    label: 'cacheDir',
+    protect: [[root, 'プロジェクトルート'], ...keepOut],
+    keepOut,
+    keepOutReason: 'dev の生成物が混ざります'
+  })
 }
 
 /**
