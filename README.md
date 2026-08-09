@@ -46,13 +46,14 @@ npm create pugkit@latest
 
 pugkit 自体を触る人向け。使い方は上の Documentation を参照してください。
 
-| 文書                                      | 内容                                             |
-| ----------------------------------------- | ------------------------------------------------ |
-| [architecture.md](./docs/architecture.md) | 全体の組み立てと、守るべき不変条件               |
-| [adr/](./docs/adr/)                       | 設計判断の記録。なぜその形なのか、何を却下したか |
-| [testing.md](./docs/testing.md)           | テストの層分けと書き方の指針                     |
-| [release.md](./docs/release.md)           | リリース手順                                     |
-| [todo.md](./docs/todo.md)                 | 既知の課題と、判断済みで今はやらないこと         |
+| 文書                                              | 内容                                             |
+| ------------------------------------------------- | ------------------------------------------------ |
+| [architecture.md](./docs/architecture.md)         | 全体の組み立てと、守るべき不変条件               |
+| [adr/](./docs/adr/)                               | 設計判断の記録。なぜその形なのか、何を却下したか |
+| [testing.md](./docs/testing.md)                   | テストの層分けと書き方の指針                     |
+| [release.md](./docs/release.md)                   | リリース手順                                     |
+| [todo.md](./docs/todo.md)                         | 既知の課題と、判断済みで今はやらないこと         |
+| [planned-features.md](./docs/planned-features.md) | やると決めていて、まだ手を付けていないもの       |
 
 ### 開発の始め方
 
