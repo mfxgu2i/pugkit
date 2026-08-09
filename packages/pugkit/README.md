@@ -11,7 +11,7 @@
 
 ## How To Use
 
-Node.js 18 以上が必要です。
+Node.js 22 以上が必要です。
 
 ```sh
 $ npm install --save-dev pugkit
@@ -105,10 +105,12 @@ export default defineConfig({
     startPath: '/'
   },
   build: {
-    // 'avif' | 'webp' | 'compress'
-    imageOptimization: 'webp',
-    // src の画像を何倍の原本として扱うか
-    imageSourceDensity: 2,
+    image: {
+      // 'avif' | 'webp' | 'compress'
+      format: 'webp',
+      // src の画像を何倍の原本として扱うか
+      sourceDensity: 2
+    },
     html: {
       indent_size: 2,
       wrap_line_length: 0
@@ -119,25 +121,47 @@ export default defineConfig({
 
 指定しなかった項目はデフォルト値が使われます。全項目は次の表を参照してください。
 
-| Option                               | Description                                                                                                                                          | Type / Values                        | Default       |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------- |
-| `siteUrl`                            | サイトのベースURL（`Builder.url` に使用）                                                                                                            | `string`                             | `''`          |
-| `subdir`                             | サイトを配置するサブディレクトリ。出力先が `outDir/<subdir>/` になり、dev の URL にも付く。`Builder.subdir` / `Builder.url` にも反映される           | `string`                             | `''`          |
-| `outDir`                             | build の出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可。dev は書き込まない。指定できる場所に制限あり（下記） | `string`                             | `'dist'`      |
-| `cacheDir`                           | dev のアセット出力先。`null` で `node_modules/.pugkit/dev`（`node_modules` が無ければ `.pugkit/dev`）。指定先は dev 起動のたびに作り直される（下記） | `string` \| `null`                   | `null`        |
-| `server.port`                        | 開発サーバーのポート番号                                                                                                                             | `number`                             | `5555`        |
-| `server.host`                        | 開発サーバーのホスト                                                                                                                                 | `string`                             | `'localhost'` |
-| `server.startPath`                   | 起動ログに表示する URL のパス                                                                                                                        | `string`                             | `'/'`         |
-| `server.domDiff`                     | ライブリロードで DOM の差分適用を使うか（`false` で常にフルリロード）                                                                                | `boolean`                            | `true`        |
-| `build.imageOptimization`            | 画像最適化の方式                                                                                                                                     | `'avif'` \| `'webp'` \| `'compress'` | `'webp'`      |
-| `build.imageSourceDensity`           | `src/` の画像を何倍の原本として扱うか。`2` なら等倍版を生成して `srcset` を出す                                                                      | `1` \| `2`                           | `2`           |
-| `build.imageOptions.avif`            | AVIF変換オプション（[Sharp AVIF options](https://sharp.pixelplumbing.com/api-output#avif)）                                                          | `object`                             | -             |
-| `build.imageOptions.webp`            | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）                                                          | `object`                             | -             |
-| `build.imageOptions.jpeg`            | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）                                                          | `object`                             | -             |
-| `build.imageOptions.png`             | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）                                                             | `object`                             | -             |
-| `build.imageInfo.artDirectionSuffix` | アートディレクション用画像のサフィックス（`_sp`, `_tb`, `_pc` など）                                                                                 | `string`                             | `'_sp'`       |
-| `build.imageOverrides`               | 特定画像に個別のSharpオプションを適用（グローバルオプションに上書きマージ）                                                                          | `Record<string, object>`             | `{}`          |
-| `build.html`                         | HTML整形オプション（[js-beautify html options](https://github.com/beautify-web/js-beautify#options)）                                                | `object`                             | see below     |
+| Option                           | Description                                                                                                                                          | Type / Values                        | Default       |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------- |
+| `siteUrl`                        | サイトのベースURL（`Builder.url` に使用）                                                                                                            | `string`                             | `''`          |
+| `subdir`                         | サイトを配置するサブディレクトリ。出力先が `outDir/<subdir>/` になり、dev の URL にも付く。`Builder.subdir` / `Builder.url` にも反映される           | `string`                             | `''`          |
+| `outDir`                         | build の出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可。dev は書き込まない。指定できる場所に制限あり（下記） | `string`                             | `'dist'`      |
+| `cacheDir`                       | dev のアセット出力先。`null` で `node_modules/.pugkit/dev`（`node_modules` が無ければ `.pugkit/dev`）。指定先は dev 起動のたびに作り直される（下記） | `string` \| `null`                   | `null`        |
+| `server.port`                    | 開発サーバーのポート番号                                                                                                                             | `number`                             | `5555`        |
+| `server.host`                    | 開発サーバーのホスト                                                                                                                                 | `string`                             | `'localhost'` |
+| `server.startPath`               | 起動ログに表示する URL のパス                                                                                                                        | `string`                             | `'/'`         |
+| `server.domDiff`                 | ライブリロードで DOM の差分適用を使うか（`false` で常にフルリロード）                                                                                | `boolean`                            | `true`        |
+| `build.image.format`             | 画像の出力形式                                                                                                                                       | `'avif'` \| `'webp'` \| `'compress'` | `'webp'`      |
+| `build.image.sourceDensity`      | `src/` の画像を何倍の原本として扱うか。`2` なら等倍版を生成して `srcset` を出す                                                                      | `1` \| `2`                           | `2`           |
+| `build.image.options.avif`       | AVIF変換オプション（[Sharp AVIF options](https://sharp.pixelplumbing.com/api-output#avif)）                                                          | `object`                             | -             |
+| `build.image.options.webp`       | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）                                                          | `object`                             | -             |
+| `build.image.options.jpeg`       | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）                                                          | `object`                             | -             |
+| `build.image.options.png`        | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）                                                             | `object`                             | -             |
+| `build.image.artDirectionSuffix` | アートディレクション用画像のサフィックス（`_sp`, `_tb`, `_pc` など）                                                                                 | `string`                             | `'_sp'`       |
+| `build.image.overrides`          | 特定画像に個別のSharpオプションを適用（グローバルオプションに上書きマージ）                                                                          | `Record<string, object>`             | `{}`          |
+| `build.html`                     | HTML整形オプション（[js-beautify html options](https://github.com/beautify-web/js-beautify#options)）                                                | `object`                             | see below     |
+
+### 設定キーの確認
+
+キーの綴りを間違えても値は既定のままで、ビルドは成功します。それだけでは出力を1つずつ確かめるまで気づけないので、起動時にキーを検査します。
+
+実在しないキーは警告して既定値のまま続けます。
+
+```
+⚠ config pugkit.config.mjs に不明なキーがあります（無視されます）: build.imageOptimizatoin
+```
+
+v1 から名前が変わったキーは中止します。指定した値が効かないまま出力されるためです。移行先を添えるので、そのまま置き換えてください。
+
+| v1                         | v2                               |
+| -------------------------- | -------------------------------- |
+| `build.imageOptimization`  | `build.image.format`             |
+| `build.imageSourceDensity` | `build.image.sourceDensity`      |
+| `build.imageOptions`       | `build.image.options`            |
+| `build.imageOverrides`     | `build.image.overrides`          |
+| `build.imageInfo`          | `build.image.artDirectionSuffix` |
+
+`build.html`・`build.image.options.*`・`build.image.overrides` の中身は検査しません。js-beautify や Sharp のオプション、利用者のファイル名がそのまま入るためです。
 
 ## Features
 
@@ -164,24 +188,32 @@ meta(property='og:url', content=Builder.url.href)
 | `Builder.url.pathname` | 現在のページのパス                 | `/about/`                                 |
 | `Builder.url.href`     | 完全なURL                          | `https://example.com/subdirectory/about/` |
 
+`origin` / `base` / `href` は `siteUrl` から組み立てます。`siteUrl` が空のままこれらを参照すると、`/about/` のような相対パスが返ります。OGP や canonical に入れても例外にならないため、参照されたときに知らせます。
+
+```
+⚠ config siteUrl が空のまま Builder.url を参照しています: index.pug。OGP や canonical に相対パスが入ります
+```
+
+共通レイアウトから参照していてもページ数だけ並ばないよう、1回の実行につき1度だけ出ます。相対リンクしか使わない場合は `Builder.dir` と `Builder.url.pathname` だけを触るので、この警告は出ません。
+
 #### imageInfo()
 
-`src/` 配下の画像のメタデータを取得します。`imageOptimization` に応じて `src` が最適化後のパスに変換され、`imageSourceDensity` に応じた `srcset` が組み立てられます。アートディレクション画像が存在する場合も自動的に解決されます。
+`src/` 配下の画像のメタデータを取得します。`build.image.format` に応じて `src` が最適化後のパスに変換され、`build.image.sourceDensity` に応じた `srcset` が組み立てられます。アートディレクション画像が存在する場合も自動的に解決されます。
 
 ```pug
 - const info = imageInfo('/assets/img/hero.jpg')
 img(src=info.src srcset=info.srcset width=info.width height=info.height alt='')
 ```
 
-| Property  | Type                                     | Description                                                           |
-| --------- | ---------------------------------------- | --------------------------------------------------------------------- |
-| `src`     | `string`                                 | 表示サイズ側のパス（`srcset` の `1x` と一致する）                     |
-| `width`   | `number \| undefined`                    | 表示サイズの幅（px）                                                  |
-| `height`  | `number \| undefined`                    | 表示サイズの高さ（px）                                                |
-| `srcset`  | `string \| undefined`                    | 密度記述子つきの `srcset`。画像が見つからない場合のみ `undefined`     |
-| `format`  | `string \| undefined`                    | 画像フォーマット（`'jpg'` / `'png'` / `'svg'` など）                  |
-| `isSvg`   | `boolean`                                | SVG かどうか                                                          |
-| `variant` | `{ src, width, height, srcset } \| null` | `build.imageInfo.artDirectionSuffix` に応じたアートディレクション画像 |
+| Property  | Type                                     | Description                                                       |
+| --------- | ---------------------------------------- | ----------------------------------------------------------------- |
+| `src`     | `string`                                 | 表示サイズ側のパス（`srcset` の `1x` と一致する）                 |
+| `width`   | `number \| undefined`                    | 表示サイズの幅（px）                                              |
+| `height`  | `number \| undefined`                    | 表示サイズの高さ（px）                                            |
+| `srcset`  | `string \| undefined`                    | 密度記述子つきの `srcset`。画像が見つからない場合のみ `undefined` |
+| `format`  | `string \| undefined`                    | 画像フォーマット（`'jpg'` / `'png'` / `'svg'` など）              |
+| `isSvg`   | `boolean`                                | SVG かどうか                                                      |
+| `variant` | `{ src, width, height, srcset } \| null` | `build.image.artDirectionSuffix` に応じたアートディレクション画像 |
 
 ```pug
 - const info = imageInfo('/assets/img/hero.jpg')
@@ -192,7 +224,7 @@ picture
   img(src=info.src srcset=info.srcset width=info.width height=info.height alt='')
 ```
 
-`imageSourceDensity: 2` で 1600×1200 の `hero.jpg` を置いた場合、出力は次のようになります。
+`sourceDensity: 2` で 1600×1200 の `hero.jpg` を置いた場合、出力は次のようになります。
 
 ```html
 <img
@@ -256,11 +288,11 @@ npm install --save-dev typescript
 
 ビルド時に `src/` 配下の画像を自動的に最適化します。
 
-| `imageOptimization` | 挙動                        |
-| ------------------- | --------------------------- |
-| `'webp'`            | PNG/JPEG/GIF を WebP に変換 |
-| `'avif'`            | PNG/JPEG/GIF を AVIF に変換 |
-| `'compress'`        | 元の形式を維持したまま圧縮  |
+| `build.image.format` | 挙動                        |
+| -------------------- | --------------------------- |
+| `'webp'`             | PNG/JPEG/GIF を WebP に変換 |
+| `'avif'`             | PNG/JPEG/GIF を AVIF に変換 |
+| `'compress'`         | 元の形式を維持したまま圧縮  |
 
 > `src/` に置いた JPEG / PNG / GIF は必ず処理されます。原寸のまま出したい画像は `public/` に置いてください。
 >
@@ -274,17 +306,17 @@ npm install --save-dev typescript
 
 ```
 src/assets/img/hero.jpg   (1600x1200)
-  ↓  imageSourceDensity: 2
+  ↓  sourceDensity: 2
 dist/assets/img/hero.webp      (1600x1200)   ← 無印は src と同じ寸法
 dist/assets/img/hero@half.webp   ( 800x600)
 ```
 
 無印を原寸のままにしているのは、CSS の `url()` 直書きや OGP 画像など `imageInfo()` を通らない参照が壊れないようにするためです。
 
-| 設定                    | 挙動                                                      |
-| ----------------------- | --------------------------------------------------------- |
-| `imageSourceDensity: 2` | 等倍版を生成し、`srcset` に `1x` / `2x` を並べる（既定）  |
-| `imageSourceDensity: 1` | 原寸を 1 枚出すだけ。縮小しない（`srcset` は 1 候補のみ） |
+| 設定               | 挙動                                                      |
+| ------------------ | --------------------------------------------------------- |
+| `sourceDensity: 2` | 等倍版を生成し、`srcset` に `1x` / `2x` を並べる（既定）  |
+| `sourceDensity: 1` | 原寸を 1 枚出すだけ。縮小しない（`srcset` は 1 候補のみ） |
 
 等倍のまま出したい画像（ロゴやアイコンなど）は `public/` に置いてください。`public/` の画像は変換も縮小もされません。
 
@@ -292,14 +324,16 @@ dist/assets/img/hero@half.webp   ( 800x600)
 
 #### 特定画像の個別オプション指定
 
-`build.imageOverrides` で特定の画像にのみ別の圧縮オプションを適用できます。キーは `src/` からの相対パス、値はグローバル設定に上書きマージされる [Sharp](https://sharp.pixelplumbing.com/api-output) オプションオブジェクトです。
+`build.image.overrides` で特定の画像にのみ別の圧縮オプションを適用できます。キーは `src/` からの相対パス、値はグローバル設定に上書きマージされる [Sharp](https://sharp.pixelplumbing.com/api-output) オプションオブジェクトです。
 
 ```js
 build: {
-  imageOptimization: 'webp',
-  imageOverrides: {
-    // 品質を上げたい画像
-    'assets/img/bg-hero.jpg': { quality: 100 },
+  image: {
+    format: 'webp',
+    overrides: {
+      // 品質を上げたい画像
+      'assets/img/bg-hero.jpg': { quality: 100 }
+    }
   }
 }
 ```
@@ -314,13 +348,18 @@ build: {
     indent_size: 2,
     indent_with_tabs: false,
     wrap_line_length: 0,
-    inline: [],
-    content_unformatted: ['script', 'style', 'pre']
+    content_unformatted: ['script', 'style', 'pre', 'textarea']
   }
 }
 ```
 
 利用可能なオプションは [js-beautify のドキュメント](https://github.com/beautify-web/js-beautify#options)を参照してください。
+
+pugkit が既定値を上書きするのは、整形しない要素の指定と字下げまわりだけです。表示に関わる判定は js-beautify の既定に任せています。
+
+`inline` を上書きすると、インライン要素が改行されてそこに空白が生まれます。`li` や `a` を `inline-block` で詰めて並べていると、ソースに書いていない隙間が入ります。
+
+`content_unformatted` から `textarea` を外すと、textarea の中身、つまり表示される値そのものが整形されます。上書きする場合は残してください。
 
 ### SVG Optimization
 
@@ -347,7 +386,7 @@ src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow
 
 `src/` と `public/` で同じ出力先になるファイルがあった場合は、どちらが残るかが決まらないため `build` を中止します。どちらか一方を削除してください。`dev` は起動時に検査してログに出しますが、起動は続けます。
 
-出力先が重なるかは設定によります。既定の `imageOptimization: 'webp'` では `src/logo.png` は `logo.webp` になるため `public/logo.png` とは衝突しません。`compress` では両方が `logo.png` を取り合います。
+出力先が重なるかは設定によります。既定の `build.image.format: 'webp'` では `src/logo.png` は `logo.webp` になるため `public/logo.png` とは衝突しません。`compress` では両方が `logo.png` を取り合います。
 
 ### Dev / Build の出力の違い
 
