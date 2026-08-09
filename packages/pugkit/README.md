@@ -11,6 +11,8 @@
 
 ## How To Use
 
+Node.js 18 以上が必要です。
+
 ```sh
 $ npm install --save-dev pugkit
 $ touch ./src/index.pug
@@ -28,11 +30,32 @@ $ touch ./src/index.pug
 
 ## Commands
 
-| コマンド        | 内容                           |
-| --------------- | ------------------------------ |
-| `pugkit`        | 開発モード（Ctrl + C で停止）  |
-| `pugkit build`  | 本番ビルド                     |
-| `pugkit sprite` | SVGスプライト生成              |
+| コマンド        | エイリアス                    | 内容                          |
+| --------------- | ----------------------------- | ----------------------------- |
+| `pugkit`        | `pugkit dev` / `pugkit watch` | 開発モード（Ctrl + C で停止） |
+| `pugkit build`  | -                             | 本番ビルド                    |
+| `pugkit sprite` | -                             | SVGスプライト生成             |
+
+いずれも第1引数でプロジェクトルートを指定できます（デフォルトはカレントディレクトリ）。
+
+```sh
+pugkit build ./path/to/project
+```
+
+### Options
+
+設定ファイルの値を、その実行の間だけ上書きします。
+
+| オプション         | 対象コマンド   | 上書きする設定 |
+| ------------------ | -------------- | -------------- |
+| `--port <port>`    | `pugkit`       | `server.port`  |
+| `--host <host>`    | `pugkit`       | `server.host`  |
+| `--site-url <url>` | `pugkit build` | `siteUrl`      |
+
+```sh
+pugkit --port 3000
+pugkit build --site-url https://example.com/
+```
 
 ## Directory Structure
 
@@ -55,7 +78,9 @@ project-root/
 
 ### File Naming Rules
 
-`_`（アンダースコア）で始まるファイル・ディレクトリはビルド対象外です。それ以外のファイルは `src/` 配下のディレクトリ構成を維持したまま `outDir`（デフォルト: `dist/`）に出力されます。
+`src/` では `_`（アンダースコア）で始まるファイル・ディレクトリがビルド対象外です。それ以外のファイルは `src/` 配下のディレクトリ構成を維持したまま `outDir`（デフォルト: `dist/`）に出力されます。
+
+`public/` にはこの規則が適用されません。ドットファイルを含め、置いたものがすべてコピーされます。
 
 ```
 src/foo/style.scss →  dist/foo/style.css
@@ -80,8 +105,10 @@ export default defineConfig({
     startPath: '/'
   },
   build: {
-    // 'avif' | 'webp' | 'compress' | false
+    // 'avif' | 'webp' | 'compress'
     imageOptimization: 'webp',
+    // src の画像を何倍の原本として扱うか
+    imageSourceDensity: 2,
     html: {
       indent_size: 2,
       wrap_line_length: 0
@@ -90,25 +117,27 @@ export default defineConfig({
 })
 ```
 
-| Option                               | Description                                                                                           | Type / Values                                   | Default       |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------- |
-| `siteUrl`                            | サイトのベースURL（`Builder.url` に使用）                                                             | `string`                                        | `''`          |
-| `subdir`                             | サブディレクトリのパス                                                                                | `string`                                        | `''`          |
-| `outDir`                             | **build の**出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可。dev は書き込まない | `string`                                        | `'dist'`      |
-| `cacheDir`                           | dev のアセット出力先。`null` で `node_modules/.pugkit/dev`（`node_modules` が無ければ `.pugkit/dev`）。**指定先は dev 起動のたびに中身が削除される** | `string` \| `null`                              | `null`        |
-| `server.port`                        | 開発サーバーのポート番号                                                                              | `number`                                        | `5555`        |
-| `server.host`                        | 開発サーバーのホスト                                                                                  | `string`                                        | `'localhost'` |
-| `server.startPath`                   | 起動ログに表示する URL のパス                                                                         | `string`                                        | `'/'`         |
-| `server.domDiff`                     | ライブリロードで DOM の差分適用を使うか（`false` で常にフルリロード）                                 | `boolean`                                       | `true`        |
-| `build.imageOptimization`            | 画像最適化の方式                                                                                      | `'avif'` \| `'webp'` \| `'compress'`           | `'webp'`      |
-| `build.imageSourceDensity`           | `src/` の画像を何倍の原本として扱うか。`2` なら等倍版を生成して `srcset` を出す                       | `1` \| `2`                                      | `2`           |
-| `build.imageOptions.avif`            | AVIF変換オプション（[Sharp AVIF options](https://sharp.pixelplumbing.com/api-output#avif)）           | `object`                                        | -             |
-| `build.imageOptions.webp`            | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）           | `object`                                        | -             |
-| `build.imageOptions.jpeg`            | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）           | `object`                                        | -             |
-| `build.imageOptions.png`             | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）              | `object`                                        | -             |
-| `build.imageInfo.artDirectionSuffix` | アートディレクション用画像のサフィックス（`_sp`, `_tb`, `_pc` など）                                  | `string`                                        | `'_sp'`       |
-| `build.imageOverrides`               | 特定画像に個別のSharpオプションを適用（グローバルオプションに上書きマージ）                           | `Record<string, object>`                        | `{}`          |
-| `build.html`                         | HTML整形オプション（[js-beautify html options](https://github.com/beautify-web/js-beautify#options)） | `object`                                        | see below     |
+指定しなかった項目はデフォルト値が使われます。全項目は次の表を参照してください。
+
+| Option                               | Description                                                                                                                                          | Type / Values                        | Default       |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------- |
+| `siteUrl`                            | サイトのベースURL（`Builder.url` に使用）                                                                                                            | `string`                             | `''`          |
+| `subdir`                             | サイトを配置するサブディレクトリ。出力先が `outDir/<subdir>/` になり、dev の URL にも付く。`Builder.subdir` / `Builder.url` にも反映される           | `string`                             | `''`          |
+| `outDir`                             | build の出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可。dev は書き込まない。指定できる場所に制限あり（下記） | `string`                             | `'dist'`      |
+| `cacheDir`                           | dev のアセット出力先。`null` で `node_modules/.pugkit/dev`（`node_modules` が無ければ `.pugkit/dev`）。指定先は dev 起動のたびに作り直される（下記） | `string` \| `null`                   | `null`        |
+| `server.port`                        | 開発サーバーのポート番号                                                                                                                             | `number`                             | `5555`        |
+| `server.host`                        | 開発サーバーのホスト                                                                                                                                 | `string`                             | `'localhost'` |
+| `server.startPath`                   | 起動ログに表示する URL のパス                                                                                                                        | `string`                             | `'/'`         |
+| `server.domDiff`                     | ライブリロードで DOM の差分適用を使うか（`false` で常にフルリロード）                                                                                | `boolean`                            | `true`        |
+| `build.imageOptimization`            | 画像最適化の方式                                                                                                                                     | `'avif'` \| `'webp'` \| `'compress'` | `'webp'`      |
+| `build.imageSourceDensity`           | `src/` の画像を何倍の原本として扱うか。`2` なら等倍版を生成して `srcset` を出す                                                                      | `1` \| `2`                           | `2`           |
+| `build.imageOptions.avif`            | AVIF変換オプション（[Sharp AVIF options](https://sharp.pixelplumbing.com/api-output#avif)）                                                          | `object`                             | -             |
+| `build.imageOptions.webp`            | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）                                                          | `object`                             | -             |
+| `build.imageOptions.jpeg`            | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）                                                          | `object`                             | -             |
+| `build.imageOptions.png`             | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）                                                             | `object`                             | -             |
+| `build.imageInfo.artDirectionSuffix` | アートディレクション用画像のサフィックス（`_sp`, `_tb`, `_pc` など）                                                                                 | `string`                             | `'_sp'`       |
+| `build.imageOverrides`               | 特定画像に個別のSharpオプションを適用（グローバルオプションに上書きマージ）                                                                          | `Record<string, object>`             | `{}`          |
+| `build.html`                         | HTML整形オプション（[js-beautify html options](https://github.com/beautify-web/js-beautify#options)）                                                | `object`                             | see below     |
 
 ## Features
 
@@ -144,15 +173,15 @@ meta(property='og:url', content=Builder.url.href)
 img(src=info.src srcset=info.srcset width=info.width height=info.height alt='')
 ```
 
-| Property  | Type                                                                      | Description                                                        |
-| --------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `src`     | `string`                                                                  | 表示サイズ側のパス（`srcset` の `1x` と一致する）                  |
-| `width`   | `number \| undefined`                                                     | 表示サイズの幅（px）                                               |
-| `height`  | `number \| undefined`                                                     | 表示サイズの高さ（px）                                             |
-| `srcset`  | `string \| undefined`                                                     | 密度記述子つきの `srcset`。画像が見つからない場合のみ `undefined`  |
-| `format`  | `string \| undefined`                                                     | 画像フォーマット（`'jpg'` / `'png'` / `'svg'` など）               |
-| `isSvg`   | `boolean`                                                                 | SVG かどうか                                                       |
-| `variant` | `{ src, width, height, srcset } \| null`                                  | `imageInfo.artDirectionSuffix` に応じたアートディレクション画像    |
+| Property  | Type                                     | Description                                                           |
+| --------- | ---------------------------------------- | --------------------------------------------------------------------- |
+| `src`     | `string`                                 | 表示サイズ側のパス（`srcset` の `1x` と一致する）                     |
+| `width`   | `number \| undefined`                    | 表示サイズの幅（px）                                                  |
+| `height`  | `number \| undefined`                    | 表示サイズの高さ（px）                                                |
+| `srcset`  | `string \| undefined`                    | 密度記述子つきの `srcset`。画像が見つからない場合のみ `undefined`     |
+| `format`  | `string \| undefined`                    | 画像フォーマット（`'jpg'` / `'png'` / `'svg'` など）                  |
+| `isSvg`   | `boolean`                                | SVG かどうか                                                          |
+| `variant` | `{ src, width, height, srcset } \| null` | `build.imageInfo.artDirectionSuffix` に応じたアートディレクション画像 |
 
 ```pug
 - const info = imageInfo('/assets/img/hero.jpg')
@@ -166,9 +195,12 @@ picture
 `imageSourceDensity: 2` で 1600×1200 の `hero.jpg` を置いた場合、出力は次のようになります。
 
 ```html
-<img src="/assets/img/hero@half.webp"
-     srcset="/assets/img/hero@half.webp 1x, /assets/img/hero.webp 2x"
-     width="800" height="600">
+<img
+  src="/assets/img/hero@half.webp"
+  srcset="/assets/img/hero@half.webp 1x, /assets/img/hero.webp 2x"
+  width="800"
+  height="600"
+/>
 ```
 
 > `imageInfo()` は `src/` 配下を探し、見つからなければ `public/` 配下も探します。
@@ -216,7 +248,7 @@ npm install --save-dev typescript
 "scripts": {
   "start": "pugkit",
   "build": "tsc --noEmit && pugkit build",
-  "sprite": "pugkit sprite",
+  "sprite": "pugkit sprite"
 }
 ```
 
@@ -224,15 +256,21 @@ npm install --save-dev typescript
 
 ビルド時に `src/` 配下の画像を自動的に最適化します。
 
-- `'avif'` - PNG/JPEG/GIF を AVIF に変換
-- `'compress'` - 元の形式を維持したまま圧縮
-- `'webp'` - PNG/JPEG/GIF を WebP に変換
+| `imageOptimization` | 挙動                        |
+| ------------------- | --------------------------- |
+| `'webp'`            | PNG/JPEG/GIF を WebP に変換 |
+| `'avif'`            | PNG/JPEG/GIF を AVIF に変換 |
+| `'compress'`        | 元の形式を維持したまま圧縮  |
 
-> **`src/` に置いた画像は必ず変換されます。** 変換したくない画像は `public/` に置いてください。
+> `src/` に置いた JPEG / PNG / GIF は必ず処理されます。原寸のまま出したい画像は `public/` に置いてください。
+>
+> `compress` を指定した場合は形式を保ったまま圧縮します（GIF はそのままコピーされます）。
+>
+> `src/` に `.webp` / `.avif` を置いた場合はどのタスクの対象にもならず、出力されません。ビルド時に警告が出ます。これらは `public/` に置いてください。
 
 #### 画像は 1 枚だけ置く
 
-`src/` には**最大解像度の 1 枚だけ**を置きます。等倍版はビルドが生成するので、`@2x` を手で用意する必要はありません。
+`src/` には最大解像度の 1 枚だけを置きます。等倍版はビルドが生成するので、`@2x` を用意する必要はありません。
 
 ```
 src/assets/img/hero.jpg   (1600x1200)
@@ -243,14 +281,14 @@ dist/assets/img/hero@half.webp   ( 800x600)
 
 無印を原寸のままにしているのは、CSS の `url()` 直書きや OGP 画像など `imageInfo()` を通らない参照が壊れないようにするためです。
 
-| 設定                    | 挙動                                                       |
-| ----------------------- | ---------------------------------------------------------- |
-| `imageSourceDensity: 2` | 等倍版を生成し、`srcset` に `1x` / `2x` を並べる（既定）   |
-| `imageSourceDensity: 1` | 原寸を 1 枚出すだけ。縮小も `srcset` も行わない            |
+| 設定                    | 挙動                                                      |
+| ----------------------- | --------------------------------------------------------- |
+| `imageSourceDensity: 2` | 等倍版を生成し、`srcset` に `1x` / `2x` を並べる（既定）  |
+| `imageSourceDensity: 1` | 原寸を 1 枚出すだけ。縮小しない（`srcset` は 1 候補のみ） |
 
 等倍のまま出したい画像（ロゴやアイコンなど）は `public/` に置いてください。`public/` の画像は変換も縮小もされません。
 
-> GIF と SVG は密度の対象外です（GIF は縮小するとアニメーションが失われるため）。
+> GIF と SVG は密度の対象外です。
 
 #### 特定画像の個別オプション指定
 
@@ -293,7 +331,7 @@ build: {
 `src/`配下の`icons/`ディレクトリに配置したSVGを1つのスプライトファイルにまとめます。
 
 ```
-`src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow`
+src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow
 ```
 
 ```html
@@ -305,28 +343,36 @@ build: {
 
 ### Public Directory
 
-`public/` に置いたファイルはそのまま `outDir` のルートにコピーされます。**変換も縮小もされない**ので、favicon・OGP画像のほか、等倍のまま出したい画像の置き場としても使います。
+`public/` に置いたファイルは、ディレクトリ構成を保ったまま出力先へコピーされます（`subdir` を指定している場合はその配下）。変換も縮小もされないので、favicon・OGP画像のほか、等倍のまま出したい画像の置き場としても使います。
 
-`src/` と `public/` で同じ出力先になる画像があった場合は、どちらが残るかが決まらないため**ビルドを中止します**。どちらか一方を削除してください。
+`src/` と `public/` で同じ出力先になるファイルがあった場合は、どちらが残るかが決まらないため `build` を中止します。どちらか一方を削除してください。`dev` は起動時に検査してログに出しますが、起動は続けます。
+
+出力先が重なるかは設定によります。既定の `imageOptimization: 'webp'` では `src/logo.png` は `logo.webp` になるため `public/logo.png` とは衝突しません。`compress` では両方が `logo.png` を取り合います。
 
 ### Dev / Build の出力の違い
 
-| 対象 | dev                                       | build                        |
-| ---- | ----------------------------------------- | ---------------------------- |
-| HTML | リクエスト時ビルド + メモリ配信（ファイルに書き出さない） | 全ページビルドして書き出し   |
-| CSS  | expanded + ソースマップ                   | minify済み                   |
-| JS   | ソースマップ・`console.*` 保持            | minify済み・`console.*` 削除 |
+| 対象   | dev                                           | build                        |
+| ------ | --------------------------------------------- | ---------------------------- |
+| HTML   | リクエスト時ビルド + メモリ配信               | 全ページビルドして書き出し   |
+| CSS    | expanded + ソースマップ                       | minify済み                   |
+| JS     | ソースマップ・`console.*` 保持                | minify済み・`console.*` 削除 |
 | 出力先 | `cacheDir`（既定 `node_modules/.pugkit/dev`） | `outDir`                     |
 
-> **`outDir` は build 専用です。** dev は `outDir` に書き込みも読み出しもしないため、dev のソースマップ等が本番成果物に混ざりません。
->
-> **`outDir` は pugkit が占有します。** build のたびに中身を削除してから書き出すので、手で置いたファイル（`.htaccess`・PHP・アップロード等）は残りません。出力に含めたいものは `public/` に置いてください。
->
-> dev が配信するのは `src` と `public` から導かれるものだけです。レガシー HTML など `outDir` にしか無いファイルを dev でも表示したい場合は `public/` に置いてください（build でも `outDir` にコピーされるので、dev と build で同じものが見えます）。
->
-> **`cacheDir` に指定したディレクトリは dev 起動のたびに中身が削除されます。** 既存ファイルのある場所を指定しないでください（プロジェクトルート・`src`・`public`・`outDir` は起動時にエラーになります）。
+> `outDir` は build 専用です。dev は `outDir` に書き込みも読み出しもしないため、dev のソースマップ等が本番成果物に混ざりません。
 
-> 旧 `debug` オプションは廃止されました。dev は常にソースマップ付き非圧縮出力になります。
+> `outDir` は pugkit が占有します。build のたびに中身を削除してから書き出すので、手で置いたファイル（`.htaccess`・PHP・アップロード等）は残りません。出力に含めたいものは `public/` に置いてください。
+
+### 出力先に指定できる場所
+
+`outDir` と `cacheDir` はどちらも中身を丸ごと削除します。消してはいけない場所を指定する事故を防ぐため、起動時に検査して中止します。
+
+`outDir` は、プロジェクトルート・`src`・`public`・`node_modules` を含む場所と、`src`・`public` の配下を指定できません。
+
+`cacheDir` は、プロジェクトルート・`src`・`public`・`outDir` を含む場所と、`src`・`public`・`outDir` の配下を指定できません。
+
+`cacheDir` にはさらに 2 つの守りがあります。指定先に pugkit が作った目印が無いのに中身が存在する場合は、削除せず起動を中止します。空のディレクトリか、存在しないパスを指定してください。
+
+また、別の dev サーバーが同じ `cacheDir` を使用中の場合も中止します。ポートを変えれば 2 つ目を起動できてしまうため、ポートではなくディレクトリ側で判定しています。
 
 ### エラー表示
 
@@ -340,11 +386,13 @@ PUGKIT_DEBUG=1 npx pugkit build
 
 ## Tech Stack
 
-- [Pug](https://pugjs.org/) - HTMLテンプレートエンジン
-- [Sass](https://sass-lang.com/) - CSSプリプロセッサー
-- [esbuild](https://esbuild.github.io/) - TypeScript/JavaScriptバンドラー
-- [PostCSS](https://postcss.org/) - CSS後処理（Autoprefixer、cssnano）
-- [Sharp](https://sharp.pixelplumbing.com/) - 画像最適化
-- [SVGO](https://svgo.dev/) - SVG最適化
-- [Chokidar](https://github.com/paulmillr/chokidar) - ファイル監視
-- [sirv](https://github.com/lukeed/sirv) + SSE（Server-Sent Events） - 開発サーバー
+| ライブラリ                                        | 役割                                 |
+| ------------------------------------------------- | ------------------------------------ |
+| [Pug](https://pugjs.org/)                         | HTMLテンプレートエンジン             |
+| [Sass](https://sass-lang.com/)                    | CSSプリプロセッサー                  |
+| [esbuild](https://esbuild.github.io/)             | TypeScript/JavaScriptバンドラー      |
+| [PostCSS](https://postcss.org/)                   | CSS後処理（Autoprefixer、cssnano）   |
+| [Sharp](https://sharp.pixelplumbing.com/)         | 画像最適化                           |
+| [SVGO](https://svgo.dev/)                         | SVG最適化                            |
+| [Chokidar](https://github.com/paulmillr/chokidar) | ファイル監視                         |
+| [sirv](https://github.com/lukeed/sirv)            | 静的配信（開発サーバー、SSE と併用） |

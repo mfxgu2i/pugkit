@@ -12,7 +12,18 @@ import { scriptOutputPath } from '../tasks/script.mjs'
 import { publicOutputPath } from '../tasks/copy.mjs'
 import { prepareDevSession } from './dev/startup.mjs'
 
-// 自分のハンドラで graph（Pug への焼き込み）を見る種別。二重に無効化しない
+/**
+ * 自分のハンドラで graph（Pug への焼き込み）を見る種別。二重に無効化しない。
+ *
+ * 既知の穴: この約束を無条件に果たしているのは svg だけ。
+ * public は isMeasurableImage のときしか無効化せず、image の unlink は
+ * imageGraph しか見ない（graph を見ない）。
+ *
+ * そのため `public/` の画像でないファイル（`include ../public/foo.css` など）を
+ * Pug が取り込んでいると、編集してもテンプレートが無効化されず古い HTML が返り続ける。
+ * この使い方は想定していないため直していない。直すならこの集合を
+ * 「無条件に面倒を見る種別」に限るか、各ハンドラが必ず graph を見るようにする。
+ */
 const HANDLES_EMBEDDING = new Set(['svg', 'image', 'public'])
 
 /**
