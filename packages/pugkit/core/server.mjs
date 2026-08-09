@@ -168,7 +168,10 @@ export async function serverTask(context, options = {}) {
 
   return new Promise((resolve, reject) => {
     httpServer.listen(port, host, () => {
-      logger.success('server', `Running at http://${host}:${port}${fullStartPath}`)
+      // 要求値ではなく実際に待ち受けたポートを出す。
+      // port: 0 は「OS に空きを割り当てさせる」指定なので、要求値を出すと
+      // `http://localhost:0/` という開けない URL を案内することになる
+      logger.success('server', `Running at http://${host}:${context.server.port}${fullStartPath}`)
       resolve()
     })
     httpServer.on('error', reject)

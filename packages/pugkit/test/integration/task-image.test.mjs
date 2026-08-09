@@ -205,6 +205,29 @@ describe('変換対象外の画像', () => {
 
     expect(logs.join('\n')).not.toMatch(/変換対象外/)
   })
+
+  /**
+   * 変換対象が 1 枚も無いときこそ警告が要る。src に .webp しか置いていない状況が
+   * まさにそれで、「何も出力されないのに無警告」が一番起きやすい。
+   *
+   * 他の画像と同居している場合しか試していないと、早期リターンの後ろに
+   * 警告を置いてしまっても気づけない。
+   */
+  it('変換対象が 1 枚も無くても警告する', async () => {
+    const only = await createTempProject({ 'src/.keep': '', 'dist/.keep': '', 'public/.keep': '' })
+    srcDir = only.path('src')
+    distDir = only.path('dist')
+    publicDir = only.path('public')
+
+    await sharp({ create: { width: 20, height: 10, channels: 3, background: '#0a0' } })
+      .webp()
+      .toFile(resolve(srcDir, 'only.webp'))
+
+    const logs = []
+    await withCapturedLogs(logs, () => imageTask(makeContext({ density: 2 })))
+
+    expect(logs.join('\n')).toMatch(/only\.webp/)
+  })
 })
 
 describe('出力先の規則', () => {

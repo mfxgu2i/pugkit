@@ -49,12 +49,15 @@ export async function imageTask(context, options = {}) {
     ignore: IMAGE_IGNORE
   })
 
+  // 変換対象が 1 枚も無いときこそ知らせる必要がある。
+  // src に .webp しか置いていない場合がまさにそれで、
+  // 早期リターンより後ろに置くと「何も出力されないのに無警告」になる
+  await warnUnhandledImages(context)
+
   if (images.length === 0) {
     logger.skip('image', 'No images found')
     return
   }
-
-  await warnUnhandledImages(context)
 
   logger.info('image', `Processing ${images.length} image(s)`)
 
