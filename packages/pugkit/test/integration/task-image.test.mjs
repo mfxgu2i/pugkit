@@ -6,8 +6,8 @@ import { imageOutputPaths, imageTask } from '../../tasks/image.mjs'
 import { createTempProject, listFiles } from '../helpers/project.mjs'
 
 /**
- * 画像タスク。imageOverrides でファイル単位に変換設定を上書きできることと、
- * imageOptimization / imageSourceDensity の組み合わせで出力が変わることを固定する。
+ * 画像タスク。build.image.overrides でファイル単位に変換設定を上書きできることと、
+ * build.image の format / sourceDensity の組み合わせで出力が変わることを固定する。
  */
 let project
 let srcDir
@@ -22,21 +22,23 @@ async function createJpeg(filePath, width = 200, height = 150) {
     .toFile(filePath)
 }
 
-function makeContext({ overrides = {}, optimization = 'webp', imageOptions = {}, density = 1 } = {}) {
+function makeContext({ overrides = {}, format = 'webp', imageOptions = {}, density = 1 } = {}) {
   return {
     paths: { src: srcDir, output: distDir, public: publicDir },
     config: {
       build: {
-        imageOptimization: optimization,
-        imageSourceDensity: density,
-        imageOptions: {
-          webp: { quality: 30, effort: 0, lossless: false },
-          jpeg: { quality: 30 },
-          png: { quality: 30, compressionLevel: 9 },
-          avif: { quality: 30, effort: 0 },
-          ...imageOptions
-        },
-        imageOverrides: overrides
+        image: {
+          format,
+          sourceDensity: density,
+          options: {
+            webp: { quality: 30, effort: 0, lossless: false },
+            jpeg: { quality: 30 },
+            png: { quality: 30, compressionLevel: 9 },
+            avif: { quality: 30, effort: 0 },
+            ...imageOptions
+          },
+          overrides
+        }
       }
     },
     isProduction: true
@@ -52,7 +54,7 @@ beforeEach(async () => {
   await createJpeg(resolve(srcDir, 'mv.jpg'))
 })
 
-describe('imageOverrides', () => {
+describe('build.image.overrides', () => {
   it('特定の画像だけ quality を上げると出力が大きくなる', async () => {
     await imageTask(makeContext({ overrides: { 'mv.jpg': { quality: 100 } } }))
 
@@ -77,7 +79,7 @@ describe('imageOverrides', () => {
     await imageTask(
       makeContext({
         overrides: { 'mv.jpg': { quality: 100 } },
-        optimization: 'avif',
+        format: 'avif',
         imageOptions: { avif: { quality: 10, effort: 0 } }
       })
     )
@@ -99,14 +101,14 @@ describe('imageOverrides', () => {
   })
 })
 
-describe('imageOptimization', () => {
+describe('build.image.format', () => {
   it('webp は .webp に変換する', async () => {
-    await imageTask(makeContext({ optimization: 'webp' }))
+    await imageTask(makeContext({ format: 'webp' }))
     expect(await listFiles(distDir)).toEqual(expect.arrayContaining(['normal.webp', 'mv.webp']))
   })
 
   it('compress は元の形式のまま出力する', async () => {
-    await imageTask(makeContext({ optimization: 'compress' }))
+    await imageTask(makeContext({ format: 'compress' }))
 
     const output = await listFiles(distDir)
     expect(output).toEqual(expect.arrayContaining(['normal.jpg', 'mv.jpg']))
@@ -114,7 +116,7 @@ describe('imageOptimization', () => {
   })
 })
 
-describe('imageSourceDensity', () => {
+describe('build.image.sourceDensity', () => {
   it('density 1 では原寸 1 枚だけを出す', async () => {
     await imageTask(makeContext({ density: 1 }))
 
@@ -162,7 +164,7 @@ describe('imageSourceDensity', () => {
       .gif()
       .toFile(source)
 
-    await imageTask(makeContext({ density: 2, optimization: 'compress' }))
+    await imageTask(makeContext({ density: 2, format: 'compress' }))
 
     expect(await readFile(resolve(distDir, 'anim.gif'))).toEqual(await readFile(source))
   })
@@ -237,8 +239,8 @@ describe('出力先の規則', () => {
    * 規則は imageOutputPaths 一つに集約し、両方から使う。
    */
   const paths = { src: '/proj/src', output: '/proj/dist', public: '/proj/public' }
-  const config = (optimization, density) => ({
-    build: { imageOptimization: optimization, imageSourceDensity: density }
+  const config = (format, density) => ({
+    build: { image: { format, sourceDensity: density } }
   })
 
   it.each([
@@ -250,10 +252,8 @@ describe('出力先の規則', () => {
     // GIF は密度の対象外。webp モードでは変換だけされる
     ['webp', 2, 'img/a.gif', ['/proj/dist/img/a.webp']],
     ['compress', 2, 'img/a.gif', ['/proj/dist/img/a.gif']]
-  ])('imageOptimization: %s / density %i のとき %s -> %j', (optimization, density, relativePath, expected) => {
-    expect(imageOutputPaths(relativePath, config(optimization, density), paths).map(out => out.absolute)).toEqual(
-      expected
-    )
+  ])('build.image.format: %s / density %i のとき %s -> %j', (format, density, relativePath, expected) => {
+    expect(imageOutputPaths(relativePath, config(format, density), paths).map(out => out.absolute)).toEqual(expected)
   })
 
   it('筆頭は必ず原寸（削除側が「このソースの出力」として頼る）', () => {

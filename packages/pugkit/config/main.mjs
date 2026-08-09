@@ -4,10 +4,11 @@ import { normalizeSubdir } from '../utils/subdir.mjs'
 import { resolveFromRoot } from '../utils/paths.mjs'
 import { existsSync } from 'node:fs'
 import { defaultConfig } from './defaults.mjs'
+import { inspectConfigKeys, RENAMED_KEYS } from './schema.mjs'
 import { logger } from '../utils/logger.mjs'
 import { normalizeSourceDensity, VALID_SOURCE_DENSITIES } from '../utils/image-density.mjs'
 
-const IMAGE_OPTIMIZATIONS = ['avif', 'webp', 'compress']
+const IMAGE_FORMATS = ['avif', 'webp', 'compress']
 
 async function loadUserConfig(root) {
   const configPath = resolve(root, 'pugkit.config.mjs')
@@ -26,29 +27,34 @@ async function loadUserConfig(root) {
 const mergeShallow = (defaults, user) => ({ ...defaults, ...(user ?? {}) })
 
 /**
- * build 配下で、丸ごと差し替えではなくキー単位で混ぜるもの。
- *
- * 差し替えにすると、`html.indent_size` だけ指定したときに他の整形設定が
- * 既定値ごと消える。imageOptions は形式ごとに同じ扱いが要るので別に見る
+ * 画像設定を混ぜる。丸ごと差し替えにすると、`options.webp.quality` だけ指定した
+ * ときに他の形式の既定値ごと消える
  */
-const MERGED_BUILD_KEYS = ['imageInfo', 'imageOverrides', 'html']
+function mergeImage(defaults, user = {}) {
+  const image = mergeShallow(defaults, user)
 
-function mergeBuild(defaults, user = {}) {
-  const build = mergeShallow(defaults, user)
-
-  for (const key of MERGED_BUILD_KEYS) {
-    build[key] = mergeShallow(defaults[key], user[key])
-  }
+  image.overrides = mergeShallow(defaults.overrides, user.overrides)
 
   // 形式の一覧は既定値から取る。形式を増やしてもここを直さなくて済む
-  build.imageOptions = Object.fromEntries(
-    Object.keys(defaults.imageOptions).map(format => [
+  image.options = Object.fromEntries(
+    Object.keys(defaults.options).map(format => [
       format,
-      mergeShallow(defaults.imageOptions[format], user.imageOptions?.[format])
+      mergeShallow(defaults.options[format], user.options?.[format])
     ])
   )
 
-  return build
+  return image
+}
+
+/**
+ * 既知のキーだけを組み立てる。以降は「config は解決済み」として扱えるよう、
+ * 実在しないキーは通さない（知らせるのは validateKeys の仕事）
+ */
+function mergeBuild(defaults, user = {}) {
+  return {
+    image: mergeImage(defaults.image, user.image),
+    html: mergeShallow(defaults.html, user.html)
+  }
 }
 
 function mergeConfig(defaults, user) {
@@ -63,32 +69,53 @@ function mergeConfig(defaults, user) {
 }
 
 /**
+ * 設定キーの誤りを知らせる。混ぜる前の、利用者が書いたそのままの形を見る。
+ *
+ * 旧名のキーは中止する。移行先が一意に決まるうえ、放置すると指定したはずの値が
+ * 効かないまま出力される。実在しないキーは綴り違いとは限らないので警告に留める
+ */
+function validateKeys(userConfig) {
+  const { renamed, unknown } = inspectConfigKeys(userConfig)
+
+  if (renamed.length > 0) {
+    const lines = renamed.map(key => `  ${key}  →  ${RENAMED_KEYS[key]}`)
+    throw new Error(
+      `pugkit.config.mjs に v1 のキーが残っています。指定した値が無視されるため中止しました。\n${lines.join('\n')}`
+    )
+  }
+
+  if (unknown.length > 0) {
+    logger.warn('config', `pugkit.config.mjs に不明なキーがあります（無視されます）: ${unknown.join(', ')}`)
+  }
+}
+
+/**
  * 画像まわりの設定を正規化する。
  *
  * 不正な値を黙って通すと、全画像が意図しない寸法で出力されるという静かな壊れ方をする。
  * 中止まではせず、安全側（変換あり・縮小なし）に倒して知らせる。
  */
-function normalizeImageConfig(build) {
-  if (!IMAGE_OPTIMIZATIONS.includes(build.imageOptimization)) {
+function normalizeImageConfig(image) {
+  if (!IMAGE_FORMATS.includes(image.format)) {
     logger.warn(
       'config',
-      `Unknown imageOptimization "${build.imageOptimization}". 'webp' として扱います（有効な値: ${IMAGE_OPTIMIZATIONS.join(' / ')}）。変換したくない画像は public/ に置いてください`
+      `Unknown build.image.format "${image.format}". 'webp' として扱います（有効な値: ${IMAGE_FORMATS.join(' / ')}）。変換したくない画像は public/ に置いてください`
     )
-    build.imageOptimization = 'webp'
+    image.format = 'webp'
   }
 
-  const density = normalizeSourceDensity(build.imageSourceDensity)
+  const density = normalizeSourceDensity(image.sourceDensity)
   if (density === null) {
     logger.warn(
       'config',
-      `Unknown imageSourceDensity "${build.imageSourceDensity}". 1 として扱います（有効な値: ${VALID_SOURCE_DENSITIES.join(' / ')}）`
+      `Unknown build.image.sourceDensity "${image.sourceDensity}". 1 として扱います（有効な値: ${VALID_SOURCE_DENSITIES.join(' / ')}）`
     )
-    build.imageSourceDensity = 1
+    image.sourceDensity = 1
   } else {
-    build.imageSourceDensity = density
+    image.sourceDensity = density
   }
 
-  return build
+  return image
 }
 
 /**
@@ -132,8 +159,9 @@ function applyInlineConfig(config, inline) {
 
 export async function loadConfig(root = process.cwd(), inlineConfig = {}) {
   const userConfig = await loadUserConfig(root)
+  validateKeys(userConfig)
   const config = mergeConfig(defaultConfig, userConfig)
-  normalizeImageConfig(config.build)
+  normalizeImageConfig(config.build.image)
   // CLI は `pugkit build .` のように相対パスを渡してくる。
   // 絶対パス前提で使う箇所（esbuild の absWorkingDir など）があるのでここで一度だけ解決する
   config.root = resolve(root)

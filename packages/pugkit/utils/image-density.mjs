@@ -29,7 +29,7 @@ export function normalizeSourceDensity(value) {
  * 「1 枚も出力されない」という無音の壊れ方をする
  */
 export function sourceDensityOf(config) {
-  return normalizeSourceDensity(config?.build?.imageSourceDensity) ?? 1
+  return normalizeSourceDensity(config?.build?.image?.sourceDensity) ?? 1
 }
 
 export function scaleDown(n, density) {
@@ -52,10 +52,10 @@ export function supportsDensity(name) {
   return DENSITY_EXT_RE.test(name)
 }
 
-/** 最適化設定に応じて拡張子を読み替える。変換対象外はそのまま */
-export function convertExtension(name, optimization) {
-  if (optimization !== 'avif' && optimization !== 'webp') return name
-  return name.replace(CONVERTIBLE_EXT_RE, `.${optimization}`)
+/** 出力形式に応じて拡張子を読み替える。変換対象外はそのまま */
+export function convertExtension(name, format) {
+  if (format !== 'avif' && format !== 'webp') return name
+  return name.replace(CONVERTIBLE_EXT_RE, `.${format}`)
 }
 
 // 縮小版のサフィックス。密度（1x）ではなく「原寸の半分」という変換内容を表す。

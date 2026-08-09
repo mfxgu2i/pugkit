@@ -22,7 +22,7 @@ export const IMAGE_IGNORE = ['**/_*/**']
  * 1 ソースが複数の密度を生成するため配列を返す。筆頭は必ず原寸。
  */
 export function imageOutputPaths(relativePath, config, paths) {
-  return densityOutputs(relativePath, config.build.imageOptimization, sourceDensityOf(config)).map(out => ({
+  return densityOutputs(relativePath, config.build.image.format, sourceDensityOf(config)).map(out => ({
     ...out,
     relative: out.name,
     absolute: resolve(paths.output, out.name)
@@ -83,16 +83,16 @@ async function warnUnhandledImages(context) {
 }
 
 /**
- * 拡張子と最適化設定から、sharp のエンコード関数を選ぶ。
+ * 拡張子と出力形式から、sharp のエンコード関数を選ぶ。
  * sharp を通せない組み合わせ（compress モードの GIF）は null
  */
 function resolveEncoder(ext, config) {
-  const { imageOptimization, imageOptions } = config.build
+  const { format, options } = config.build.image
 
-  if (imageOptimization === 'avif') return (pipeline, opts) => pipeline.avif({ ...imageOptions.avif, ...opts })
-  if (imageOptimization === 'webp') return (pipeline, opts) => pipeline.webp({ ...imageOptions.webp, ...opts })
-  if (ext === '.jpg' || ext === '.jpeg') return (pipeline, opts) => pipeline.jpeg({ ...imageOptions.jpeg, ...opts })
-  if (ext === '.png') return (pipeline, opts) => pipeline.png({ ...imageOptions.png, ...opts })
+  if (format === 'avif') return (pipeline, opts) => pipeline.avif({ ...options.avif, ...opts })
+  if (format === 'webp') return (pipeline, opts) => pipeline.webp({ ...options.webp, ...opts })
+  if (ext === '.jpg' || ext === '.jpeg') return (pipeline, opts) => pipeline.jpeg({ ...options.jpeg, ...opts })
+  if (ext === '.png') return (pipeline, opts) => pipeline.png({ ...options.png, ...opts })
 
   return null
 }
@@ -105,7 +105,7 @@ async function processImage(filePath, context, retries = 3, retryDelay = 200) {
   const ext = extname(filePath).toLowerCase()
   const relativePath = relative(paths.src, filePath)
   const overrideKey = relativePath.replace(/\\/g, '/')
-  const overrides = config.build.imageOverrides?.[overrideKey] ?? {}
+  const overrides = config.build.image.overrides?.[overrideKey] ?? {}
   const sourceDensity = sourceDensityOf(config)
 
   try {
