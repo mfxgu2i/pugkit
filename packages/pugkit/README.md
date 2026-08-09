@@ -240,9 +240,31 @@ picture
 
 ### Sass
 
-`src/` 配下の `.scss` ファイルをコンパイルして出力します。ベンダープレフィックスの自動付与と圧縮も行われます。
+`src/` 配下の `.scss` ファイルをコンパイルして出力します。コンパイル後は [Lightning CSS](https://lightningcss.dev/) を通し、ベンダープレフィックスの付与、モダン構文の降格、圧縮を行います。
 
-> ブラウザターゲットを指定する場合は、プロジェクトルートに `.browserslistrc` を配置してください。
+対象ブラウザは [browserslist](https://github.com/browserslist/browserslist) から読みます。プロジェクトルートの `.browserslistrc` か、`package.json` の `browserslist` に書いてください。指定が無ければ browserslist の既定が使われます。
+
+対象ブラウザは付与するプレフィックスだけでなく、構文をどこまで降ろすかも決めます。入れ子・メディアクエリの範囲構文・相対カラー構文などは、未対応のブラウザが対象に含まれていれば古い書き方へ変換されます。
+
+```scss
+// 書いたもの
+.a {
+  @media (width >= 40rem) {
+    color: red;
+  }
+}
+```
+
+```css
+/* chrome >= 100 を対象にした場合 */
+@media (min-width: 40rem) {
+  .a {
+    color: red;
+  }
+}
+```
+
+> pugkit は PostCSS のプラグインを受け付けません。CSS の後処理は Lightning CSS に一本化されています。
 
 ### JavaScript / TypeScript
 
@@ -425,13 +447,13 @@ PUGKIT_DEBUG=1 npx pugkit build
 
 ## Tech Stack
 
-| ライブラリ                                        | 役割                                 |
-| ------------------------------------------------- | ------------------------------------ |
-| [Pug](https://pugjs.org/)                         | HTMLテンプレートエンジン             |
-| [Sass](https://sass-lang.com/)                    | CSSプリプロセッサー                  |
-| [esbuild](https://esbuild.github.io/)             | TypeScript/JavaScriptバンドラー      |
-| [PostCSS](https://postcss.org/)                   | CSS後処理（Autoprefixer、cssnano）   |
-| [Sharp](https://sharp.pixelplumbing.com/)         | 画像最適化                           |
-| [SVGO](https://svgo.dev/)                         | SVG最適化                            |
-| [Chokidar](https://github.com/paulmillr/chokidar) | ファイル監視                         |
-| [sirv](https://github.com/lukeed/sirv)            | 静的配信（開発サーバー、SSE と併用） |
+| ライブラリ                                        | 役割                                    |
+| ------------------------------------------------- | --------------------------------------- |
+| [Pug](https://pugjs.org/)                         | HTMLテンプレートエンジン                |
+| [Sass](https://sass-lang.com/)                    | CSSプリプロセッサー                     |
+| [esbuild](https://esbuild.github.io/)             | TypeScript/JavaScriptバンドラー         |
+| [Lightning CSS](https://lightningcss.dev/)        | CSS後処理（プレフィックス・降格・圧縮） |
+| [Sharp](https://sharp.pixelplumbing.com/)         | 画像最適化                              |
+| [SVGO](https://svgo.dev/)                         | SVG最適化                               |
+| [Chokidar](https://github.com/paulmillr/chokidar) | ファイル監視                            |
+| [sirv](https://github.com/lukeed/sirv)            | 静的配信（開発サーバー、SSE と併用）    |

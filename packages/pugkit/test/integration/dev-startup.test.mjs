@@ -114,10 +114,12 @@ describe('dev の差分ビルド', () => {
     const otherBefore = await mtimeOf(context, 'assets/css/other.css')
 
     await new Promise(r => setTimeout(r, 10))
-    await project.write({ 'src/assets/css/style.scss': '.a { color: rebeccapurple; }\n' })
+    // 目印に色名を使わない。Lightning CSS は dev でも色を短い表記に正規化するため、
+    // 書いた文字列がそのまま出力に現れるとは限らない
+    await project.write({ 'src/assets/css/style.scss': '.rebuilt { margin: 7px; }\n' })
     await runTask('sass', { changed: project.path('src/assets/css/style.scss') })
 
-    expect(await read('assets/css/style.css')).toContain('rebeccapurple')
+    expect(await read('assets/css/style.css')).toContain('.rebuilt')
     expect(await mtimeOf(context, 'assets/css/other.css')).toBe(otherBefore)
   })
 
@@ -140,10 +142,12 @@ describe('依存で決める差分ビルド', () => {
    * tokens.scss のように「それ自体エントリで、かつ他からも @use される」
    * 共有ファイルは名前では見分けられず、名前で判断すると反映されない。
    */
+  // 変数の値には色名を使わない。Lightning CSS が短い表記へ正規化するため、
+  // 「書いた文字列が出力にあるか」で伝播を確かめられなくなる
   const sharedEntryProject = () =>
     minimalProjectFiles({
-      'src/assets/css/tokens.scss': '$brand: red;\n.tokens { --x: 1; }\n',
-      'src/assets/css/style.scss': "@use 'tokens';\n.a { color: tokens.$brand; }\n"
+      'src/assets/css/tokens.scss': '$gap: 3px;\n.tokens { --x: 1; }\n',
+      'src/assets/css/style.scss': "@use 'tokens';\n.a { margin: tokens.$gap; }\n"
     })
 
   const readCss = (context, name) =>
@@ -152,10 +156,10 @@ describe('依存で決める差分ビルド', () => {
   it('「_」が付かない共有ファイルの変更を、参照しているエントリに反映する', async () => {
     const { project, context, runTask } = await startWatcher(sharedEntryProject())
 
-    await project.write({ 'src/assets/css/tokens.scss': '$brand: blue;\n.tokens { --x: 2; }\n' })
+    await project.write({ 'src/assets/css/tokens.scss': '$gap: 9px;\n.tokens { --x: 2; }\n' })
     await runTask('sass', { changed: project.path('src/assets/css/tokens.scss') })
 
-    expect(await readCss(context, 'style.css')).toContain('blue')
+    expect(await readCss(context, 'style.css')).toContain('9px')
   })
 
   it('「_」ディレクトリ配下のパーシャルでも反映する', async () => {
