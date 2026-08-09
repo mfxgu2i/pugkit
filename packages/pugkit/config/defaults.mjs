@@ -28,8 +28,7 @@ export const defaultConfig = {
       end_with_newline: true,
       extra_liners: [],
       wrap_line_length: 0,
-      inline: [],
-      content_unformatted: ['script', 'style', 'pre']
+      content_unformatted: ['script', 'style', 'pre', 'textarea']
     },
     imageOptions: {
       webp: {
