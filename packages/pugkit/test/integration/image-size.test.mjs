@@ -24,8 +24,8 @@ const createImageInfoHelper = (pugFile, config, options) =>
 
 const clearImageSizeCache = () => cache.clearImageSizes()
 
-const config = (optimization, density = 1, extra = {}) => ({
-  build: { imageOptimization: optimization, imageSourceDensity: density, ...extra }
+const config = (format, density = 1, extra = {}) => ({
+  build: { image: { format, sourceDensity: density, ...extra } }
 })
 
 const avifConfig = config('avif')
@@ -83,17 +83,17 @@ describe('createImageInfoHelper', () => {
   })
 
   describe('src のパス解決', () => {
-    it('imageOptimization: avif のとき src が .avif パスになる', () => {
+    it('build.image.format: avif のとき src が .avif パスになる', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, avifConfig)
       expect(imageInfo('/images/hero.jpg').src).toBe('/images/hero.avif')
     })
 
-    it('imageOptimization: webp のとき src が .webp パスになる', () => {
+    it('build.image.format: webp のとき src が .webp パスになる', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, webpConfig)
       expect(imageInfo('/images/hero.jpg').src).toBe('/images/hero.webp')
     })
 
-    it('imageOptimization: compress のとき src は元パスのまま', () => {
+    it('build.image.format: compress のとき src は元パスのまま', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, compressConfig)
       expect(imageInfo('/images/hero.jpg').src).toBe('/images/hero.jpg')
     })
@@ -137,7 +137,7 @@ describe('createImageInfoHelper', () => {
     })
   })
 
-  describe('imageSourceDensity', () => {
+  describe('build.image.sourceDensity', () => {
     it('density 1 では原寸を返し srcset は 1 枚だけ', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 1))
       const result = imageInfo('/images/hero.jpg')
@@ -227,7 +227,7 @@ describe('createImageInfoHelper', () => {
   })
 
   describe('アートディレクション variant 自動検出', () => {
-    it('デフォルト（imageInfo.artDirectionSuffix: "_sp"）: avif モードで _sp が検出される', () => {
+    it('デフォルト（build.image.artDirectionSuffix: "_sp"）: avif モードで _sp が検出される', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, avifConfig)
       const result = imageInfo('/images/responsive.jpg')
       expect(result.variant).not.toBeNull()
@@ -236,11 +236,8 @@ describe('createImageInfoHelper', () => {
       expect(result.variant.height).toBe(300)
     })
 
-    it('imageInfo.artDirectionSuffix: "_tb" のとき _tb が検出される', () => {
-      const imageInfo = createImageInfoHelper(
-        mockPugFile,
-        config('webp', 1, { imageInfo: { artDirectionSuffix: '_tb' } })
-      )
+    it('build.image.artDirectionSuffix: "_tb" のとき _tb が検出される', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 1, { artDirectionSuffix: '_tb' }))
       const result = imageInfo('/images/responsive.jpg')
       expect(result.variant).not.toBeNull()
       expect(result.variant.src).toBe('/images/responsive_tb.webp')

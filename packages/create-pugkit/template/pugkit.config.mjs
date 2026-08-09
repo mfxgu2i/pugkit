@@ -11,9 +11,11 @@ export default defineConfig({
     startPath: '/'
   },
   build: {
-    // 'avif' | 'webp' | 'compress'
-    imageOptimization: 'webp',
-    // src の画像を何倍の原本として扱うか。2 なら等倍版を生成して srcset を出す
-    imageSourceDensity: 2
+    image: {
+      // 'avif' | 'webp' | 'compress'
+      format: 'webp',
+      // src の画像を何倍の原本として扱うか。2 なら等倍版を生成して srcset を出す
+      sourceDensity: 2
+    }
   }
 })

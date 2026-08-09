@@ -7,6 +7,7 @@ import { cac } from 'cac'
 import { develop } from './develop.mjs'
 import { build } from './build.mjs'
 import { sprite } from './sprite.mjs'
+import { unsupportedNodeMessage } from '../utils/node-version.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -28,6 +29,11 @@ function fail(error) {
   console.error(process.env.PUGKIT_DEBUG ? (error.stack ?? error) : (error.message ?? error))
   process.exit(1)
 }
+
+// 引数を解釈する前に判定する。古い Node では依存の読み込みで落ちることがあり、
+// そうなると原因が pugkit の不具合に見える
+const unsupportedNode = unsupportedNodeMessage(process.versions.node)
+if (unsupportedNode) fail(new Error(unsupportedNode))
 
 const cli = cac('pugkit')
 

@@ -106,6 +106,68 @@ describe('createBuilderVars', () => {
   })
 })
 
+/**
+ * siteUrl が空でも href は "/about/" として返る。OGP や canonical に入れても
+ * 例外にならないため、HTML を1枚ずつ開くまで気づけない。
+ *
+ * 設定を読んだ時点で知らせると、相対リンクだけで組む案件にも毎回出てしまうので、
+ * テンプレートが絶対URLを実際に参照した時にだけ知らせる
+ */
+describe('siteUrl が空のときの通知', () => {
+  const paths = { src: '/project/src' }
+  const filePath = '/project/src/index.pug'
+
+  const withNotify = (config, options = {}) => {
+    const calls = []
+    const vars = createBuilderVars(filePath, paths, config, { onMissingSiteUrl: () => calls.push(1), ...options })
+    return { vars, calls }
+  }
+
+  it.each(['origin', 'base', 'href'])('%s を参照したら知らせる', property => {
+    const { vars, calls } = withNotify({})
+
+    expect(vars.url[property]).toBeDefined()
+    expect(calls).toHaveLength(1)
+  })
+
+  it('pathname では知らせない（siteUrl に依らない値なので）', () => {
+    const { vars, calls } = withNotify({})
+
+    expect(vars.url.pathname).toBe('/')
+    expect(calls).toEqual([])
+  })
+
+  it('siteUrl があれば参照しても知らせない', () => {
+    const { vars, calls } = withNotify({ siteUrl: 'https://example.com' })
+
+    expect(vars.url.href).toBe('https://example.com/')
+    expect(calls).toEqual([])
+  })
+
+  it('通知しても値そのものは変えない', () => {
+    const { vars } = withNotify({ subdir: 'sub' })
+
+    expect(vars.url.href).toBe('/sub/')
+    expect(vars.url.base).toBe('/sub')
+    expect(vars.url.origin).toBe('')
+  })
+
+  it('参照するたびに知らせる（受け手が回数を決める）', () => {
+    const { vars, calls } = withNotify({})
+
+    vars.url.href
+    vars.url.origin
+
+    expect(calls).toHaveLength(2)
+  })
+
+  it('通知先を渡さなければ素の値を返す', () => {
+    const vars = createBuilderVars(filePath, paths, {})
+
+    expect(vars.url).toEqual({ origin: '', base: '', pathname: '/', href: '/' })
+  })
+})
+
 describe('subdir の正規化', () => {
   // 正規化は loadConfig で済んでいるが、ここでも独自に整形すると
   // 規則が食い違う。実装を分けない限り、弱い方だけが残って気づけない

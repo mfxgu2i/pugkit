@@ -13,13 +13,44 @@ export const defaultConfig = {
     domDiff: true
   },
   build: {
-    imageOptimization: 'webp',
-    // src の画像を何倍の原本として扱うか。2 なら等倍版を生成して srcset を出す
-    imageSourceDensity: 2,
-    imageInfo: {
-      artDirectionSuffix: '_sp'
+    // 画像に関わる設定はここにまとめる。build の直下に並べると、
+    // 形式・密度・sharp のオプション・個別上書きが同じ高さに見えて関係が読めない
+    image: {
+      format: 'webp',
+      // src の画像を何倍の原本として扱うか。2 なら等倍版を生成して srcset を出す
+      sourceDensity: 2,
+      artDirectionSuffix: '_sp',
+      options: {
+        webp: {
+          quality: 80,
+          effort: 4,
+          smartSubsample: true,
+          alphaQuality: 100,
+          lossless: false
+        },
+        jpeg: {
+          quality: 75,
+          progressive: true,
+          mozjpeg: false
+        },
+        png: {
+          quality: 85,
+          compressionLevel: 6,
+          adaptiveFiltering: true,
+          palette: true
+        },
+        avif: {
+          quality: 70,
+          lossless: false,
+          effort: 4,
+          chromaSubsampling: '4:4:4'
+        }
+      },
+      overrides: {}
     },
-    imageOverrides: {},
+    // js-beautify の html オプション。上書きは既定のままでは困るものだけに絞る。
+    // inline を上書きせず、content_unformatted に textarea を残す理由は
+    // docs/adr/0009 にある
     html: {
       indent_size: 2,
       indent_with_tabs: false,
@@ -28,34 +59,7 @@ export const defaultConfig = {
       end_with_newline: true,
       extra_liners: [],
       wrap_line_length: 0,
-      inline: [],
-      content_unformatted: ['script', 'style', 'pre']
-    },
-    imageOptions: {
-      webp: {
-        quality: 80,
-        effort: 4,
-        smartSubsample: true,
-        alphaQuality: 100,
-        lossless: false
-      },
-      jpeg: {
-        quality: 75,
-        progressive: true,
-        mozjpeg: false
-      },
-      png: {
-        quality: 85,
-        compressionLevel: 6,
-        adaptiveFiltering: true,
-        palette: true
-      },
-      avif: {
-        quality: 70,
-        lossless: false,
-        effort: 4,
-        chromaSubsampling: '4:4:4'
-      }
+      content_unformatted: ['script', 'style', 'pre', 'textarea']
     }
   }
 }

@@ -65,8 +65,9 @@ describe('normalizeSourceDensity / sourceDensityOf', () => {
   it('未設定・不正値は 1 に倒す（1 枚も出力されない事故を防ぐ）', () => {
     expect(sourceDensityOf(undefined)).toBe(1)
     expect(sourceDensityOf({ build: {} })).toBe(1)
-    expect(sourceDensityOf({ build: { imageSourceDensity: 3 } })).toBe(1)
-    expect(sourceDensityOf({ build: { imageSourceDensity: 2 } })).toBe(2)
+    expect(sourceDensityOf({ build: { image: {} } })).toBe(1)
+    expect(sourceDensityOf({ build: { image: { sourceDensity: 3 } } })).toBe(1)
+    expect(sourceDensityOf({ build: { image: { sourceDensity: 2 } } })).toBe(2)
   })
 })
 

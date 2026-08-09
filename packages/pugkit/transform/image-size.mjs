@@ -59,7 +59,7 @@ function createImageResolver(filePath, paths) {
 /**
  * Pug に渡す imageInfo ヘルパーを作る。
  *
- * 画像の実寸を読み、imageSourceDensity に応じた表示サイズと srcset を返す。
+ * 画像の実寸を読み、build.image.sourceDensity に応じた表示サイズと srcset を返す。
  * あわせてアートディレクション用の派生画像（既定 `_sp`）を自動検出する。
  *
  * 出力名の規則は utils/image-density.mjs に置き、生成側（tasks/image.mjs）と共有する。
@@ -73,9 +73,9 @@ function createImageResolver(filePath, paths) {
  */
 export function createImageInfoHelper(filePath, context, { onAccess, logger = defaultLogger } = {}) {
   const { paths, config, cache } = context
-  const optimization = config?.build?.imageOptimization
+  const format = config?.build?.image?.format
   const sourceDensity = sourceDensityOf(config)
-  const artDirectionSuffix = config?.build?.imageInfo?.artDirectionSuffix ?? '_sp'
+  const artDirectionSuffix = config?.build?.image?.artDirectionSuffix ?? '_sp'
   const findImageFile = createImageResolver(filePath, paths)
 
   /**
@@ -91,9 +91,9 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
     // public は copyTask がバイト列のまま出すだけなので、変換も密度も適用されない
     const scalable = !found.fromPublic && supportsDensity(src) && hasScaledVariant(width, height, sourceDensity)
     const density = scalable ? sourceDensity : 1
-    const outputOptimization = found.fromPublic ? null : optimization
+    const outputFormat = found.fromPublic ? null : format
 
-    const entries = densityOutputs(src, outputOptimization, density)
+    const entries = densityOutputs(src, outputFormat, density)
       .map(out => ({
         src: out.name,
         density: out.density,

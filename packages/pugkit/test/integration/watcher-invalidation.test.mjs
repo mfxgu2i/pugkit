@@ -20,7 +20,7 @@ beforeEach(async () => {
   src = project.path('src')
   context = {
     paths: { src, public: project.path('public'), output: project.path('dist') },
-    config: { build: { imageOptimization: 'webp', imageSourceDensity: 2 } },
+    config: { build: { image: { format: 'webp', sourceDensity: 2 } } },
     cache: new CacheManager('development'),
     graph: new DependencyGraph(),
     imageGraph: new DependencyGraph(),

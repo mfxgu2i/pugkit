@@ -30,10 +30,12 @@ beforeEach(async () => {
     paths: { src: project.path('src'), public: project.path('public'), output: project.path('dist') },
     config: {
       build: {
-        imageOptimization: 'webp',
-        imageSourceDensity: 2,
-        imageOptions: { webp: { quality: 30, effort: 0 } },
-        imageOverrides: {}
+        image: {
+          format: 'webp',
+          sourceDensity: 2,
+          options: { webp: { quality: 30, effort: 0 } },
+          overrides: {}
+        }
       }
     }
   }
