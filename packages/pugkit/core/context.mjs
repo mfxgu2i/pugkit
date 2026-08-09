@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs'
 import { CacheManager } from './cache.mjs'
 import { DependencyGraph } from './graph.mjs'
 import { ResourceStore } from './resources.mjs'
+import { logger } from '../utils/logger.mjs'
 
 /**
  * dev の出力先は起動のたびに中身を作り直すため、消してはいけない場所を弾く。
@@ -58,6 +59,8 @@ export class BuildContext {
     this.imageGraph = new DependencyGraph() // Pug -> 画像ファイルの依存グラフ（dev時に構築）
     // Sass / esbuild の常駐リソース。Builder.close() で破棄する
     this.resources = new ResourceStore()
+    // warnOnce で出し終えた理由
+    this.warnedReasons = new Set()
 
     const buildOutDir = resolveFromRoot(config.root, config.outDir ?? DEFAULT_OUT_DIR)
 
@@ -79,6 +82,21 @@ export class BuildContext {
     }
 
     this.server = null
+  }
+
+  /**
+   * 同じ理由の警告をセッション中に1回だけ出す。
+   *
+   * ページごとに判定するものは、共通レイアウト由来だとページ数だけ警告が並ぶ。
+   * 数が多いと他のログを押し流して、かえって読まれなくなる
+   *
+   * @param reason 出し分けの鍵。文言ではなく理由そのものを渡す
+   */
+  warnOnce(scope, reason, message) {
+    if (this.warnedReasons.has(reason)) return
+
+    this.warnedReasons.add(reason)
+    logger.warn(scope, message)
   }
 
   get isProduction() {

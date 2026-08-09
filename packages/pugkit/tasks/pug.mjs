@@ -1,5 +1,5 @@
 import { glob } from 'glob'
-import { basename } from 'node:path'
+import { basename, relative } from 'node:path'
 import { compilePugFile } from '../transform/pug.mjs'
 import { formatHtml } from '../transform/html.mjs'
 import { createBuilderVars } from '../transform/builder-vars.mjs'
@@ -57,7 +57,14 @@ export async function buildPageHtml(filePath, context) {
       template = result.template
     }
 
-    const builderVars = createBuilderVars(filePath, paths, config)
+    const builderVars = createBuilderVars(filePath, paths, config, {
+      onMissingSiteUrl: () =>
+        context.warnOnce(
+          'config',
+          'missing-site-url',
+          `siteUrl が空のまま Builder.url を参照しています: ${relative(paths.src, filePath)}。OGP や canonical に相対パスが入ります。pugkit.config.mjs の siteUrl か、build の --site-url で指定してください`
+        )
+    })
 
     // dev 時のみ: imageGraph に Pug->画像 の依存を記録して画像変更時の最小再ビルドに使う
     const accessedImages = new Set()
