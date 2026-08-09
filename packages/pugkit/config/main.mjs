@@ -77,15 +77,17 @@ function mergeConfig(defaults, user) {
 function validateKeys(userConfig) {
   const { renamed, unknown } = inspectConfigKeys(userConfig)
 
+  // 中止する前に警告を出す。v1 の設定ファイルは旧名と不明なキーの両方を持つことが多く、
+  // 先に投げると不明なキーが見えないまま終わり、直して再実行するまで気づけない
+  if (unknown.length > 0) {
+    logger.warn('config', `pugkit.config.mjs に不明なキーがあります（無視されます）: ${unknown.join(', ')}`)
+  }
+
   if (renamed.length > 0) {
     const lines = renamed.map(key => `  ${key}  →  ${RENAMED_KEYS[key]}`)
     throw new Error(
       `pugkit.config.mjs に v1 のキーが残っています。指定した値が無視されるため中止しました。\n${lines.join('\n')}`
     )
-  }
-
-  if (unknown.length > 0) {
-    logger.warn('config', `pugkit.config.mjs に不明なキーがあります（無視されます）: ${unknown.join(', ')}`)
   }
 }
 

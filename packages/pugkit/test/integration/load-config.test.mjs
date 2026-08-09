@@ -117,6 +117,21 @@ describe('設定キーの検査', () => {
 
     await expect(loadConfig(project.root)).rejects.toThrow('build.image.format')
   })
+
+  /**
+   * v1 の設定ファイルは旧名と不明なキーを両方持っていることが多い。
+   * 中止を先にすると不明なキーが見えないまま終わり、
+   * 旧名を直して再実行するまで残りの誤りに気づけない
+   */
+  it('中止するときも、不明なキーは先に知らせる', async () => {
+    const logs = captureLogs()
+    const project = await createTempProject({
+      'pugkit.config.mjs': "export default { debug: false, build: { imageOptimization: 'compress' } }\n"
+    })
+
+    await expect(loadConfig(project.root)).rejects.toThrow('build.imageOptimization')
+    expect(logs.mock.calls.map(args => args.join(' ')).join('\n')).toContain('debug')
+  })
 })
 
 describe('既定値とのマージ', () => {
