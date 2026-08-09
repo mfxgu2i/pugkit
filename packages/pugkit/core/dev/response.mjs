@@ -1,7 +1,10 @@
 import path from 'node:path'
 
 function escapeHtml(str) {
-  return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+  return String(str).replace(
+    /[&<>"']/g,
+    c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+  )
 }
 
 /**
@@ -82,4 +85,3 @@ export function injectReload(html, liveReloadScript) {
     ? html.replace('</body>', () => liveReloadScript + '</body>')
     : html + liveReloadScript
 }
-

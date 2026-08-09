@@ -68,9 +68,12 @@ describe('存在確認の失敗（同期 throw）', () => {
 
   it('失敗を報告する', () => {
     const reported = []
-    const guarded = guardStaticServe(() => {
-      throw Object.assign(new Error('gone'), { code: 'ENOENT' })
-    }, error => reported.push(error.code))
+    const guarded = guardStaticServe(
+      () => {
+        throw Object.assign(new Error('gone'), { code: 'ENOENT' })
+      },
+      error => reported.push(error.code)
+    )
 
     guarded({}, createResponse(), () => {})
 

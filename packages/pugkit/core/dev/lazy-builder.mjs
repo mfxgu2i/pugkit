@@ -32,4 +32,3 @@ export function createLazyPageBuilder(context, buildFn = buildPageHtml) {
     return promise
   }
 }
-

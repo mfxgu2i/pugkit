@@ -80,4 +80,3 @@ export function createReloadTag({ signature = '', scroll = true, domDiff = true 
 
   return `<script ${attrs}>\n${idiomorph ?? ''}\n${loadClientSource()}</script>`
 }
-
