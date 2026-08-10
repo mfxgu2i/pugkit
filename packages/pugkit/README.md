@@ -74,14 +74,26 @@ project-root/
 
 ### File Naming Rules
 
-`src/` では `_`（アンダースコア）で始まるファイル・ディレクトリがビルド対象外です。それ以外のファイルは `src/` 配下のディレクトリ構成を維持したまま `outDir`（デフォルト: `dist/`）に出力されます。
-
-`public/` にはこの規則が適用されません。ドットファイルを含め、置いたものがすべてコピーされます。
+`src/` から出力されるのは、いずれかのタスクが担当する拡張子だけです。ディレクトリ構成は維持したまま `outDir`（デフォルト: `dist/`）に出力されます。
 
 ```
 src/foo/style.scss →  dist/foo/style.css
 src/foo/bar/script.js  →  dist/foo/bar/script.js
 ```
+
+| 拡張子                             | 担当   |
+| ---------------------------------- | ------ |
+| `.pug`                             | pug    |
+| `.scss`                            | sass   |
+| `.ts` / `.js`                      | script |
+| `.jpg` / `.jpeg` / `.png` / `.gif` | image  |
+| `.svg`                             | svg    |
+
+これ以外のファイルは出力されません。フォント・JSON・`.css`・`.webp` などを `src/` に置いても無視されます（`.webp` と `.avif` だけはビルド時に警告が出ます）。これらは `public/` に置いてください。
+
+`_`（アンダースコア）で始まるファイル・ディレクトリはビルド対象外です。
+
+`public/` にはどちらの規則も適用されません。ドットファイルを含め、置いたものがすべてコピーされます。
 
 ## Configuration
 
@@ -117,25 +129,52 @@ export default defineConfig({
 
 指定しなかった項目はデフォルト値が使われます。全項目は次の表を参照してください。
 
-| Option                           | Description                                                                                                                                          | Type / Values                        | Default       |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------- |
-| `siteUrl`                        | サイトのベースURL（`Builder.url` に使用）                                                                                                            | `string`                             | `''`          |
-| `subdir`                         | サイトを配置するサブディレクトリ。出力先が `outDir/<subdir>/` になり、dev の URL にも付く。`Builder.subdir` / `Builder.url` にも反映される           | `string`                             | `''`          |
-| `outDir`                         | build の出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可。dev は書き込まない。指定できる場所に制限あり（下記） | `string`                             | `'dist'`      |
-| `cacheDir`                       | dev のアセット出力先。`null` で `node_modules/.pugkit/dev`（`node_modules` が無ければ `.pugkit/dev`）。指定先は dev 起動のたびに作り直される（下記） | `string` \| `null`                   | `null`        |
-| `server.port`                    | 開発サーバーのポート番号                                                                                                                             | `number`                             | `5555`        |
-| `server.host`                    | 開発サーバーのホスト                                                                                                                                 | `string`                             | `'localhost'` |
-| `server.startPath`               | 起動ログに表示する URL のパス                                                                                                                        | `string`                             | `'/'`         |
-| `server.domDiff`                 | ライブリロードで DOM の差分適用を使うか（`false` で常にフルリロード）                                                                                | `boolean`                            | `true`        |
-| `build.image.format`             | 画像の出力形式                                                                                                                                       | `'avif'` \| `'webp'` \| `'compress'` | `'webp'`      |
-| `build.image.sourceDensity`      | `src/` の画像を何倍の原本として扱うか。`2` なら等倍版を生成して `srcset` を出す。`imageInfo()` に `widths` を渡した画像には効かない                  | `1` \| `2`                           | `2`           |
-| `build.image.options.avif`       | AVIF変換オプション（[Sharp AVIF options](https://sharp.pixelplumbing.com/api-output#avif)）                                                          | `object`                             | -             |
-| `build.image.options.webp`       | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）                                                          | `object`                             | -             |
-| `build.image.options.jpeg`       | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）                                                          | `object`                             | -             |
-| `build.image.options.png`        | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）                                                             | `object`                             | -             |
-| `build.image.artDirectionSuffix` | アートディレクション用画像のサフィックス（`_sp`, `_tb`, `_pc` など）                                                                                 | `string`                             | `'_sp'`       |
-| `build.image.overrides`          | 特定画像に個別のSharpオプションを適用（グローバルオプションに上書きマージ）                                                                          | `Record<string, object>`             | `{}`          |
-| `build.html`                     | HTML整形オプション（[js-beautify html options](https://github.com/beautify-web/js-beautify#options)）                                                | `object`                             | see below     |
+| Option                           | Description                                                                                                                                  | Type / Values                        | Default       |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------- |
+| `siteUrl`                        | サイトのベースURL（`Builder.url` に使用）                                                                                                    | `string`                             | `''`          |
+| `subdir`                         | サイトを配置するサブディレクトリ。出力先が `outDir/<subdir>/` になり、dev の URL にも付く。`Builder.subdir` / `Builder.url` にも反映される   | `string`                             | `''`          |
+| `outDir`                         | build の出力先ディレクトリ。相対・絶対パス・ネスト（`htdocs/v2`）・上位（`../htdocs`）も指定可。dev は書き込まない。指定できる場所に制限あり | `string`                             | `'dist'`      |
+| `cacheDir`                       | dev のアセット出力先。`null` で `node_modules/.pugkit/dev`（`node_modules` が無ければ `.pugkit/dev`）。指定先は dev 起動のたびに作り直される | `string` \| `null`                   | `null`        |
+| `server.port`                    | 開発サーバーのポート番号                                                                                                                     | `number`                             | `5555`        |
+| `server.host`                    | 開発サーバーのホスト                                                                                                                         | `string`                             | `'localhost'` |
+| `server.startPath`               | 起動ログに表示する URL のパス                                                                                                                | `string`                             | `'/'`         |
+| `server.domDiff`                 | ライブリロードで DOM の差分適用を使うか（`false` で常にフルリロード）                                                                        | `boolean`                            | `true`        |
+| `build.image.format`             | 画像の出力形式                                                                                                                               | `'avif'` \| `'webp'` \| `'compress'` | `'webp'`      |
+| `build.image.sourceDensity`      | `src/` の画像を何倍の原本として扱うか。`2` なら等倍版を生成して `srcset` を出す。`imageInfo()` に `widths` を渡した画像には効かない          | `1` \| `2`                           | `2`           |
+| `build.image.options.avif`       | AVIF変換オプション（[Sharp AVIF options](https://sharp.pixelplumbing.com/api-output#avif)）                                                  | `object`                             | 下記          |
+| `build.image.options.webp`       | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）                                                  | `object`                             | 下記          |
+| `build.image.options.jpeg`       | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）                                                  | `object`                             | 下記          |
+| `build.image.options.png`        | PNG圧縮オプション（[Sharp PNG options](https://sharp.pixelplumbing.com/api-output#png)）                                                     | `object`                             | 下記          |
+| `build.image.artDirectionSuffix` | アートディレクション用画像のサフィックス（`_sp`, `_tb`, `_pc` など）                                                                         | `string`                             | `'_sp'`       |
+| `build.image.overrides`          | 特定画像に個別のSharpオプションを適用（グローバルオプションに上書きマージ）                                                                  | `Record<string, object>`             | `{}`          |
+| `build.html`                     | HTML整形オプション（[js-beautify html options](https://github.com/beautify-web/js-beautify#options)）                                        | `object`                             | 下記          |
+
+### 既定値
+
+`build.image.options.*` と `build.html` は形式ごとに浅くマージされます。一部だけ指定すれば、残りは次の値のままです。
+
+```js
+build: {
+  image: {
+    options: {
+      webp: { quality: 80, effort: 4, smartSubsample: true, alphaQuality: 100, lossless: false },
+      jpeg: { quality: 75, progressive: true, mozjpeg: false },
+      png: { quality: 85, compressionLevel: 6, adaptiveFiltering: true, palette: true },
+      avif: { quality: 70, lossless: false, effort: 4, chromaSubsampling: '4:4:4' }
+    }
+  },
+  html: {
+    indent_size: 2,
+    indent_with_tabs: false,
+    max_preserve_newlines: 1,
+    preserve_newlines: false,
+    end_with_newline: true,
+    extra_liners: [],
+    wrap_line_length: 0,
+    content_unformatted: ['script', 'style', 'pre', 'textarea']
+  }
+}
+```
 
 ## Features
 
@@ -230,7 +269,7 @@ img(src=info.src srcset=info.srcset sizes=info.sizes width=info.width height=inf
 
 幅モードでは `width` と `height` が原寸になります。CSS で幅を指定してください。`sizes` も必ず渡してください。省くとブラウザは画面いっぱいに表示されるものとみなし、重い候補を選びます。
 
-`srcset` は候補が 2 つ以上のときだけ返ります。1 つのときは `sizes` ごと落ちます。SVG、GIF、`public/` の画像、`sourceDensity: 1`、指定した幅がすべて原寸以上だった場合が該当します。`variant.srcset` は `<source>` の必須属性なので、候補が 1 つでも返ります。
+`srcset` は候補が 2 つ以上のときだけ返ります。1 つのときは `sizes` ごと落ちます。SVG、GIF、`public/` の画像、`sourceDensity: 1`、縮小しても寸法が変わらない画像、指定した幅がすべて原寸以上だった場合が該当します。`variant.srcset` は `<source>` の必須属性なので、候補が 1 つでも返ります。
 
 アートディレクション画像は `variant` に入ります。`widths` は `variant` にも掛かります。
 
@@ -458,6 +497,8 @@ PUGKIT_DEBUG=1 npx pugkit build
 | [js-beautify](https://github.com/beautify-web/js-beautify) | HTML整形                             |
 | [Chokidar](https://github.com/paulmillr/chokidar)          | ファイル監視                         |
 | [sirv](https://github.com/lukeed/sirv)                     | 静的配信（開発サーバー、SSE と併用） |
+| [image-size](https://github.com/image-size/image-size)     | 画像の寸法の読み取り                 |
+| [idiomorph](https://github.com/bigskysoftware/idiomorph)   | ライブリロードの DOM 差分適用        |
 | [htmlparser2](https://github.com/fb55/htmlparser2)         | 出力 HTML からの参照の収集           |
 
 [markuplint](https://markuplint.dev/) は optional peer dependency です。`pugkit check markup` を使う場合はプロジェクトに入れてください。

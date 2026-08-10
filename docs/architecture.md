@@ -39,8 +39,9 @@ pugkit check [...項目]
   ├─ 項目を選ぶ（core/check/index.mjs）
   │    指定が無ければ全部。知らない id は中止する
   │
-  ├─ [ references ]  出力の .html / .css を読み、参照が実在するかを見る
-  └─ [ markup ]      出力の .html を markuplint に渡す
+  ├─ references  出力の .html / .css を読み、参照が実在するかを見る
+  └─ markup      出力の .html を markuplint に渡す
+                 項目は直列に走る。markuplint がファイル単位で並列に走るため
 ```
 
 build とは独立していて、build は検査を一切しない（[ADR 0013](adr/0013-check-is-a-separate-command.md)）。
@@ -113,8 +114,12 @@ pug / sass / script / image / svg / sprite / copy / server / watch の 9 種類�
 生成系のタスクは戻り値を持たない。`watch` だけは `FileWatcher` を返し、
 `Builder` が停止のために保持する。
 
-`options.changed` が渡されると、そのファイルだけを処理する（dev の監視時）。
+`options.changed` を受け取るのは sass / script / image / svg / copy の 5 つで、
+渡されるとそのファイルだけを処理する（dev の監視時）。
 sass と script は依存グラフを使って影響エントリに絞り込む。
+
+pug と sprite は options を取らず、常に全件を処理する。watcher 側も
+`whole: true` を指定して `changed` を渡さない。
 
 ### paths
 
@@ -204,12 +209,16 @@ build ではグラフを絞り込みに使わない。構築はするが、全�
 
 おおまかな依存の向きは `cli` → `index` → `core` → `tasks` → `transform` / `utils`。
 
-ただし `core` から `tasks` への参照が 3 種類ある。どれも意図したもので、
+ただし `core` から `tasks` への参照が 4 種類ある。どれも意図したもので、
 向きを守るために消してはいけない。
 
 出力先の導出（`core/watcher.mjs` と `core/output-conflicts.mjs` が
 `*OutputPath` を呼ぶ）。規則の持ち主はタスク自身であるべきで、
 呼ぶ側が独自に導出すると生成と削除でずれる。
+
+走査範囲の共有（`core/output-conflicts.mjs` が `IMAGE_GLOB` / `SVG_GLOB` を取る）。
+衝突検査が見る範囲は、build が実際に処理する範囲と同じでなければならない。
+別々に書くと、検査を通った組み合わせが build で衝突する。
 
 リクエスト時ビルド（`core/dev/lazy-builder.mjs` が `buildPageHtml` を呼ぶ）。
 dev と build で同じ関数を通すためのもの。
@@ -348,7 +357,7 @@ Sass と Script のインクリメンタル処理も `isDevelopment` の条件�
 | -------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | build は再現性を優先する         | 同じソースからは必ず同じ出力が出る。速度はここでは求めない | [0001](adr/0001-build-is-always-full.md)                                                     |
 | dev は応答性を優先する           | 反映までの時間がプロジェクトの規模に依存しないようにする   | [0002](adr/0002-dev-html-lazy-build.md)                                                      |
-| 出力のパスと名前は入力のまま保つ | ハッシュを付けず、専用ディレクトリへも移さない             | [0006](adr/0006-single-source-image-density.md)                                              |
+| 出力のパスと名前は入力のまま保つ | ハッシュを付けず、専用ディレクトリへも移さない             | [0005](adr/0005-abort-on-output-conflict.md)                                                 |
 | 間違いは黙って通さない           | 気づけない不具合は、気づける不具合より高くつく             | [0004](adr/0004-cachedir-is-not-persisted.md) / [0005](adr/0005-abort-on-output-conflict.md) |
 
 最後の 2 つは結びついている。パスと名前を保つ以上、ハッシュ化で衝突を構造的に
