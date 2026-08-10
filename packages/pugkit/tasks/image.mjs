@@ -10,7 +10,9 @@ import {
   hasScaledVariant,
   parseWidthName,
   scaleDown,
-  sourceDensityOf
+  sourceDensityOf,
+  widthDimensions,
+  widthName
 } from '../utils/image-density.mjs'
 import { CONVERTIBLE_GLOB, UNHANDLED_GLOB } from '../utils/image-formats.mjs'
 import { FILE_CONCURRENCY, runWithConcurrency } from '../utils/concurrency.mjs'
@@ -134,6 +136,36 @@ function resolveEncoder(ext, config) {
   return null
 }
 
+/** 個別上書き設定。幅違いにも同じ値を掛ける（幅ごとには変えられない） */
+function overridesFor(relativePath, config) {
+  return config.build.image.overrides?.[relativePath.replace(/\\/g, '/')] ?? {}
+}
+
+/**
+ * 幅違いを 1 枚書き出す。
+ *
+ * build と dev のリクエスト時生成が、リサイズの式とエンコード設定を共有するための入口。
+ * 別々に持つと同じ URL がモードによって違うバイト列になり、
+ * dev と build のアセット一致が崩れる（docs/adr/0011）。
+ *
+ * @param size ソースの実寸。剪定の判定と同じ値を渡すこと
+ */
+export async function writeWidthVariant(sourcePath, outputPath, targetWidth, size, context) {
+  const { paths, config } = context
+  const encoder = resolveEncoder(extname(sourcePath).toLowerCase(), config)
+
+  // sharp を通せない形式は幅違いを作らない（compress モードの GIF）
+  if (!encoder) return false
+
+  const { width, height } = widthDimensions(size.width, size.height, targetWidth)
+  const overrides = overridesFor(relative(paths.src, sourcePath), config)
+
+  await ensureFileDir(outputPath)
+  await encoder(sharp(sourcePath).resize(width, height), overrides).toFile(outputPath)
+
+  return true
+}
+
 /**
  * 画像を処理（最適化）
  */
@@ -141,9 +173,15 @@ async function processImage(filePath, context, retries = 3, retryDelay = 200) {
   const { paths, config } = context
   const ext = extname(filePath).toLowerCase()
   const relativePath = relative(paths.src, filePath)
-  const overrideKey = relativePath.replace(/\\/g, '/')
-  const overrides = config.build.image.overrides?.[overrideKey] ?? {}
+  const overrides = overridesFor(relativePath, config)
   const sourceDensity = sourceDensityOf(config)
+
+  /**
+   * 幅違いは build だけが作る。dev はリクエスト時に作るので、ここでも作ると
+   * 「ページを開く前と後で出力が変わる」ことになり、判断がセッション中に反転する。
+   * 幅は剪定済みで届く（transform/image-size.mjs）ので、ここでは原寸と比べ直さない
+   */
+  const widths = context.isProduction ? (context.imageWidths?.get(filePath) ?? []) : []
 
   try {
     const outputs = imageOutputPaths(relativePath, config, paths)
@@ -157,12 +195,14 @@ async function processImage(filePath, context, retries = 3, retryDelay = 200) {
       return
     }
 
-    // 縮小版を作るかは原寸に依る。1x1 のような画像で同じ寸法を 2 枚配らない
-    const size = outputs.length > 1 ? await sharp(filePath).metadata() : null
+    // 縮小版を作るかは原寸に依る。1x1 のような画像で同じ寸法を 2 枚配らない。
+    // 幅違いを作るときもリサイズ先の算出に実寸が要る
+    const size = outputs.length > 1 || widths.length > 0 ? await sharp(filePath).metadata() : null
     const scalable = size ? hasScaledVariant(size.width, size.height, sourceDensity) : false
+    const [{ relative: convertedName }] = outputs
 
-    await Promise.all(
-      outputs.map(async out => {
+    await Promise.all([
+      ...outputs.map(async out => {
         const isOriginal = out.density >= sourceDensity
         if (!isOriginal && !scalable) return
 
@@ -175,8 +215,11 @@ async function processImage(filePath, context, retries = 3, retryDelay = 200) {
 
         await ensureFileDir(out.absolute)
         await encoder(pipeline, overrides).toFile(out.absolute)
-      })
-    )
+      }),
+      ...widths.map(width =>
+        writeWidthVariant(filePath, resolve(paths.output, widthName(convertedName, width)), width, size, context)
+      )
+    ])
   } catch (error) {
     if (retries > 0 && error.message.includes('unsupported image format')) {
       await new Promise(resolve => setTimeout(resolve, retryDelay))

@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { stat, readFile, writeFile, mkdir } from 'node:fs/promises'
 import sharp from 'sharp'
 import { imageOutputPaths, imageTask } from '../../tasks/image.mjs'
+import { ImageWidthRequests } from '../../core/image-widths.mjs'
 import { createTempProject, listFiles } from '../helpers/project.mjs'
 
 /**
@@ -22,9 +23,20 @@ async function createJpeg(filePath, width = 200, height = 150) {
     .toFile(filePath)
 }
 
-function makeContext({ overrides = {}, format = 'webp', imageOptions = {}, density = 1 } = {}) {
+function makeContext({
+  overrides = {},
+  format = 'webp',
+  imageOptions = {},
+  density = 1,
+  widths = {},
+  isProduction = true
+} = {}) {
+  const imageWidths = new ImageWidthRequests()
+  for (const [name, values] of Object.entries(widths)) imageWidths.record(resolve(srcDir, name), values)
+
   return {
     paths: { src: srcDir, output: distDir, public: publicDir },
+    imageWidths,
     config: {
       build: {
         image: {
@@ -41,7 +53,7 @@ function makeContext({ overrides = {}, format = 'webp', imageOptions = {}, densi
         }
       }
     },
-    isProduction: true
+    isProduction
   }
 }
 
@@ -259,6 +271,67 @@ describe('出力先の規則', () => {
   it('筆頭は必ず原寸（削除側が「このソースの出力」として頼る）', () => {
     const [first] = imageOutputPaths('img/a.jpg', config('webp', 2), paths)
     expect(first).toMatchObject({ relative: 'img/a.webp', density: 2 })
+  })
+})
+
+/**
+ * 幅違いの書き出し。幅は imageInfo() が集めたものだけを作る。
+ * 剪定は参照側で済んでいるので、ここでは原寸と比べ直さない（docs/adr/0011）
+ */
+describe('幅違いの出力', () => {
+  const sizeOf = async name => {
+    const { width, height } = await sharp(resolve(distDir, name)).metadata()
+    return { width, height }
+  }
+
+  it('集めた幅を書き出す', async () => {
+    await imageTask(makeContext({ widths: { 'normal.jpg': [50, 100] } }))
+
+    const files = await listFiles(distDir)
+    expect(files).toContain('normal@50w.webp')
+    expect(files).toContain('normal@100w.webp')
+  })
+
+  it('幅に合わせて縦も比率で縮める', async () => {
+    await imageTask(makeContext({ widths: { 'normal.jpg': [100] } }))
+
+    // 元は 200x150
+    expect(await sizeOf('normal@100w.webp')).toEqual({ width: 100, height: 75 })
+  })
+
+  it('要求されていない画像には作らない', async () => {
+    await imageTask(makeContext({ widths: { 'normal.jpg': [100] } }))
+
+    expect(await listFiles(distDir)).not.toContain('mv@100w.webp')
+  })
+
+  /** dev はリクエスト時に作る。ここで作るとページを開く前と後で出力が変わる */
+  it('dev では作らない', async () => {
+    await imageTask(makeContext({ widths: { 'normal.jpg': [100] }, isProduction: false }))
+
+    const files = await listFiles(distDir)
+    expect(files).not.toContain('normal@100w.webp')
+    // 前提: 無印は作られている
+    expect(files).toContain('normal.webp')
+  })
+
+  it('overrides は幅違いにも掛かる', async () => {
+    const low = makeContext({ widths: { 'mv.jpg': [100] } })
+    await imageTask(low)
+    const lowSize = (await stat(resolve(distDir, 'mv@100w.webp'))).size
+
+    const high = makeContext({ widths: { 'mv.jpg': [100] }, overrides: { 'mv.jpg': { quality: 100 } } })
+    await imageTask(high)
+
+    expect((await stat(resolve(distDir, 'mv@100w.webp'))).size).toBeGreaterThan(lowSize)
+  })
+
+  it('compress モードの GIF には作らない（sharp を通せないため）', async () => {
+    await writeFile(resolve(srcDir, 'anim.gif'), await readFile(resolve(srcDir, 'normal.jpg')))
+
+    await imageTask(makeContext({ format: 'compress', widths: { 'anim.gif': [100] } }))
+
+    expect(await listFiles(distDir)).not.toContain('anim@100w.gif')
   })
 })
 
