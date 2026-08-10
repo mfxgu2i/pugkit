@@ -49,8 +49,10 @@ export const defaultConfig = {
       overrides: {}
     },
     // js-beautify の html オプション。上書きは既定のままでは困るものだけに絞る。
-    // inline を上書きせず、content_unformatted に textarea を残す理由は
-    // docs/adr/0009 にある
+    //
+    // inline を上書きしないのは、既定を狭めるとインライン要素が改行され、
+    // 表示に無い空白が入るため。content_unformatted の textarea も、
+    // 外すと中身が整形されて値そのものが変わる
     html: {
       indent_size: 2,
       indent_with_tabs: false,

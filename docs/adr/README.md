@@ -7,7 +7,7 @@ pugkit がある形になっている理由を、決定ごとに 1 ファイル�
 
 ## 書き方
 
-ファイル名は `NNNN-短い題名.md`。番号は連番で、欠番を作らない。
+ファイル名は `NNNN-短い題名.md`。番号は追加した順に振り、一度使った番号は再利用しない。
 
 各ファイルは次の見出しを持つ。
 
@@ -42,20 +42,21 @@ pugkit がある形になっている理由を、決定ごとに 1 ファイル�
 
 決定した時点で何を知っていたかが残らないと、記録の意味がなくなるため。
 
+記録に残す価値が無くなった ADR は削除する。番号は詰めないので、一覧に欠番が出る。
+欠番は「そこにあった ADR を消した」という意味で、抜けや書き忘れではない。
+
 ## 一覧
 
-| 番号                                                | 題名                                      |
-| --------------------------------------------------- | ----------------------------------------- |
-| [0001](0001-build-is-always-full.md)                | build は毎回フルビルドする                |
-| [0002](0002-dev-html-lazy-build.md)                 | dev の HTML はリクエスト時に作る          |
-| [0003](0003-outdir-is-build-only.md)                | outDir は build 専用にする                |
-| [0004](0004-cachedir-is-not-persisted.md)           | dev のキャッシュは永続化しない            |
-| [0005](0005-abort-on-output-conflict.md)            | 出力先が衝突したら中止する                |
-| [0006](0006-single-source-image-density.md)         | 画像は 1 ソースから密度別に生成する       |
-| [0007](0007-resources-live-in-context.md)           | 常駐リソースは BuildContext が持つ        |
-| [0008](0008-config-key-mistakes-are-reported.md)    | 設定キーの誤りを知らせる                  |
-| [0009](0009-html-formatting-follows-js-beautify.md) | HTML の整形は js-beautify の既定に寄せる  |
-| [0010](0010-css-postprocess-is-lightningcss.md)     | CSS の後処理を Lightning CSS に一本化する |
-| [0011](0011-image-widths-are-caller-driven.md)      | 画像の幅は呼び出し側が決める              |
-| [0012](0012-single-candidate-drops-srcset.md)       | 候補が 1 つなら img の srcset を出さない  |
-| [0013](0013-check-is-a-separate-command.md)         | 出力の検査は build と分けたコマンドにする |
+| 番号                                            | 題名                                      |
+| ----------------------------------------------- | ----------------------------------------- |
+| [0001](0001-build-is-always-full.md)            | build は毎回フルビルドする                |
+| [0002](0002-dev-html-lazy-build.md)             | dev の HTML はリクエスト時に作る          |
+| [0003](0003-outdir-is-build-only.md)            | outDir は build 専用にする                |
+| [0004](0004-cachedir-is-not-persisted.md)       | dev のキャッシュは永続化しない            |
+| [0005](0005-abort-on-output-conflict.md)        | 出力先が衝突したら中止する                |
+| [0006](0006-single-source-image-density.md)     | 画像は 1 ソースから密度別に生成する       |
+| [0007](0007-resources-live-in-context.md)       | 常駐リソースは BuildContext が持つ        |
+| [0010](0010-css-postprocess-is-lightningcss.md) | CSS の後処理を Lightning CSS に一本化する |
+| [0011](0011-image-widths-are-caller-driven.md)  | 画像の幅は呼び出し側が決める              |
+| [0012](0012-single-candidate-drops-srcset.md)   | 候補が 1 つなら img の srcset を出さない  |
+| [0013](0013-check-is-a-separate-command.md)     | 出力の検査は build と分けたコマンドにする |

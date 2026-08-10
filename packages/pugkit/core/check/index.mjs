@@ -22,7 +22,7 @@ export const CHECK_IDS = CHECKS.map(check => check.id)
  * 実行する項目を決める。指定が無ければ全部。
  *
  * 知らない id は中止する。黙って無視すると、綴りを間違えた実行が
- * 「違反なし」と同じ表示になる（docs/adr/0008 と同じ考え方）
+ * 「違反なし」と同じ表示になる。設定キーの検査と同じ考え方
  */
 export function selectChecks(items = []) {
   const requested = items.filter(Boolean)

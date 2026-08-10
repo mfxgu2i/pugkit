@@ -38,8 +38,6 @@ $ touch ./src/index.pug
 | `pugkit check`  | -                             | ビルド済みの出力を検査        |
 | `pugkit sprite` | -                             | SVGスプライト生成             |
 
-いずれもカレントディレクトリをプロジェクトルートとして扱います。
-
 ### Options
 
 設定ファイルの値を、その実行の間だけ上書きします。
@@ -139,28 +137,6 @@ export default defineConfig({
 | `build.image.overrides`          | 特定画像に個別のSharpオプションを適用（グローバルオプションに上書きマージ）                                                                          | `Record<string, object>`             | `{}`          |
 | `build.html`                     | HTML整形オプション（[js-beautify html options](https://github.com/beautify-web/js-beautify#options)）                                                | `object`                             | see below     |
 
-### 設定キーの確認
-
-キーの綴りを間違えても値は既定のままで、ビルドは成功します。それだけでは出力を1つずつ確かめるまで気づけないので、起動時にキーを検査します。
-
-実在しないキーは警告して既定値のまま続けます。
-
-```
-⚠ config pugkit.config.mjs に不明なキーがあります（無視されます）: build.imageOptimizatoin
-```
-
-v1 から名前が変わったキーは中止します。指定した値が効かないまま出力されるためです。移行先を添えるので、そのまま置き換えてください。
-
-| v1                         | v2                               |
-| -------------------------- | -------------------------------- |
-| `build.imageOptimization`  | `build.image.format`             |
-| `build.imageSourceDensity` | `build.image.sourceDensity`      |
-| `build.imageOptions`       | `build.image.options`            |
-| `build.imageOverrides`     | `build.image.overrides`          |
-| `build.imageInfo`          | `build.image.artDirectionSuffix` |
-
-`build.html`・`build.image.options.*`・`build.image.overrides` の中身は検査しません。js-beautify や Sharp のオプション、利用者のファイル名がそのまま入るためです。
-
 ## Features
 
 ### Pug Templates
@@ -196,7 +172,7 @@ meta(property='og:url', content=Builder.url.href)
 
 #### imageInfo()
 
-`src/` 配下の画像のメタデータを取得します。`build.image.format` に応じて `src` が最適化後のパスに変換され、`srcset` が組み立てられます。アートディレクション画像が存在する場合も自動的に解決されます。
+`src/` 配下の画像のパスと寸法を返します。パスは `build.image.format` に応じた変換後のもので、`srcset` も組み立てます。
 
 ```pug
 - const info = imageInfo('/assets/img/hero.jpg')
@@ -226,33 +202,18 @@ img(src=info.src srcset=info.srcset sizes=info.sizes width=info.width height=inf
 | `isSvg`   | `boolean`                                       | SVG かどうか                                                          |
 | `variant` | `{ src, width, height, srcset, sizes } \| null` | `build.image.artDirectionSuffix` に応じたアートディレクション画像     |
 
-`srcset` は候補が 1 つしかないときには返りません。SVG、GIF、`public/` 配下の画像、縮小しても寸法が変わらない画像、`sourceDensity: 1` のプロジェクトの画像、そして幅がすべて剪定された画像が該当します。`sizes` も一緒に落ちます。`variant.srcset` は `<source>` の必須属性なので、候補が 1 つでも必ず返ります。
-
-`widths` を渡したのに `srcset` が返らないときは、指定した幅がすべて原寸以上だった場合です。1600px の画像に `widths: [2000]` を渡すと候補は無印だけになります。このとき `width` と `height` は原寸に切り替わったままなので、CSS で幅を決めていないと表示が変わります。
-
-```pug
-- const info = imageInfo('/assets/img/hero.jpg')
-picture
-  //- アートディレクション
-  if info.variant
-    source(media='(max-width: 767px)' srcset=info.variant.srcset width=info.variant.width height=info.variant.height)
-  img(src=info.src srcset=info.srcset width=info.width height=info.height alt='')
-```
-
-`sourceDensity: 2` で 1600×1200 の `hero.jpg` を置いた場合、出力は次のようになります。
+1600×1200 の `hero.jpg` を置いた場合、2 つのモードの出力はこうなります。
 
 ```html
+<!-- 密度モード（既定） -->
 <img
   src="/assets/img/hero@half.webp"
   srcset="/assets/img/hero@half.webp 1x, /assets/img/hero.webp 2x"
   width="800"
   height="600"
 />
-```
 
-同じ画像に `widths: [400, 800, 1200]` を渡すと次のようになります。
-
-```html
+<!-- 幅モード（widths: [400, 800, 1200]） -->
 <img
   src="/assets/img/hero.webp"
   srcset="
@@ -267,65 +228,27 @@ picture
 />
 ```
 
-アートディレクション画像にも同じ幅が掛かります。`hero_sp.jpg` が 750px なら、`hero_sp@400w.webp` と無印の 2 つが候補になります。原寸を超える幅は落ちるので、指定した幅がそのまま並ぶとは限りません。
+幅モードでは `width` と `height` が原寸になります。CSS で幅を指定してください。`sizes` も必ず渡してください。省くとブラウザは画面いっぱいに表示されるものとみなし、重い候補を選びます。
 
-#### 幅モードは CSS で幅を決めることが前提です
+`srcset` は候補が 2 つ以上のときだけ返ります。1 つのときは `sizes` ごと落ちます。SVG、GIF、`public/` の画像、`sourceDensity: 1`、指定した幅がすべて原寸以上だった場合が該当します。`variant.srcset` は `<source>` の必須属性なので、候補が 1 つでも返ります。
 
-`widths` を渡すと、`imageInfo()` が返す `width` と `height` は原寸の実寸になります。密度モードでは表示サイズ、つまり原寸を `sourceDensity` で割った値でした。同じ画像に `widths` を足すと、この値が変わります。
+アートディレクション画像は `variant` に入ります。`widths` は `variant` にも掛かります。
 
-`width` と `height` 属性は、アスペクト比だけでなく CSS の `width` と `height` にも写ります。優先度は最も低い扱いなので、スタイルシートが幅を指定していれば必ずそちらが勝ちます。指定していない画像だけが、属性の値そのままの幅で描画されます。
+```pug
+- const info = imageInfo('/assets/img/hero.jpg')
+picture
+  if info.variant
+    source(media='(max-width: 767px)' srcset=info.variant.srcset width=info.variant.width height=info.variant.height)
+  img(src=info.src srcset=info.srcset width=info.width height=info.height alt='')
+```
 
-レイアウトシフトは起きません。読み込み前に確保される箱は比率から決まり、比率は実寸から導いているためです。
-
-幅モードを使う画像には、CSS で幅を与えてください。あわせて `sizes` を必ず書いてください。書かないとブラウザは `100vw`、つまり画面いっぱいに表示されるものとして候補を選びます。サムネイルでも全幅想定で選ぶので、密度記述子より重いファイルを取りに行くことになります。
-
-> `imageInfo()` は `src/` 配下を探し、見つからなければ `public/` 配下も探します。
-> `public/` の画像は変換も縮小もされないため、`src` は元のパスのまま返り、`srcset` は返りません。`widths` を渡しても効かず、警告が出ます。
+> `imageInfo()` は `src/` を探し、見つからなければ `public/` も探します。`public/` の画像は変換も縮小もされないため、`src` は元のパスのまま返り、`srcset` は返りません。`widths` を渡すと警告が出ます。
 
 ### Sass
 
 `src/` 配下の `.scss` ファイルをコンパイルして出力します。コンパイル後は [Lightning CSS](https://lightningcss.dev/) を通し、ベンダープレフィックスの付与、モダン構文の降格、圧縮を行います。
 
 対象ブラウザは [browserslist](https://github.com/browserslist/browserslist) から読みます。プロジェクトルートの `.browserslistrc` か、`package.json` の `browserslist` に書いてください。指定が無ければ browserslist の既定が使われます。
-
-対象ブラウザは付与するプレフィックスだけでなく、構文をどこまで降ろすかも決めます。入れ子・メディアクエリの範囲構文・相対カラー構文などは、未対応のブラウザが対象に含まれていれば古い書き方へ変換されます。
-
-```scss
-// 書いたもの
-.a {
-  @media (width >= 40rem) {
-    color: red;
-  }
-}
-```
-
-```css
-/* chrome >= 100 を対象にした場合 */
-@media (min-width: 40rem) {
-  .a {
-    color: red;
-  }
-}
-```
-
-プレフィックスと降格は dev でも同じように行われます。dev と build で違うのは圧縮とソースマップの有無だけなので、対象ブラウザ向けの変換結果は開発中に確認できます。
-
-#### 降格できるものとできないもの
-
-Lightning CSS はトランスパイラであって、ポリフィルではありません。古い書き方に置き換えられるものだけを変換します。
-
-|            | 例                                                                                                                                                |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 変換される | 入れ子、メディアクエリの範囲構文、相対カラー構文、`oklch()`、論理プロパティ、`inset`、`image-set()`、ベンダープレフィックス                       |
-| 素通りする | `:has()`、`@container`、`@layer`、`@property`、`subgrid`、`svh` / `dvh`、`aspect-ratio`、`accent-color`、`text-wrap: balance`、`scrollbar-gutter` |
-
-下の段は、置き換え先が古い CSS に存在しないため降格できません。対象ブラウザが未対応でもそのまま出力され、警告も出ません。
-
-つまり browserslist の指定が防げるのは「その機能はあるが書き方が違う」という食い違いだけです。「その機能がそもそも無い」場合は防げないので、対象ブラウザに存在するかどうかは書く側で確認してください。Lightning CSS が通したことは、対象で動くことの証明になりません。
-
-> `.browserslistrc` と `package.json` の `browserslist` は、dev の起動時に一度だけ読まれます。稼働中に書き換えても反映されないので、変更したら dev を再起動してください。
-
-> pugkit は PostCSS のプラグインを受け付けません。CSS の後処理は Lightning CSS に一本化されています。
 
 ### JavaScript / TypeScript
 
@@ -369,45 +292,39 @@ npm install --save-dev typescript
 
 ### Image Optimization
 
-ビルド時に `src/` 配下の画像を自動的に最適化します。
+`src/` 配下の JPEG / PNG / GIF をビルド時に変換します。
 
-| `build.image.format` | 挙動                        |
-| -------------------- | --------------------------- |
-| `'webp'`             | PNG/JPEG/GIF を WebP に変換 |
-| `'avif'`             | PNG/JPEG/GIF を AVIF に変換 |
-| `'compress'`         | 元の形式を維持したまま圧縮  |
+| `build.image.format` | 挙動                                 |
+| -------------------- | ------------------------------------ |
+| `'webp'`             | WebP に変換（既定）                  |
+| `'avif'`             | AVIF に変換                          |
+| `'compress'`         | 形式を保ったまま圧縮（GIF はコピー） |
 
-> `src/` に置いた JPEG / PNG / GIF は必ず処理されます。原寸のまま出したい画像は `public/` に置いてください。
->
-> `compress` を指定した場合は形式を保ったまま圧縮します（GIF はそのままコピーされます）。
->
-> `src/` に `.webp` / `.avif` を置いた場合はどのタスクの対象にもならず、出力されません。ビルド時に警告が出ます。これらは `public/` に置いてください。
+> 等倍のまま出したい画像（ロゴ・favicon・OGP など）は `public/` に置いてください。変換も縮小もされません。
+
+> `src/` に置いた `.webp` / `.avif` は出力されません。ビルド時に警告が出ます。
+
+> GIF と SVG は密度・幅記述子の対象外です。
 
 #### 画像は 1 枚だけ置く
 
-`src/` には最大解像度の 1 枚だけを置きます。等倍版はビルドが生成するので、`@2x` を用意する必要はありません。
+`src/` には最大解像度の 1 枚だけを置きます。縮小版はビルドが作るので、`@2x` を用意する必要はありません。
 
 ```
 src/assets/img/hero.jpg   (1600x1200)
   ↓  sourceDensity: 2
-dist/assets/img/hero.webp      (1600x1200)   ← 無印は src と同じ寸法
+dist/assets/img/hero.webp        (1600x1200)
 dist/assets/img/hero@half.webp   ( 800x600)
 ```
 
-無印を原寸のままにしているのは、CSS の `url()` 直書きや OGP 画像など `imageInfo()` を通らない参照が壊れないようにするためです。
-
-| 設定               | 挙動                                                                 |
-| ------------------ | -------------------------------------------------------------------- |
-| `sourceDensity: 2` | 等倍版を生成し、`srcset` に `1x` / `2x` を並べる（既定）             |
-| `sourceDensity: 1` | 原寸を 1 枚出すだけ。縮小しない。候補が 1 つなので `srcset` は出ない |
-
-等倍のまま出したい画像（ロゴやアイコンなど）は `public/` に置いてください。`public/` の画像は変換も縮小もされません。
-
-> GIF と SVG は密度の対象外です。幅記述子の対象にもなりません。
+| 設定               | 挙動                                                     |
+| ------------------ | -------------------------------------------------------- |
+| `sourceDensity: 2` | `@half` を作り、`srcset` に `1x` / `2x` を並べる（既定） |
+| `sourceDensity: 1` | 原寸 1 枚だけ。`srcset` は出ない                         |
 
 #### 幅違いの生成
 
-`imageInfo()` に `widths` を渡した画像だけ、幅違いが生成されます。設定項目はありません。どの幅が要るかはレイアウトによって決まるので、その場所を書いている側で指定します。
+`imageInfo()` に `widths` を渡した画像だけ生成されます。設定項目はありません。
 
 ```
 src/assets/img/hero.jpg   (1600x1200)
@@ -419,17 +336,13 @@ dist/assets/img/hero@800w.webp   ( 800x600)
 dist/assets/img/hero@1200w.webp  (1200x900)
 ```
 
-原寸以上の幅は作られません。`hero.jpg` が 1600px なら `widths: [1200, 1600, 2000]` で作られるのは 1200 だけで、1600 は無印が兼ねます。
+原寸以上の幅は作られません。`@half` は `widths` を渡した画像にも作られます。
 
-`widths` を渡した画像にも `@half` は作られます。同じ画像を別のページが密度記述子で参照したときに、その `srcset` が指す先が必要になるためです。
-
-dev では幅違いを起動時に作らず、ブラウザから要求された時点で作ります。起動が遅くならない代わりに、dev と build のアセットが揃うのはページを開いた後になります。dev が 1 枚の画像に作る幅は 32 本までです。それを超えると 404 を返し、画像ごとに 1 度だけログに出します。数え方はセッション単位なので、幅の値をいろいろ試していると当たることがあります。そのときは dev を再起動してください。build に上限はありません。
-
-> `@half` と `@<数字>w` はビルドが作る名前です。この形の画像を `src/` や `public/` に置くと、build が中止します。
+> `@half` と `@<数字>w` はビルドが作る名前です。この形の画像を `src/` や `public/` に置くと build が中止します。
 
 #### 特定画像の個別オプション指定
 
-`build.image.overrides` で特定の画像にのみ別の圧縮オプションを適用できます。キーは `src/` からの相対パス、値はグローバル設定に上書きマージされる [Sharp](https://sharp.pixelplumbing.com/api-output) オプションオブジェクトです。幅違いにも同じ値が掛かります。幅ごとに変えることはできません。
+`build.image.overrides` で画像ごとに圧縮オプションを変えられます。キーは `src/` からの相対パス、値は [Sharp](https://sharp.pixelplumbing.com/api-output) のオプションです。幅違いにも同じ値が掛かります。
 
 ```js
 build: {
@@ -460,12 +373,6 @@ build: {
 
 利用可能なオプションは [js-beautify のドキュメント](https://github.com/beautify-web/js-beautify#options)を参照してください。
 
-pugkit が既定値を上書きするのは、整形しない要素の指定と字下げまわりだけです。表示に関わる判定は js-beautify の既定に任せています。
-
-`inline` を上書きすると、インライン要素が改行されてそこに空白が生まれます。`li` や `a` を `inline-block` で詰めて並べていると、ソースに書いていない隙間が入ります。
-
-`content_unformatted` から `textarea` を外すと、textarea の中身、つまり表示される値そのものが整形されます。上書きする場合は残してください。
-
 ### SVG Optimization
 
 `icons/`以外に配置した SVG ファイルはSVGOで自動最適化されて出力されます。
@@ -487,13 +394,11 @@ src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow
 
 ### Public Directory
 
-`public/` に置いたファイルは、ディレクトリ構成を保ったまま出力先へコピーされます（`subdir` を指定している場合はその配下）。変換も縮小もされないので、favicon・OGP画像のほか、等倍のまま出したい画像の置き場としても使います。
+- `public/` に置いたファイルは、ディレクトリ構成を保ったまま出力先へコピーされます（`subdir` を指定している場合はその配下）。変換も縮小もされないので、favicon・OGP画像のほか、等倍のまま出したい画像の置き場としても使います。
 
-`src/` と `public/` で同じ出力先になるファイルがあった場合は、どちらが残るかが決まらないため `build` を中止します。どちらか一方を削除してください。`dev` は起動時に検査してログに出しますが、起動は続けます。
+- `src/` と `public/` で同じ出力先になるファイルがあった場合は、どちらが残るかが決まらないため `build` を中止します。どちらか一方を削除してください。`dev` は起動時に検査してログに出しますが、起動は続けます。
 
-`@half` と `@<数字>w` で終わる画像も同じ扱いで中止します。これはビルドが縮小版と幅違いに使う名前で、幅違いの出力先は事前に列挙できないため、名前を予約することで衝突を防いでいます。`@2x` のようなデザインツールの書き出し名は対象外です。
-
-出力先が重なるかは設定によります。既定の `build.image.format: 'webp'` では `src/logo.png` は `logo.webp` になるため `public/logo.png` とは衝突しません。`compress` では両方が `logo.png` を取り合います。
+- `@half` と `@<数字>w` で終わる画像も同じ扱いで中止します。これはビルドが縮小版と幅違いに使う名前で、幅違いの出力先は事前に列挙できないため、名前を予約することで衝突を防いでいます。
 
 ### Dev / Build の出力の違い
 
@@ -508,18 +413,6 @@ src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow
 
 > `outDir` は pugkit が占有します。build のたびに中身を削除してから書き出すので、手で置いたファイル（`.htaccess`・PHP・アップロード等）は残りません。出力に含めたいものは `public/` に置いてください。
 
-### 出力先に指定できる場所
-
-`outDir` と `cacheDir` はどちらも中身を丸ごと削除します。消してはいけない場所を指定する事故を防ぐため、起動時に検査して中止します。
-
-`outDir` は、プロジェクトルート・`src`・`public`・`node_modules` を含む場所と、`src`・`public` の配下を指定できません。
-
-`cacheDir` は、プロジェクトルート・`src`・`public`・`outDir` を含む場所と、`src`・`public`・`outDir` の配下を指定できません。
-
-`cacheDir` にはさらに 2 つの守りがあります。指定先に pugkit が作った目印が無いのに中身が存在する場合は、削除せず起動を中止します。空のディレクトリか、存在しないパスを指定してください。
-
-また、別の dev サーバーが同じ `cacheDir` を使用中の場合も中止します。ポートを変えれば 2 つ目を起動できてしまうため、ポートではなくディレクトリ側で判定しています。
-
 ### 出力の検査
 
 `pugkit check` はビルド済みの出力を検査します。ビルドはしないので、出力ディレクトリが無ければ中止します。あっても中身が空なら、検査対象が無かったことを表示します。
@@ -527,8 +420,6 @@ src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow
 ```sh
 pugkit build && pugkit check
 ```
-
-build から分けているのは、過去の負債でビルドが止まると、今の更新を出すために関係のない箇所まで直すことになるためです。検査を実行するかどうかは利用者が決めます。詳しくは [ADR 0013](https://github.com/mfxgu2i/pugkit/blob/main/docs/adr/0013-check-is-a-separate-command.md) を参照してください。
 
 検査項目は引数で選べます。指定しなければ全項目を実行します。
 
@@ -544,32 +435,6 @@ pugkit check references          # 参照の実在だけ
 
 違反が 1 件でもあれば終了コード `1` を返します。markuplint が `warning` や `info` に落としたルールも同じ扱いです。重さは表示の色で分けますが、終了コードは変えません。落としたいルールは markuplint の設定で切ってください。
 
-#### references
-
-`href` / `src` / `srcset` の各候補 / `poster` / `xlink:href` と、`meta` の `og:image` / `og:url` / `twitter:image`、CSS の `url()` / `image-set()` / `@import` を集めて、出力に実在するかを見ます。`<base href>` があれば相対参照の基点に使います。
-
-とくに CSS の `url()` は静かに壊れます。pugkit は Sass の `url()` を書き換えないため、`format: 'webp'` の設定で `url(hero.jpg)` と書いてもビルドは成功し、背景画像だけが出ません。
-
-幅違いの画像も同じです。`imageInfo()` を通さずに `hero@1200w.webp` と直書きすると、dev はリクエスト時に生成して表示できてしまいますが、build はその幅を作りません。dev で見えていたものが本番で消えるので、この検査で拾ってください。
-
-外部の URL は叩きません。スキーム付きの URL、`//` 始まり、`#` だけのアンカー、`mailto:`、`tel:`、`data:`、`{{ }}` や `<?php` を含む値は検査しません。
-
-`siteUrl` を設定している場合、それと同じ origin の絶対 URL は内部の参照として解決します。`Builder.url()` で組み立てた canonical や `og:image` が、存在しないファイルを指していないかを見るためです。
-
-`subdir` を設定している場合、URL にも `/subdir/` が必要です。付け忘れた絶対パスは本番で 404 になるため、実在しない参照として報告します。
-
-#### markup
-
-[markuplint](https://markuplint.dev/) に出力 HTML を渡します。markuplint は pugkit の依存に含まれないため、使う場合はプロジェクトに入れてください。
-
-```sh
-npm install --save-dev markuplint
-```
-
-入っていなければ、その旨を表示して `markup` は飛ばします。設定は `markuplint.config.js` などプロジェクトのものをそのまま使い、pugkit は独自の設定を持ちません。設定が見つからない場合は markuplint の既定ルールで検査し、そう表示します。
-
-ソースの `.pug` ではなく出力の `.html` を検査します。報告される行番号は出力側のものです。
-
 ### エラー表示
 
 CLI が異常終了したときは、原因のメッセージだけを表示して終了コード `1` を返します。設定ミスや出力先の衝突など、ソースを直せば済むエラーがスタックトレースに埋もれないようにするためです。
@@ -582,14 +447,17 @@ PUGKIT_DEBUG=1 npx pugkit build
 
 ## Tech Stack
 
-| ライブラリ                                         | 役割                                    |
-| -------------------------------------------------- | --------------------------------------- |
-| [Pug](https://pugjs.org/)                          | HTMLテンプレートエンジン                |
-| [Sass](https://sass-lang.com/)                     | CSSプリプロセッサー                     |
-| [esbuild](https://esbuild.github.io/)              | TypeScript/JavaScriptバンドラー         |
-| [Lightning CSS](https://lightningcss.dev/)         | CSS後処理（プレフィックス・降格・圧縮） |
-| [Sharp](https://sharp.pixelplumbing.com/)          | 画像最適化                              |
-| [SVGO](https://svgo.dev/)                          | SVG最適化                               |
-| [Chokidar](https://github.com/paulmillr/chokidar)  | ファイル監視                            |
-| [sirv](https://github.com/lukeed/sirv)             | 静的配信（開発サーバー、SSE と併用）    |
-| [htmlparser2](https://github.com/fb55/htmlparser2) | 出力 HTML からの参照の収集              |
+| ライブラリ                                                 | 役割                                 |
+| ---------------------------------------------------------- | ------------------------------------ |
+| [Pug](https://pugjs.org/)                                  | HTMLテンプレートエンジン             |
+| [Sass](https://sass-lang.com/)                             | CSSプリプロセッサー                  |
+| [esbuild](https://esbuild.github.io/)                      | TypeScript/JavaScriptバンドラー      |
+| [Lightning CSS](https://lightningcss.dev/)                 | CSS後処理（プレフィックス・圧縮）    |
+| [Sharp](https://sharp.pixelplumbing.com/)                  | 画像最適化                           |
+| [SVGO](https://svgo.dev/)                                  | SVG最適化                            |
+| [js-beautify](https://github.com/beautify-web/js-beautify) | HTML整形                             |
+| [Chokidar](https://github.com/paulmillr/chokidar)          | ファイル監視                         |
+| [sirv](https://github.com/lukeed/sirv)                     | 静的配信（開発サーバー、SSE と併用） |
+| [htmlparser2](https://github.com/fb55/htmlparser2)         | 出力 HTML からの参照の収集           |
+
+[markuplint](https://markuplint.dev/) は optional peer dependency です。`pugkit check markup` を使う場合はプロジェクトに入れてください。

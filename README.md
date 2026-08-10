@@ -41,35 +41,3 @@ pugkitが生成するHTMLは、納品案件・WordPressやMovableTypeなどのCM
 ```bash
 npm create pugkit@latest
 ```
-
-## 開発者向けドキュメント
-
-pugkit 自体を触る人向け。使い方は上の Documentation を参照してください。
-
-| 文書                                              | 内容                                             |
-| ------------------------------------------------- | ------------------------------------------------ |
-| [architecture.md](./docs/architecture.md)         | 全体の組み立てと、守るべき不変条件               |
-| [adr/](./docs/adr/)                               | 設計判断の記録。なぜその形なのか、何を却下したか |
-| [testing.md](./docs/testing.md)                   | テストの層分けと書き方の指針                     |
-| [release.md](./docs/release.md)                   | リリース手順                                     |
-| [todo.md](./docs/todo.md)                         | 既知の課題と、判断済みで今はやらないこと         |
-| [planned-features.md](./docs/planned-features.md) | やると決めていて、まだ手を付けていないもの       |
-
-### 開発の始め方
-
-```bash
-npm install
-npm test                # 全テスト
-npm run test:watch      # unit だけを watch（TDD 用）
-```
-
-pugkit 自体にビルド手順はありません。`packages/pugkit/` の `.mjs` がそのまま公開されます。
-
-実際のプロジェクトに対して動かすには、テンプレートを一時ディレクトリへ複製して
-リポジトリの pugkit を指させます。手順は [release.md](./docs/release.md) の
-「リリース前の確認」にあります。CLI 特有の壊れ方はテストでは拾えないため、
-挙動を変えたときはこの確認を通してください。
-
-コミットメッセージは `<type>: <subject>` の形式で、終止形で書きます
-（`feat` / `fix` / `docs` / `refactor` / `test` / `chore`）。
-破壊的変更は `feat!` のように `!` を付けます。
