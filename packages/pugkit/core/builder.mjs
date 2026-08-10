@@ -107,6 +107,7 @@ export class Builder {
 
     // 出力を消したら、それを前提にしていた状態も一緒に捨てる
     this.context.cache.clear()
+    this.context.imageWidths.clear()
     for (const graph of [
       this.context.graph,
       this.context.sassGraph,

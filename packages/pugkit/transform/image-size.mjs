@@ -4,9 +4,12 @@ import sizeOf from 'image-size'
 import {
   densityOutputs,
   hasScaledVariant,
+  normalizeWidths,
+  pruneWidths,
   scaleDown,
   sourceDensityOf,
-  supportsDensity
+  supportsDensity,
+  supportsWidthVariants
 } from '../utils/image-density.mjs'
 import { logger as defaultLogger } from '../utils/logger.mjs'
 
@@ -79,11 +82,42 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
   const findImageFile = createImageResolver(filePath, paths)
 
   /**
+   * 呼び出し側が渡した幅のうち、実際に作れるものを記録する。
+   *
+   * 剪定はここでしかしない。生成側が sharp の metadata で独立に剪定すると、
+   * image-size と 1px でも食い違ったときに「srcset に載っているのにファイルが無い」か
+   * 「誰も参照しない孤児」が出る（docs/adr/0011）
+   */
+  const recordWidths = (src, found, widths, intrinsicWidth) => {
+    if (widths.length === 0) return []
+
+    // public は copyTask がバイト列のまま出すだけで、変換も縮小もされない。
+    // 幅違いを作れないので、書かれていても効かないことを知らせる
+    if (found.fromPublic) {
+      context.warnOnce?.(
+        'pug',
+        'widths-on-public-image',
+        `public/ の画像には widths が効きません: ${src}。幅違いを作るには src/ に置いてください`
+      )
+      return []
+    }
+
+    if (!supportsWidthVariants(src)) return []
+
+    const usable = pruneWidths(widths, intrinsicWidth)
+    context.imageWidths?.record(found.path, usable)
+
+    return usable
+  }
+
+  /**
    * 参照パスと実ファイルから、出力側の src / 寸法 / srcset を組み立てる。
    * 返す src は最小密度（表示サイズ）側で、srcset の 1x と一致する
    */
-  const describe = (src, found) => {
+  const describe = (src, found, widths = []) => {
     const { width, height, type } = readImageSize(found.path, cache)
+
+    recordWidths(src, found, widths, width)
 
     // 縮小版が実在しないものは密度 1 として扱う。そうしないと 1x の無い
     // srcset="... 2x" だけを書くことになる（SVG / GIF / public 配下 / 極小画像）
@@ -113,7 +147,7 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
     }
   }
 
-  return src => {
+  return (src, options = {}) => {
     const fallback = {
       src,
       width: undefined,
@@ -122,6 +156,18 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
       isSvg: false,
       srcset: undefined,
       variant: null
+    }
+
+    // 幅は呼び出しごとに決まる。使えない値は落として1度だけ知らせる。
+    // 共有ミックスインに書かれると、黙って落とすとページ数だけ食い違いが広がる
+    const { widths, dropped } = normalizeWidths(options.widths)
+
+    if (dropped.length > 0) {
+      context.warnOnce?.(
+        'pug',
+        'invalid-image-widths',
+        `imageInfo の widths に使えない値があります: ${dropped.map(value => JSON.stringify(value)).join(', ')}。正の整数だけを指定してください`
+      )
     }
 
     try {
@@ -147,11 +193,12 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
         if (!variantFound) return null
 
         onAccess?.(variantFound.path)
-        const { format, ...rest } = describe(variantSrc, variantFound)
+        // _sp にも同じ幅一覧を掛ける。原寸が小さいぶんは剪定で落ちる
+        const { format, ...rest } = describe(variantSrc, variantFound, widths)
         return rest
       }
 
-      return { ...describe(src, found), isSvg, variant: findVariant() }
+      return { ...describe(src, found, widths), isSvg, variant: findVariant() }
     } catch (error) {
       logger?.warn('pug', `Failed to read "${src}" in ${relative(paths.src, filePath)}: ${error.message}`)
       return fallback

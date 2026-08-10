@@ -5,6 +5,7 @@ import { DEFAULT_OUT_DIR, resolveFromRoot } from '../utils/paths.mjs'
 import { existsSync } from 'node:fs'
 import { CacheManager } from './cache.mjs'
 import { DependencyGraph } from './graph.mjs'
+import { ImageWidthRequests } from './image-widths.mjs'
 import { ResourceStore } from './resources.mjs'
 import { logger } from '../utils/logger.mjs'
 
@@ -57,6 +58,8 @@ export class BuildContext {
     this.sassGraph = new DependencyGraph()
     this.scriptGraph = new DependencyGraph()
     this.imageGraph = new DependencyGraph() // Pug -> 画像ファイルの依存グラフ（dev時に構築）
+    // imageInfo() が要求した幅。build では pug が先に走るので image タスクが読める
+    this.imageWidths = new ImageWidthRequests()
     // Sass / esbuild の常駐リソース。Builder.close() で破棄する
     this.resources = new ResourceStore()
     // warnOnce で出し終えた理由

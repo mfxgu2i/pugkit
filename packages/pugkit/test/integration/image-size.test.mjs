@@ -4,6 +4,7 @@ import { writeFile, mkdir } from 'node:fs/promises'
 import sharp from 'sharp'
 import { createImageInfoHelper as createHelper } from '../../transform/image-size.mjs'
 import { CacheManager } from '../../core/cache.mjs'
+import { ImageWidthRequests } from '../../core/image-widths.mjs'
 import { createTempProject } from '../helpers/project.mjs'
 
 // リポジトリ内の固定パスに書くと、テストを並列に走らせたとき互いのフィクスチャを消し合う
@@ -274,6 +275,92 @@ describe('createImageInfoHelper', () => {
       // 密度の対象外なので縮小版は存在しない
       expect(result.srcset).toBe('/images/icon.svg 1x')
     })
+  })
+})
+
+/**
+ * 幅は呼び出し側が渡す。生成側はこの記録だけを見て作るので、
+ * ここで剪定を誤ると「srcset に載っているのにファイルが無い」か「誰も参照しない孤児」が出る。
+ */
+describe('幅の収集', () => {
+  const createWithStore = (imageConfig = webpConfig) => {
+    const imageWidths = new ImageWidthRequests()
+    const warnings = []
+    const warnOnce = (scope, reason, message) => warnings.push({ reason, message })
+    const imageInfo = createHelper(
+      mockPugFile,
+      { paths, config: imageConfig, cache, imageWidths, warnOnce },
+      {
+        logger: null
+      }
+    )
+
+    return { imageInfo, imageWidths, warnings }
+  }
+
+  it('渡さなければ何も記録しない', () => {
+    const { imageInfo, imageWidths } = createWithStore()
+    imageInfo('/images/hero.jpg')
+
+    expect(imageWidths.get(resolve(imagesDir, 'hero.jpg'))).toEqual([])
+  })
+
+  it('渡した幅を記録する', () => {
+    const { imageInfo, imageWidths } = createWithStore()
+    imageInfo('/images/hero.jpg', { widths: [400, 600] })
+
+    expect(imageWidths.get(resolve(imagesDir, 'hero.jpg'))).toEqual([400, 600])
+  })
+
+  /** 原寸は無印が兼ねる。作ると同じ中身が 2 枚出る */
+  it('原寸以上の幅は記録しない', () => {
+    const { imageInfo, imageWidths } = createWithStore()
+    imageInfo('/images/hero.jpg', { widths: [400, 800, 1200] })
+
+    expect(imageWidths.get(resolve(imagesDir, 'hero.jpg'))).toEqual([400])
+  })
+
+  it('_sp にも同じ幅を掛け、原寸の違いで別々に剪定する', () => {
+    const { imageInfo, imageWidths } = createWithStore()
+    imageInfo('/images/responsive.jpg', { widths: [200, 500] })
+
+    expect(imageWidths.get(resolve(imagesDir, 'responsive.jpg'))).toEqual([200, 500])
+    // _sp は 376px なので 500 は落ちる
+    expect(imageWidths.get(resolve(imagesDir, 'responsive_sp.jpg'))).toEqual([200])
+  })
+
+  it('SVG は幅の対象外', () => {
+    const { imageInfo, imageWidths } = createWithStore()
+    imageInfo('/images/icon.svg', { widths: [16] })
+
+    expect(imageWidths.get(resolve(imagesDir, 'icon.svg'))).toEqual([])
+  })
+
+  it('public の画像には効かないことを知らせる', async () => {
+    await mkdir(resolve(testDataDir, 'public/images'), { recursive: true })
+    await createJpeg(resolve(testDataDir, 'public/images/ogp.jpg'), 1200, 630)
+
+    const { imageInfo, imageWidths, warnings } = createWithStore()
+    imageInfo('/images/ogp.jpg', { widths: [400] })
+
+    expect(imageWidths.get(resolve(testDataDir, 'public/images/ogp.jpg'))).toEqual([])
+    expect(warnings.map(w => w.reason)).toContain('widths-on-public-image')
+  })
+
+  it('使えない値は落として知らせる', () => {
+    const { imageInfo, imageWidths, warnings } = createWithStore()
+    imageInfo('/images/hero.jpg', { widths: [400, -100, '600', 0] })
+
+    expect(imageWidths.get(resolve(imagesDir, 'hero.jpg'))).toEqual([400])
+    expect(warnings.map(w => w.reason)).toContain('invalid-image-widths')
+  })
+
+  it('同じ画像を違う幅で参照したら和集合になる', () => {
+    const { imageInfo, imageWidths } = createWithStore()
+    imageInfo('/images/hero.jpg', { widths: [400] })
+    imageInfo('/images/hero.jpg', { widths: [600] })
+
+    expect(imageWidths.get(resolve(imagesDir, 'hero.jpg'))).toEqual([400, 600])
   })
 })
 
