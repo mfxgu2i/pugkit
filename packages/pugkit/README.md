@@ -458,7 +458,7 @@ src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow
 pugkit build && pugkit check
 ```
 
-build から分けているのは、過去の負債でビルドが止まると、今の更新を出すために関係のない箇所まで直すことになるためです。検査を実行するかどうかは利用者が決めます。詳しくは [ADR 0011](https://github.com/mfxgu2i/pugkit/blob/main/docs/adr/0011-check-is-a-separate-command.md) を参照してください。
+build から分けているのは、過去の負債でビルドが止まると、今の更新を出すために関係のない箇所まで直すことになるためです。検査を実行するかどうかは利用者が決めます。詳しくは [ADR 0013](https://github.com/mfxgu2i/pugkit/blob/main/docs/adr/0013-check-is-a-separate-command.md) を参照してください。
 
 検査項目は引数で選べます。指定しなければ全項目を実行します。
 

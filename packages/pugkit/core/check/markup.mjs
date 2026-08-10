@@ -9,7 +9,7 @@ import { FILE_CONCURRENCY, runWithConcurrency } from '../../utils/concurrency.mj
  *
  * markuplint は pugkit の依存に含めない（optional peer）。利用者のプロジェクトに
  * あるものをそのまま使い、設定も markuplint.config.js を唯一の真実とする。
- * 理由は [ADR 0011](../../../../docs/adr/0011-check-is-a-separate-command.md) にある。
+ * 理由は [ADR 0013](../../../../docs/adr/0013-check-is-a-separate-command.md) にある。
  *
  * 渡すのはソースの .pug ではなく出力の .html。markuplint の Pug 対応は
  * コンポーネントをまたぐ構造を追い切れないため。

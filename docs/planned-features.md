@@ -5,7 +5,7 @@
 着手するときは、この文書の該当節を読んでから始める。決め終わっている論点を蒸し返さないため。
 
 「出力の参照が実在するかの検査」はここにあったが、`pugkit check` として実装したので外した。
-決定の経緯は [ADR 0011](adr/0011-check-is-a-separate-command.md) にある。
+決定の経緯は [ADR 0013](adr/0013-check-is-a-separate-command.md) にある。
 
 ## 共通の線引き
 

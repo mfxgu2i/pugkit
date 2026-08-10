@@ -42,7 +42,7 @@ pugkit check [...項目]
   └─ [ markup ]      出力の .html を markuplint に渡す
 ```
 
-build とは独立していて、build は検査を一切しない（[ADR 0011](adr/0011-check-is-a-separate-command.md)）。
+build とは独立していて、build は検査を一切しない（[ADR 0013](adr/0013-check-is-a-separate-command.md)）。
 検査の入力は `paths.outputRoot` 配下のファイルで、`src` は見ない。
 
 参照の解決も `outputRoot` が基点になる。`output` ではない。dist の中身は
