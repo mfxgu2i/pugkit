@@ -1,15 +1,25 @@
-# public/ 配下の画像
+# public/ 配下のファイル
 
-`public/` のファイルは最適化されず、`outDir` のルートにそのままコピーされる。favicon・OGP 画像・PDF・最適化済み画像などが対象。
+`public/` に置いたファイルは、ディレクトリ構成を保ったまま出力先へコピーされる。`src/` と違って `_` 始まりの除外規則は適用されず、ドットファイルも含めてすべてコピーされる。
 
-`imageInfo()` は `src/` に見つからない画像を `public/` からも探すため、`public/` の画像も `src/` の画像と同じように参照できる（`width` / `height` の自動付与、`@2x` の retina 検出も同様に働く）:
+変換も縮小もされないため、次の置き場として使う。
+
+- favicon・OGP 画像
+- 等倍のまま出したいロゴなどの画像
+- PDF や `.htaccess` など、ビルドを通さず出力に含めたいファイル
+
+## public/ の画像を参照する
+
+`imageInfo()` は `src/` に見つからない画像を `public/` からも探すため、`src/` の画像と同じ書き方で参照できる。
 
 ```pug
-- const info = imageInfo(`${Builder.dir}assets/img/stock/factory.webp`)
-img(src=info.src width=info.width height=info.height alt='' loading='lazy')
+- const info = imageInfo(`${Builder.dir}assets/img/common/logo.svg`)
+img(src=info.src width=info.width height=info.height alt='ロゴ')
 ```
 
-注意点:
+`public/` の画像は変換されないため `src` は元のパスのまま返り、`srcset` は返らない。`widths` を渡すと警告が出る。
 
-- `public/` のファイルはビルドで変換されない。一方で `info.src` の拡張子読み替え（`build.imageOptimization`）は渡したパスに対して適用されるため、`public/` に `.jpg` / `.png` を置くと実在しない `.webp` パスに読み替えられてしまう。**`public/` に置く画像は最終形式（`.webp` / `.avif` / `.svg` など）にしておく。**
-- 出力に含めたい静的ファイル（`.htaccess` など）も `public/` に置く。`outDir` は build のたびに中身が削除されるため、直接置いても残らない。
+## 注意点
+
+- `src/` と `public/` で出力先が同じになるファイルがあると build が中止する。どちらか一方を削除する。
+- `@half` と `@<数字>w` で終わる画像名はビルドの予約名。`public/` に置いても build が中止する。
