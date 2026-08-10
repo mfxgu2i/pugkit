@@ -42,9 +42,9 @@ npm create pugkit@latest .
 プロジェクト作成後の手順：
 
 ```sh
+mise install
 npm install
-npm run build
 npm run start
 ```
 
-`npm run check` でビルド済みの出力を検査できます。リンク切れと画像切れを見ます。HTML の妥当性も見たい場合は `npm install --save-dev markuplint` を足してください。
+[mise](https://mise.jdx.dev/) を使わない場合は `mise install` を飛ばしてください。Node 22 以上であれば動きます。
