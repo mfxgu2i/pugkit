@@ -52,11 +52,11 @@ describe('assertUniqueOutputs', () => {
 
   describe('画像', () => {
     it('別のソースが同じ出力先に写像したら中止する', async () => {
-      // density 2 では hero.jpg が hero@half.webp を生むので、手置きの @half と衝突する
-      await createJpeg(project.path('src/hero.jpg'))
-      await createJpeg(project.path('src/hero@half.jpg'))
+      // webp モードでは logo.jpg と logo.png がどちらも logo.webp になる
+      await createJpeg(project.path('src/logo.jpg'))
+      await createJpeg(project.path('src/logo.png'))
 
-      await expect(assertUniqueOutputs(context)).rejects.toThrow(/hero@half\.webp/)
+      await expect(assertUniqueOutputs(context)).rejects.toThrow(/logo\.webp/)
     })
 
     it('public と同じ出力先になったら中止する', async () => {
@@ -94,25 +94,67 @@ describe('assertUniqueOutputs', () => {
   })
 
   it('衝突の相手が両方分かるメッセージを出す', async () => {
-    await createJpeg(project.path('src/hero.jpg'))
-    await createJpeg(project.path('src/hero@half.jpg'))
+    await createJpeg(project.path('src/logo.jpg'))
+    await createJpeg(project.path('src/logo.png'))
 
     const error = await assertUniqueOutputs(context).catch(e => e)
 
-    expect(error.message).toContain('src/hero.jpg')
-    expect(error.message).toContain('src/hero@half.jpg')
+    expect(error.message).toContain('src/logo.jpg')
+    expect(error.message).toContain('src/logo.png')
   })
 
   it('衝突を全件まとめて報告する（直すたびに走り直させない）', async () => {
-    await createJpeg(project.path('src/hero.jpg'))
-    await createJpeg(project.path('src/hero@half.jpg'))
-    await writeFile(project.path('src/logo.svg'), svg)
-    await writeFile(project.path('public/logo.svg'), svg)
+    await createJpeg(project.path('src/logo.jpg'))
+    await createJpeg(project.path('src/logo.png'))
+    await writeFile(project.path('src/mark.svg'), svg)
+    await writeFile(project.path('public/mark.svg'), svg)
 
     const error = await assertUniqueOutputs(context).catch(e => e)
 
-    expect(error.message).toContain('hero@half.webp')
-    expect(error.message).toContain('logo.svg')
+    expect(error.message).toContain('logo.webp')
+    expect(error.message).toContain('mark.svg')
+  })
+})
+
+/**
+ * 幅違いは相対パスから列挙できないので、突き合わせでは見られない。
+ * ビルドが作る形の名前を置かせないことで肩代わりする（docs/adr/0011）
+ */
+describe('予約された名前', () => {
+  it.each(['src/hero@half.jpg', 'src/hero@400w.jpg', 'src/hero@1200w.png'])('%s は中止する', async path => {
+    await createJpeg(project.path(path))
+
+    await expect(assertUniqueOutputs(context)).rejects.toThrow(/別の名前にしてください/)
+  })
+
+  it('public に置いた場合も中止する', async () => {
+    await createJpeg(project.path('public/hero@400w.webp'))
+
+    await expect(assertUniqueOutputs(context)).rejects.toThrow(/public\/hero@400w\.webp/)
+  })
+
+  /** @2x はデザインツールの書き出し名として実在する。予約すると支給素材が置けなくなる */
+  it('@2x は中止しない', async () => {
+    await createJpeg(project.path('src/hero@2x.jpg'))
+
+    await expect(assertUniqueOutputs(context)).resolves.toBeUndefined()
+  })
+
+  it('画像でないファイルは名前が同じ形でも中止しない', async () => {
+    await writeFile(project.path('public/report@400w.pdf'), 'x')
+
+    await expect(assertUniqueOutputs(context)).resolves.toBeUndefined()
+  })
+
+  it('衝突と同じ例外にまとめる（片方を直してまた止まらないように）', async () => {
+    await createJpeg(project.path('src/logo.jpg'))
+    await createJpeg(project.path('src/logo.png'))
+    await createJpeg(project.path('src/hero@400w.jpg'))
+
+    const error = await assertUniqueOutputs(context).catch(e => e)
+
+    expect(error.message).toContain('logo.webp')
+    expect(error.message).toContain('src/hero@400w.jpg')
   })
 })
 
@@ -122,11 +164,11 @@ describe('タスク側は衝突を見ない', () => {
    * 一度だけ行う。保存のたびに走らせないのは dev の軽さを優先しているため
    */
   it('imageTask は衝突があっても中止せずに処理する', async () => {
-    await createJpeg(project.path('src/hero.jpg'))
-    await createJpeg(project.path('src/hero@half.jpg'))
+    await createJpeg(project.path('src/logo.jpg'))
+    await createJpeg(project.path('src/logo.png'))
 
     await expect(imageTask(context)).resolves.toBeUndefined()
     // 前提: 実際に出力まで進んでいる
-    expect(await listFiles(project.path('dist'))).toContain('hero.webp')
+    expect(await listFiles(project.path('dist'))).toContain('logo.webp')
   })
 })
