@@ -11,7 +11,7 @@ mixin Meta(meta = {})
       type: meta.pageType || 'article'
     }
 
-    const title = Builder.pathname === '/' || !page.title ? site.title : `${page.title}｜${site.title}`
+    const title = Builder.url.pathname === '/' || !page.title ? site.title : `${page.title}｜${site.title}`
     const description = page.description || site.description
     const ogImage = `${Builder.url.base}/assets/img/common/ogp.jpg`
 
@@ -22,7 +22,7 @@ mixin Meta(meta = {})
   meta(name='mobile-web-app-capable' content='yes')
 
   //- アイコン
-  link(rel='icon' href='/favicon.ico')
+  link(rel='icon' href=`${Builder.dir}favicon.ico`)
 
   //- タイトルと説明
   title !{title}
