@@ -2,11 +2,15 @@ import { extname } from 'node:path'
 import { CONVERTIBLE_EXT_RE, DENSITY_EXT_RE } from './image-formats.mjs'
 
 /**
- * 画像の密度と出力名の規則。
+ * 画像の出力名と寸法の規則。密度（@half）と幅（@400w）の両方を持つ。
  *
  * 生成側（tasks/image.mjs）と参照側（transform/image-size.mjs）が同じ規則を使わないと、
  * HTML に書く width/height と実際に出力された画像の寸法がずれて CLS になる。
  * 出力先の導出を imageOutputPaths に一本化しているのと同じ理由で、ここに集める。
+ *
+ * 幅モードでは出力先を相対パスだけから列挙できない（幅は呼び出し側が決めるため）。
+ * 削除側と衝突検査がそれぞれ別の手で解くことになるので、名前の規則だけはここに集約する
+ * （docs/adr/0011）。
  *
  * 対象の拡張子そのものは utils/image-formats.mjs に置く（glob や種別判定でも要るため）。
  */
@@ -88,4 +92,101 @@ export function densityOutputs(name, optimization, sourceDensity) {
   }
 
   return outputs
+}
+
+// 幅版のサフィックス。srcset の記述子（400w）と同じ綴りにして、
+// 出力名から候補の幅が読めるようにする
+const WIDTH_SUFFIX_RE = /@(\d+)w$/
+
+/** 拡張子を除いた幹。拡張子が無い名前でも壊れないようにする */
+function stemOf(name) {
+  return name.slice(0, name.length - extname(name).length)
+}
+
+/** 幅版の出力名。@half と同じ族で揃える */
+export function widthName(name, width) {
+  return `${stemOf(name)}@${width}w${extname(name)}`
+}
+
+/**
+ * 出力名から幅記述子を読む。読めなければ null。
+ *
+ * 削除側（core/watcher.mjs）と dev のリクエスト時生成が、同じ規則で名前を解く必要がある。
+ * 片方が glob のような緩い判定を持つと、他人の出力を消す
+ */
+export function parseWidthName(name) {
+  const ext = extname(name)
+  const stem = stemOf(name)
+  const match = stem.match(WIDTH_SUFFIX_RE)
+
+  return match ? { base: stem.slice(0, stem.length - match[0].length), width: Number(match[1]), ext } : null
+}
+
+/**
+ * ビルドが作る名前の形か。src と public にこの形の画像を置かせない。
+ *
+ * 幅が呼び出し側で決まると出力先を先に列挙できないので、
+ * 衝突検査はこの予約で肩代わりする（docs/adr/0011）
+ */
+export function isReservedImageName(name) {
+  const stem = stemOf(name)
+  return stem.endsWith(SCALED_SUFFIX) || WIDTH_SUFFIX_RE.test(stem)
+}
+
+/**
+ * 幅違いを作ってよい形式か。密度と同じ集合を使う。
+ * 呼ぶ側の意図が読めるように別名で置く
+ */
+export function supportsWidthVariants(name) {
+  return supportsDensity(name)
+}
+
+/**
+ * 呼び出し側から渡された widths を正規化する。昇順にして重複を除く。
+ *
+ * 使えない値は落として dropped に入れる。黙って消すと、
+ * 書いた幅が出力に現れないことに気づけない
+ */
+export function normalizeWidths(value) {
+  if (value === undefined || value === null) return { widths: [], dropped: [] }
+  if (!Array.isArray(value)) return { widths: [], dropped: [value] }
+
+  const widths = new Set()
+  const dropped = []
+
+  for (const entry of value) {
+    if (Number.isInteger(entry) && entry > 0) widths.add(entry)
+    else dropped.push(entry)
+  }
+
+  return { widths: [...widths].sort((a, b) => a - b), dropped }
+}
+
+/**
+ * 原寸以上の幅は作らない。拡大しても情報は増えず、
+ * 原寸と同じ幅は無印が兼ねるので同じ中身が 2 枚出る
+ */
+export function pruneWidths(widths, intrinsicWidth) {
+  return intrinsicWidth ? widths.filter(width => width < intrinsicWidth) : []
+}
+
+/**
+ * 幅版の寸法。縦は原寸の比率から決める。
+ * 生成側と参照側でこの式を共有しないと、書いた height と実際の画像がずれる
+ */
+export function widthDimensions(width, height, targetWidth) {
+  return { width: targetWidth, height: scaleDown(height, width / targetWidth) }
+}
+
+/**
+ * 幅モードで 1 つのソース画像が生成する出力を、幅の昇順で返す。
+ * 無印は原寸のままで、最大の候補を兼ねる
+ */
+export function widthOutputs(name, format, widths, intrinsicWidth) {
+  const converted = convertExtension(name, format)
+  const original = { name: converted, width: intrinsicWidth }
+
+  if (!supportsWidthVariants(name)) return [original]
+
+  return [...pruneWidths(widths, intrinsicWidth).map(width => ({ name: widthName(converted, width), width })), original]
 }
