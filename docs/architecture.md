@@ -22,8 +22,12 @@ pugkit build
   │
   ├─ [ sass │ script │ sprite ]   並列
   ├─ [ pug ]                      CSS/JS の出力を参照するため後
-  └─ [ image │ svg │ copy ]       並列
+  └─ [ image │ svg │ copy ]       並列。pug が集めた幅をここで作る
 ```
+
+pug が image より先に走ることは、幅記述子の前提になっている
+（[ADR 0011](adr/0011-image-widths-are-caller-driven.md)）。
+順序を入れ替えると、HTML が指している幅違いが 1 枚も出なくなる。
 
 レイヤーは `core/builder.mjs` の `BUILD_PHASES` が持つ。同じレイヤーのタスクは並列に走る。
 
