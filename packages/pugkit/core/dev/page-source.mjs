@@ -24,8 +24,11 @@ export function resolvePugSource(urlPath, paths, subdir = '') {
 /**
  * subdir の前置きを外す。境界チェック付きで、/sub と /sub/... のみ対象
  * （/subfoo は不一致）。一致しなければ null。
+ *
+ * 幅違いのリクエスト時生成も同じ規則で解く必要があるので export している。
+ * 書き写すと境界の判定が二重定義になる
  */
-function stripSubdir(urlPath, subdir) {
+export function stripSubdir(urlPath, subdir) {
   if (!subdir) return urlPath
   if (urlPath === subdir) return '/'
   if (urlPath.startsWith(`${subdir}/`)) return urlPath.slice(subdir.length)

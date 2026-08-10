@@ -382,3 +382,108 @@ describe('SSE', () => {
     await reader.cancel()
   })
 })
+
+/**
+ * 幅違いはリクエスト時に作る。起動時に作らないのは、幅が imageInfo() の
+ * 呼び出し側で決まり、まだ開いていないページの要求を起動時には知れないため（docs/adr/0011）。
+ */
+describe('幅違いの画像', () => {
+  const loadSharp = () => import('sharp').then(module => module.default)
+
+  const jpegBuffer = async (width, height) => {
+    const sharp = await loadSharp()
+    return sharp({ create: { width, height, channels: 3, background: { r: 10, g: 20, b: 30 } } })
+      .jpeg()
+      .toBuffer()
+  }
+
+  async function startWithImages() {
+    const server = await startDevServer()
+
+    await mkdir(server.project.path('src/assets/img/_wip'), { recursive: true })
+    await writeFile(server.project.path('src/assets/img/hero.jpg'), await jpegBuffer(800, 600))
+    await writeFile(server.project.path('src/assets/img/_wip/draft.jpg'), await jpegBuffer(800, 600))
+    await writeFile(
+      server.project.path('src/assets/img/mark.svg'),
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"></svg>'
+    )
+
+    return server
+  }
+
+  const outputPath = (server, name) => `${server.context.paths.output}/${name}`
+
+  it('要求された幅を生成して返す', async () => {
+    const server = await startWithImages()
+    const res = await server.get('/assets/img/hero@400w.webp')
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('image/webp')
+
+    const sharp = await loadSharp()
+    const { width, height } = await sharp(Buffer.from(await res.arrayBuffer())).metadata()
+    expect({ width, height }).toEqual({ width: 400, height: 300 })
+  })
+
+  /** 記述子を落とした名前で書くと、無印（原寸）を縮小版で上書きしてしまう */
+  it('記述子を含む名前で書き、無印には触らない', async () => {
+    const { existsSync } = await import('node:fs')
+    const server = await startWithImages()
+
+    await server.get('/assets/img/hero@400w.webp')
+
+    expect(existsSync(outputPath(server, 'assets/img/hero@400w.webp'))).toBe(true)
+    expect(existsSync(outputPath(server, 'assets/img/hero.webp'))).toBe(false)
+  })
+
+  it('2 回目は作り直さない', async () => {
+    const { stat } = await import('node:fs/promises')
+    const server = await startWithImages()
+
+    await server.get('/assets/img/hero@400w.webp')
+    const first = (await stat(outputPath(server, 'assets/img/hero@400w.webp'))).mtimeMs
+
+    await new Promise(resolve => setTimeout(resolve, 10))
+    await server.get('/assets/img/hero@400w.webp')
+
+    expect((await stat(outputPath(server, 'assets/img/hero@400w.webp'))).mtimeMs).toBe(first)
+  })
+
+  it.each([
+    ['原寸以上の幅', '/assets/img/hero@800w.webp'],
+    ['0 の幅', '/assets/img/hero@0w.webp'],
+    ['SVG', '/assets/img/mark@4w.svg'],
+    ['「_」配下', '/assets/img/_wip/draft@400w.webp'],
+    ['元画像が無い', '/assets/img/missing@400w.webp'],
+    ['配信ルートの外へ出る', '/..%2f..%2fevil@400w.webp']
+  ])('%s は生成しない', async (_label, path) => {
+    const server = await startWithImages()
+
+    expect((await server.get(path)).status).toBe(404)
+  })
+
+  /** URL だけで決める以上、歯止めが無いと 1 枚のページで千を超えるエンコードが走る */
+  it('1 画像あたりの生成数に上限がある', async () => {
+    const server = await startWithImages()
+
+    for (let width = 1; width <= 32; width++) {
+      expect((await server.get(`/assets/img/hero@${width}w.webp`)).status, `${width}w`).toBe(200)
+    }
+
+    expect((await server.get('/assets/img/hero@33w.webp')).status).toBe(404)
+  })
+
+  it('subdir を前置きした URL でも生成する', async () => {
+    const server = await startDevServer({
+      ...minimalProjectFiles(),
+      'pugkit.config.mjs': "export default { subdir: 'sub' }\n"
+    })
+
+    await mkdir(server.project.path('src/assets/img'), { recursive: true })
+    await writeFile(server.project.path('src/assets/img/hero.jpg'), await jpegBuffer(800, 600))
+
+    expect((await server.get('/sub/assets/img/hero@400w.webp')).status).toBe(200)
+    // 前置きが無い URL は対象にしない。出力ルート直下に書くと build に無いものが dev だけに出る
+    expect((await server.get('/assets/img/hero@200w.webp')).status).toBe(404)
+  })
+})

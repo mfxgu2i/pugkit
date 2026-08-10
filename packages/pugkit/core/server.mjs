@@ -1,5 +1,5 @@
 import http from 'node:http'
-import { existsSync } from 'node:fs'
+import { createReadStream, existsSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
 import sirv from 'sirv'
 import { logger } from '../utils/logger.mjs'
@@ -10,6 +10,7 @@ import { SSE_PATH, computeMorphSignature, createReloadTag } from './dev/client-s
 import { resolvePugSource } from './dev/page-source.mjs'
 import { resolvePageFile } from './dev/page-candidates.mjs'
 import { createLazyPageBuilder } from './dev/lazy-builder.mjs'
+import { createWidthImageResponder } from './dev/width-images.mjs'
 import { buildErrorPage, guardStaticServe, injectReload, sendHtml } from './dev/response.mjs'
 
 /**
@@ -38,6 +39,8 @@ export async function serverTask(context, options = {}) {
 
   const clients = new Set()
   const getPage = createLazyPageBuilder(context)
+  // 幅違いは起動時に作らず、要求された時点で作る（docs/adr/0011）
+  const getWidthImage = createWidthImageResponder(context, subdir)
 
   const sirvOptions = {
     dev: true,
@@ -125,11 +128,28 @@ export async function serverTask(context, options = {}) {
       return
     }
 
-    // ── sirv で静的ファイルを配信 ───────────────────────
-    serveStatic(req, res, () => {
-      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
-      res.end('404 Not Found')
-    })
+    // ── 幅違いの画像: リクエスト時生成 ──────────────────
+    // 作れないもの（対象外の形式・原寸以上・上限超え・既に置かれている）は null が返り、
+    // そのまま sirv に落ちる。sirv に委譲せず自分で返すのは、
+    // decodeURIComponent と sirv の decodeURI が食い違うため
+    getWidthImage(decoded)
+      .then(image => {
+        if (!image) {
+          serveStatic(req, res, () => {
+            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+            res.end('404 Not Found')
+          })
+          return
+        }
+
+        res.writeHead(200, { 'Content-Type': image.contentType, 'Cache-Control': 'no-cache' })
+        createReadStream(image.path).pipe(res)
+      })
+      .catch(() => {
+        if (res.headersSent) return
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+        res.end('404 Not Found')
+      })
   })
 
   function broadcast(event, data = '') {
