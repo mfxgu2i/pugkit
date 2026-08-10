@@ -141,3 +141,69 @@ describe('モダン構文の降格', () => {
     expect(css).toContain('width>=40rem')
   })
 })
+
+/**
+ * `/` 始まりを src からの指定として解く。Pug の include と同じ書き方を揃えるため。
+ *
+ * 相対指定は Sass 自身の解決が先に働くので、importer を足しても経路が変わらないこと
+ * を一緒に確かめる。片方だけ通っても意味がない
+ */
+describe('src を基点にした @use', () => {
+  it('`/` 始まりを src から解決する', async () => {
+    const { css } = await run({
+      'src/sass/_test.scss': '.from-partial { color: red; }\n',
+      'src/style.scss': "@use '/sass/test';\n.a { margin: 7px; }\n"
+    })
+
+    expect(css).toContain('.from-partial')
+    expect(css).toContain('margin:7px')
+  })
+
+  it('パーシャルの `_` と拡張子を補完する', async () => {
+    const { css } = await run({
+      'src/sass/nested/_index.scss': '.from-index { color: red; }\n',
+      'src/style.scss': "@use '/sass/nested';\n"
+    })
+
+    expect(css).toContain('.from-index')
+  })
+
+  it('相対指定はそのまま使える', async () => {
+    const { css } = await run({
+      'src/sass/_test.scss': '.from-partial { color: red; }\n',
+      'src/assets/css/style.scss': "@use '../../sass/test';\n",
+      'src/style.scss': '.entry { color: red; }\n'
+    })
+
+    // 前提: entry 側がビルドされている
+    expect(css).toContain('.entry')
+  })
+
+  it('見つからなければ中止する', async () => {
+    await expect(run({ 'src/style.scss': "@use '/sass/nope';\n" })).rejects.toThrow()
+  })
+
+  /**
+   * 依存グラフに載らないと、パーシャルを直しても dev で反映されない。
+   * ビルドが通ることと、差分ビルドが効くことは別
+   */
+  it('依存グラフに載る', async () => {
+    const project = await createTempProject({
+      'src/sass/_test.scss': '.from-partial { color: red; }\n',
+      'src/style.scss': "@use '/sass/test';\n"
+    })
+    const resources = new ResourceStore()
+    onTestFinished(() => resources.disposeAll())
+
+    const sassGraph = new DependencyGraph()
+    await sassTask({
+      paths: { root: project.root, src: project.path('src'), output: project.path('out') },
+      isProduction: false,
+      isDevelopment: true,
+      sassGraph,
+      resources
+    })
+
+    expect(sassGraph.getAffectedParents(project.path('src/sass/_test.scss'))).toEqual([project.path('src/style.scss')])
+  })
+})

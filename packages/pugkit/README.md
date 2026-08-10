@@ -289,9 +289,27 @@ picture
 
 対象ブラウザは [browserslist](https://github.com/browserslist/browserslist) から読みます。プロジェクトルートの `.browserslistrc` か、`package.json` の `browserslist` に書いてください。指定が無ければ browserslist の既定が使われます。
 
+`@use` と `@forward` は `/` 始まりで `src/` からの指定になります。Pug の `include` と同じ書き方です。相対指定もそのまま使えます。
+
+```scss
+@use '/sass/tokens'; // src/sass/_tokens.scss
+@use '../../sass/tokens'; // 同じファイルを相対で指定
+```
+
+パーシャルの `_` と拡張子は補完されます。ディレクトリを指定すると `_index.scss` を読みます。
+
 ### JavaScript / TypeScript
 
 `src/` 配下の `.js` / `.ts` ファイルをバンドルして出力します。
+
+`import` も `/` 始まりで `src/` からの指定になります。拡張子は省けます。
+
+```js
+import { tag } from '/_lib/util' // src/_lib/util.js
+import { tag } from '../../_lib/util.js' // 同じファイルを相対で指定
+```
+
+`_` で始まるファイル・ディレクトリはエントリになりません。他から `import` される部品はこの名前にしてください。そうしないと、その部品自体も単体でバンドルされて出力されます。
 
 esbuild がTypeScriptをネイティブ処理するため、`tsconfig.json` は不要です。ただし型チェックは行わずトランスパイルのみ行います。
 

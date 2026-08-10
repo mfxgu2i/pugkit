@@ -9,6 +9,31 @@ import { ensureDir, ensureFileDir } from '../utils/file.mjs'
 const SCRIPT_BUILDER = 'script:builder'
 
 /**
+ * `/` 始まりの import を src からの指定として解く。
+ *
+ * Pug の `include /_templates/_layout` と同じ書き方を JS / TS でも使えるようにする。
+ * Sass 側の `srcRootImporter` と対になる。
+ *
+ * 解決そのものは `build.resolve()` に投げ直す。自前でパスを返すと拡張子の補完と
+ * ディレクトリの index が効かず、`/lib/util` が `lib/util.js` に当たらない。
+ * 投げ直す先は `./` 始まりなのでこのフックには戻ってこない。
+ *
+ * エントリポイントは対象外。走査済みの絶対パスがここに来るので、
+ * 素通ししないと src の下をもう一度探しに行く
+ */
+function srcRootPlugin(srcDir) {
+  return {
+    name: 'pugkit-src-root',
+    setup(build) {
+      build.onResolve({ filter: /^\// }, async args => {
+        if (args.kind === 'entry-point') return null
+        return build.resolve(`.${args.path}`, { kind: args.kind, resolveDir: srcDir })
+      })
+    }
+  }
+}
+
+/**
  * dev で常駐させる esbuild の incremental build コンテキスト。
  * 同じファイルの連続編集でモジュールグラフを再利用する。
  *
@@ -136,7 +161,7 @@ export async function scriptTask(context, options = {}) {
       logLevel: 'error',
       keepNames: false,
       external: [],
-      plugins: [],
+      plugins: [srcRootPlugin(paths.src)],
       legalComments: 'none',
       treeShaking: true,
       minifyWhitespace: !isDevBuild,

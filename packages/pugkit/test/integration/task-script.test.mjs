@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { readFile, stat } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { createTempProject, createTestBuilder } from '../helpers/project.mjs'
 
 /**
@@ -20,7 +21,8 @@ async function buildScripts(files) {
   const builder = await createTestBuilder(project.root, 'development')
   await builder.runTask('script')
 
-  return { project, graph: builder.context.scriptGraph }
+  // 出力先は cacheDir 側で、node_modules の有無で場所が変わる。決め打ちしない
+  return { project, graph: builder.context.scriptGraph, output: builder.context.paths.output }
 }
 
 describe('依存グラフ', () => {
@@ -105,5 +107,52 @@ describe('dev の差分ビルド', () => {
 
     expect(await readOut(builder, 'main.js')).toContain('2')
     expect((await stat(`${builder.context.paths.outputRoot}/assets/js/other.js`)).mtimeMs).toBe(before)
+  })
+})
+
+/**
+ * `/` 始まりを src からの指定として解く。Sass の `@use '/sass/test'` と対になる。
+ *
+ * 解決を esbuild に投げ直しているので、拡張子の補完が効くことと、
+ * 相対指定の経路が変わっていないことを一緒に固定する
+ */
+describe('src を基点にした import', () => {
+  it('`/` 始まりを src から解決する', async () => {
+    const { output } = await buildScripts({
+      'src/_lib/util.js': 'export const tag = "from-lib"\n',
+      'src/assets/js/main.js': "import { tag } from '/_lib/util.js'\ndocument.title = tag\n"
+    })
+
+    const out = await readFile(resolve(output, 'assets/js/main.js'), 'utf8')
+    expect(out).toContain('from-lib')
+  })
+
+  it('拡張子を省いても解決する', async () => {
+    const { output } = await buildScripts({
+      'src/_lib/util.js': 'export const tag = "from-lib"\n',
+      'src/assets/js/main.js': "import { tag } from '/_lib/util'\ndocument.title = tag\n"
+    })
+
+    const out = await readFile(resolve(output, 'assets/js/main.js'), 'utf8')
+    expect(out).toContain('from-lib')
+  })
+
+  it('相対指定はそのまま使える', async () => {
+    const { output } = await buildScripts({
+      'src/_lib/util.js': 'export const tag = "from-relative"\n',
+      'src/assets/js/main.js': "import { tag } from '../../_lib/util.js'\ndocument.title = tag\n"
+    })
+
+    const out = await readFile(resolve(output, 'assets/js/main.js'), 'utf8')
+    expect(out).toContain('from-relative')
+  })
+
+  it('依存グラフに載る', async () => {
+    const { project, graph } = await buildScripts({
+      'src/_lib/util.js': 'export const tag = "from-lib"\n',
+      'src/assets/js/main.js': "import { tag } from '/_lib/util.js'\ndocument.title = tag\n"
+    })
+
+    expect(graph.getAffectedParents(project.path('src/_lib/util.js'))).toEqual([project.path('src/assets/js/main.js')])
   })
 })
