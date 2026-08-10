@@ -134,17 +134,18 @@ describe('createImageInfoHelper', () => {
       const result = imageInfo('/images/logo.jpg')
 
       expect(result).toMatchObject({ width: 240, height: 80 })
-      expect(result.srcset).toBe('/images/logo.jpg 1x')
+      // 候補が 1 つなので srcset は書かない
+      expect(result.srcset).toBeUndefined()
     })
   })
 
   describe('build.image.sourceDensity', () => {
-    it('density 1 では原寸を返し srcset は 1 枚だけ', () => {
+    it('density 1 では原寸を返し srcset を出さない', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 1))
       const result = imageInfo('/images/hero.jpg')
 
       expect(result).toMatchObject({ src: '/images/hero.webp', width: 800, height: 600 })
-      expect(result.srcset).toBe('/images/hero.webp 1x')
+      expect(result.srcset).toBeUndefined()
     })
 
     it('density 2 では src と width/height が表示サイズになる', () => {
@@ -171,7 +172,7 @@ describe('createImageInfoHelper', () => {
       const result = imageInfo('/images/tiny.jpg')
 
       expect(result).toMatchObject({ src: '/images/tiny.webp', width: 1, height: 1 })
-      expect(result.srcset).toBe('/images/tiny.webp 1x')
+      expect(result.srcset).toBeUndefined()
     })
 
     it('不正な密度は 1 として扱う（全画像が半分になる事故を防ぐ）', () => {
@@ -187,7 +188,8 @@ describe('createImageInfoHelper', () => {
       const result = imageInfo('/images/sibling.jpg')
 
       expect(result.retina).toBeUndefined()
-      expect(result.srcset).toBe('/images/sibling.webp 1x')
+      expect(result.src).toBe('/images/sibling.webp')
+      expect(result.srcset).toBeUndefined()
     })
   })
 
@@ -272,8 +274,8 @@ describe('createImageInfoHelper', () => {
       expect(result.isSvg).toBe(true)
       expect(result.src).toBe('/images/icon.svg')
       expect(result.variant).toBeNull()
-      // 密度の対象外なので縮小版は存在しない
-      expect(result.srcset).toBe('/images/icon.svg 1x')
+      // 密度の対象外なので候補は 1 つ。srcset は書かない
+      expect(result.srcset).toBeUndefined()
     })
   })
 })
@@ -405,8 +407,30 @@ describe('幅の収集', () => {
     const { imageInfo } = createWithStore()
     const result = imageInfo('/images/icon.svg', { widths: [16], sizes: '100vw' })
 
-    expect(result.srcset).toBe('/images/icon.svg 1x')
+    expect(result.src).toBe('/images/icon.svg')
+    expect(result.srcset).toBeUndefined()
     expect(result.sizes).toBeUndefined()
+  })
+
+  /**
+   * srcset が無ければ sizes も意味を持たない。
+   * 片方だけ残すと、選びようのない候補に対する指定が納品 HTML に残る
+   */
+  it('候補が 1 つなら img の srcset も sizes も出さない', () => {
+    const { imageInfo } = createWithStore()
+    // 800px の画像に 800 以上だけを渡すと、剪定後は無印 1 枚になる
+    const result = imageInfo('/images/hero.jpg', { widths: [1200], sizes: '100vw' })
+
+    expect(result.srcset).toBeUndefined()
+    expect(result.sizes).toBeUndefined()
+  })
+
+  /** source は srcset が必須。落とすと source ごと無効になり SP 画像が出ない */
+  it('候補が 1 つでも variant の srcset は出す', () => {
+    const { imageInfo } = createWithStore()
+    const { variant } = imageInfo('/images/responsive.jpg', { widths: [600], sizes: '100vw' })
+
+    expect(variant.srcset).toBe('/images/responsive_sp.webp 376w')
   })
 
   it('同じ画像を違う幅で参照したら和集合になる', () => {

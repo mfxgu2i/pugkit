@@ -125,7 +125,8 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
       height,
       format: type,
       srcset: entries.map(entry => `${encodeSrcsetUrl(entry.name)} ${entry.width}w`).join(', '),
-      sizes
+      sizes,
+      candidates: entries.length
     }
   }
 
@@ -162,7 +163,8 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
       format: type,
       srcset: entries.map(entry => `${encodeSrcsetUrl(entry.src)} ${entry.density}x`).join(', '),
       // sizes は幅記述子のときだけ意味を持つ。密度記述子に付けても無視される
-      sizes: undefined
+      sizes: undefined,
+      candidates: entries.length
     }
   }
 
@@ -227,12 +229,27 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
         if (!variantFound) return null
 
         onAccess?.(variantFound.path)
-        // _sp にも同じ幅一覧と sizes を掛ける。原寸が小さいぶんは剪定で落ちる
-        const { format, ...rest } = describe(variantSrc, variantFound, widths, options.sizes)
+        // _sp にも同じ幅一覧と sizes を掛ける。原寸が小さいぶんは剪定で落ちる。
+        // srcset は候補が 1 つでも必ず出す。source の必須属性なので、
+        // 落とすと source ごと無効になって SP 画像が出なくなる
+        const { format, candidates, ...rest } = describe(variantSrc, variantFound, widths, options.sizes)
         return rest
       }
 
-      return { ...describe(src, found, widths, options.sizes), isSvg, variant: findVariant() }
+      /**
+       * 候補が 1 つなら img の srcset を出さない。書いても選びようがなく、
+       * 納品する HTML に意味の無い属性が残る。sizes も srcset あってのものなので一緒に落とす
+       */
+      const { candidates, ...main } = describe(src, found, widths, options.sizes)
+      const hasChoice = candidates > 1
+
+      return {
+        ...main,
+        srcset: hasChoice ? main.srcset : undefined,
+        sizes: hasChoice ? main.sizes : undefined,
+        isSvg,
+        variant: findVariant()
+      }
     } catch (error) {
       logger?.warn('pug', `Failed to read "${src}" in ${relative(paths.src, filePath)}: ${error.message}`)
       return fallback
