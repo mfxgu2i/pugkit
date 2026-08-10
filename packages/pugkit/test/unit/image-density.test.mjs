@@ -166,6 +166,14 @@ describe('parseWidthName', () => {
       expect(parseWidthName(name)).toBeNull()
     }
   )
+
+  /**
+   * 綴りが 1 通りでないと、同じ幅に複数の出力先ができる。
+   * dev の生成上限は「既知の幅」で数えているので、先頭のゼロを増やすだけで素通りする
+   */
+  it.each(['img/a@0400w.webp', 'img/a@00400w.webp', 'img/a@0w.webp'])('%s は非正規の綴りなので読まない', name => {
+    expect(parseWidthName(name)).toBeNull()
+  })
 })
 
 describe('isReservedImageName', () => {

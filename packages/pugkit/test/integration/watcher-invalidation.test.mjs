@@ -337,6 +337,26 @@ describe('画像の変更', () => {
     }
   })
 
+  /**
+   * dev は幅違いをリクエスト時に作り、既にあれば作り直さない。
+   * 元画像を編集したときに消しておかないと、古い中身が配信され続ける
+   */
+  it('元画像の変更でも幅違いを消す', async () => {
+    const { writeFile, mkdir } = await import('node:fs/promises')
+    const { existsSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+
+    await mkdir(resolve(context.paths.output, 'assets'), { recursive: true })
+    await writeFile(resolve(context.paths.output, 'assets/hero@400w.webp'), 'x')
+    await writeFile(resolve(context.paths.output, 'assets/hero2@400w.webp'), 'x')
+
+    await watcher.onImageChange(at('assets/hero.jpg'), 'change')
+
+    expect(existsSync(resolve(context.paths.output, 'assets/hero@400w.webp'))).toBe(false)
+    // 隣の画像は巻き添えにしない
+    expect(existsSync(resolve(context.paths.output, 'assets/hero2@400w.webp'))).toBe(true)
+  })
+
   /** glob を使うと `a{1,2}@*w.webp` が a1 と a2 に当たり、自分のを残して他人のを消す */
   it('glob のメタ文字を含む名前でも自分の幅違いだけを消す', async () => {
     const { writeFile, mkdir } = await import('node:fs/promises')

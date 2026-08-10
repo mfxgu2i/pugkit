@@ -102,8 +102,11 @@ block content
     })
 
     await build(project.root)
+    const files = await listFiles(project.path('dist'))
 
-    expect((await listFiles(project.path('dist'))).filter(file => /@\d+w\./.test(file))).toEqual([])
+    // 前提: 画像そのものは出ている（1 枚も処理されていないと空振りする）
+    expect(files).toContain('assets/img/hero.webp')
+    expect(files.filter(file => /@\d+w\./.test(file))).toEqual([])
   })
 })
 

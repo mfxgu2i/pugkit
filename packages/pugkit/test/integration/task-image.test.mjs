@@ -301,8 +301,11 @@ describe('幅違いの出力', () => {
 
   it('要求されていない画像には作らない', async () => {
     await imageTask(makeContext({ widths: { 'normal.jpg': [100] } }))
+    const files = await listFiles(distDir)
 
-    expect(await listFiles(distDir)).not.toContain('mv@100w.webp')
+    // 前提: mv.jpg 自体は処理されている
+    expect(files).toContain('mv.webp')
+    expect(files).not.toContain('mv@100w.webp')
   })
 
   /** dev はリクエスト時に作る。ここで作るとページを開く前と後で出力が変わる */
@@ -330,8 +333,11 @@ describe('幅違いの出力', () => {
     await writeFile(resolve(srcDir, 'anim.gif'), await readFile(resolve(srcDir, 'normal.jpg')))
 
     await imageTask(makeContext({ format: 'compress', widths: { 'anim.gif': [100] } }))
+    const files = await listFiles(distDir)
 
-    expect(await listFiles(distDir)).not.toContain('anim@100w.gif')
+    // 前提: GIF 自体はコピーされている
+    expect(files).toContain('anim.gif')
+    expect(files).not.toContain('anim@100w.gif')
   })
 })
 

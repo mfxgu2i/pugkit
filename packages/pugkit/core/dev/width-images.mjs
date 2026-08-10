@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { readdir, rename, rm } from 'node:fs/promises'
-import { basename, dirname, extname, relative, resolve, sep } from 'node:path'
+import { basename, dirname, extname, relative, resolve } from 'node:path'
 import sizeOf from 'image-size'
 import { convertExtension, parseWidthName, supportsWidthVariants } from '../../utils/image-density.mjs'
 import { CONVERTIBLE_EXTENSIONS } from '../../utils/image-formats.mjs'
@@ -37,9 +37,14 @@ const CONTENT_TYPES = {
   '.gif': 'image/gif'
 }
 
-/** 「_」始まりのセグメントを含むか。build の IMAGE_IGNORE と同じ扱いにする */
-function isHidden(relativePath) {
-  return relativePath.split(sep).some(segment => segment.startsWith('_'))
+/**
+ * 「_」始まりのセグメントを含むか。build の IMAGE_IGNORE と同じ扱いにする。
+ *
+ * 判定するのは URL 由来のパスなので、区切りは常に「/」。path.sep で分けると
+ * Windows では 1 つのセグメントとして扱われ、dev だけが `_` 配下を配信する
+ */
+function isHidden(urlRelativePath) {
+  return urlRelativePath.split('/').some(segment => segment.startsWith('_'))
 }
 
 /**
@@ -80,8 +85,9 @@ async function resolveWidthRequest(urlPath, context, subdir) {
   const withoutSubdir = stripSubdir(urlPath, subdir)
   if (withoutSubdir === null) return null
 
+  // parseWidthName はビルドが作る綴りだけを読む（1 以上、先頭ゼロなし）
   const parsed = parseWidthName(withoutSubdir)
-  if (!parsed || parsed.width < 1) return null
+  if (!parsed) return null
 
   const outputRelative = parsed.base.replace(/^\//, '')
   if (!outputRelative || isHidden(outputRelative)) return null

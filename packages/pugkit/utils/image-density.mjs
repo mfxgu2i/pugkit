@@ -118,8 +118,15 @@ export function parseWidthName(name) {
   const ext = extname(name)
   const stem = stemOf(name)
   const match = stem.match(WIDTH_SUFFIX_RE)
+  if (!match) return null
 
-  return match ? { base: stem.slice(0, stem.length - match[0].length), width: Number(match[1]), ext } : null
+  // ビルドが作る綴りだけを読む。`@0400w` を許すと同じ幅に複数の出力先ができ、
+  // dev の生成上限は「既知の幅」で数えているので先頭のゼロを増やすだけで素通りする。
+  // 0 も作らない名前なので、予約にも削除の対象にも含めない
+  const width = Number(match[1])
+  if (width < 1 || String(width) !== match[1]) return null
+
+  return { base: stem.slice(0, stem.length - match[0].length), width, ext }
 }
 
 /**
