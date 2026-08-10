@@ -37,3 +37,6 @@ coverage/
 # Temporary files
 *.tmp
 .cache/
+
+# mise（ローカル上書き。共有するのは mise.toml だけ）
+mise.local.toml

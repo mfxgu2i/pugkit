@@ -1,0 +1,563 @@
+import { describe, expect, it, onTestFinished } from 'vitest'
+import net from 'node:net'
+import { existsSync } from 'node:fs'
+import { chmod, mkdir, writeFile } from 'node:fs/promises'
+import { dirname, relative } from 'node:path'
+import { createTempProject, minimalProjectFiles, createTestBuilder } from '../helpers/project.mjs'
+
+/**
+ * dev サーバーを実際に listen させて HTTP 越しに確認する。
+ * ルーティング・エラーページ・morph 可否ヘッダー・SSE はここでしか守れない。
+ *
+ * ポートは 0 を指定して OS に割り当てさせるため、並列実行でも衝突しない。
+ */
+async function startDevServer(files = minimalProjectFiles()) {
+  const project = await createTempProject(files)
+  const builder = await createTestBuilder(project.root, 'development')
+  const { context } = builder
+
+  context.config.server.port = 0
+  await builder.tasks.server(context)
+
+  const { port } = context.server
+
+  return {
+    project,
+    context,
+    builder,
+    get: (path, options) => fetch(`http://localhost:${port}${path}`, options)
+  }
+}
+
+describe('dev サーバーの配信', () => {
+  it('Pug ページをリクエスト時にビルドして返す', async () => {
+    const server = await startDevServer()
+    const res = await server.get('/')
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toMatch(/text\/html/)
+    await expect(res.text()).resolves.toContain('<h1>Home</h1>')
+  })
+
+  it('ライブリロードスクリプトを注入する', async () => {
+    const server = await startDevServer()
+    const html = await (await server.get('/')).text()
+
+    expect(html).toContain('__pugkit_sse')
+  })
+
+  it('存在しないページは 404 を返す', async () => {
+    const server = await startDevServer()
+    expect((await server.get('/nope.html')).status).toBe(404)
+  })
+
+  it('パーシャルはページとして配信しない', async () => {
+    const server = await startDevServer()
+    expect((await server.get('/_partials/_layout.html')).status).toBe(404)
+  })
+
+  it('壊れた URL エンコードは 400 を返す', async () => {
+    const server = await startDevServer()
+    expect((await server.get('/%')).status).toBe(400)
+  })
+
+  it('クエリ文字列があってもページを解決できる', async () => {
+    const server = await startDevServer()
+    expect((await server.get('/?preview=1')).status).toBe(200)
+  })
+})
+
+describe('DOM 差分適用の可否判定', () => {
+  /**
+   * body の差分適用では <head>・<html> 属性・<script> の変更を反映できないため、
+   * それらが変わっていないかを指紋で判定する。
+   *
+   * 指紋は「そのタブが今表示している HTML」の性質なので HTML に埋め込んで持たせる。
+   * サーバーが「直近に返した指紋」を1つだけ覚える作りだと、同じページを複数タブで
+   * 開いたとき2つ目以降が「変わっていない」と誤判定し、head と script を取りこぼす。
+   */
+  const signatureOf = html => html.match(/data-pugkit-signature="([^"]+)"/)?.[1]
+
+  const changeHead = async server => {
+    await server.project.write({
+      'src/_partials/_layout.pug':
+        'doctype html\nhtml\n  head\n    title Changed\n    meta(name="description" content="new")\n  body\n    block content\n'
+    })
+    server.context.cache.clearPageHtml()
+    server.context.cache.invalidatePugTemplate(server.project.path('src/index.pug'))
+  }
+
+  it('配信する HTML に指紋を埋め込む', async () => {
+    const server = await startDevServer()
+
+    expect(signatureOf(await (await server.get('/')).text())).toMatch(/^[0-9a-f]+$/)
+  })
+
+  it('内容が同じなら同じ指紋になる（差分適用してよい）', async () => {
+    const server = await startDevServer()
+
+    const first = signatureOf(await (await server.get('/')).text())
+    const second = signatureOf(await (await server.get('/')).text())
+
+    expect(second).toBe(first)
+  })
+
+  it('head が変わったら指紋も変わる（差分適用させない）', async () => {
+    const server = await startDevServer()
+    const before = signatureOf(await (await server.get('/')).text())
+
+    await changeHead(server)
+
+    expect(signatureOf(await (await server.get('/')).text())).not.toBe(before)
+  })
+
+  it('何度取得しても、変更前の指紋と変更後の指紋は食い違ったまま', async () => {
+    // 複数タブ: 1つ目が取得しても、2つ目が持っている古い指紋は新しい HTML と一致しない
+    const server = await startDevServer()
+    const tabA = signatureOf(await (await server.get('/')).text())
+    const tabB = signatureOf(await (await server.get('/')).text())
+    expect(tabB).toBe(tabA)
+
+    await changeHead(server)
+
+    const fetchedByTabA = signatureOf(await (await server.get('/')).text())
+    const fetchedByTabB = signatureOf(await (await server.get('/')).text())
+
+    expect(fetchedByTabA).not.toBe(tabA)
+    expect(fetchedByTabB).not.toBe(tabB)
+  })
+
+  it('ページごとに指紋が異なる', async () => {
+    const server = await startDevServer()
+
+    const home = signatureOf(await (await server.get('/')).text())
+    const about = signatureOf(await (await server.get('/about.html')).text())
+
+    expect(about).not.toBe(home)
+  })
+})
+
+describe('ビルドエラー', () => {
+  it('エラーページを 500 で返し、サーバーは動き続ける', async () => {
+    const server = await startDevServer({
+      ...minimalProjectFiles(),
+      'src/broken.pug': 'extends /_partials/_missing.pug\n'
+    })
+
+    const res = await server.get('/broken.html')
+    expect(res.status).toBe(500)
+    await expect(res.text()).resolves.toContain('Pug Build Error')
+
+    // 他のページは通常どおり配信される
+    expect((await server.get('/')).status).toBe(200)
+  })
+
+  it('エラーページにもライブリロードを仕込んで自動復帰できるようにする', async () => {
+    const server = await startDevServer({
+      ...minimalProjectFiles(),
+      'src/broken.pug': 'extends /_partials/_missing.pug\n'
+    })
+
+    const html = await (await server.get('/broken.html')).text()
+    expect(html).toContain('__pugkit_sse')
+  })
+})
+
+describe('配信ルートの封じ込め', () => {
+  /**
+   * fetch は "/.." を送る前に正規化してしまうので、生のソケットで送る。
+   * Pug の解決（resolvePugSource）側にはテストがあるが、
+   * 既存 HTML を読み出す経路にも同じ封じ込めが要る。
+   */
+  function rawGet(port, rawPath) {
+    return new Promise((resolve, reject) => {
+      const socket = net.connect(port, 'localhost', () => {
+        socket.write(`GET ${rawPath} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`)
+      })
+      let data = ''
+      socket.setEncoding('utf8')
+      socket.on('data', chunk => (data += chunk))
+      socket.on('end', () => resolve(data))
+      socket.on('error', reject)
+    })
+  }
+
+  /**
+   * 「..」の数は配信ルートの深さで決まる。固定で書くと届かないパスになり、
+   * 封じ込めを外しても素通りするテスト（＝何も守らないテスト）になる
+   */
+  const escapeTo = (server, target) => relative(server.context.paths.outputRoot, server.project.path(target))
+
+  const shapes = {
+    そのまま: escape => `/${escape}`,
+    スラッシュ重複: escape => `/${escape.replace(/\//g, '//')}`,
+    エンコード: escape => `/${escape.replace(/\//g, '%2f')}`,
+    カレント経由: escape => `/./${escape}`
+  }
+
+  it.each(Object.keys(shapes))('%s の形でも配信ルートの外を読み出せない', async shape => {
+    const server = await startDevServer({
+      ...minimalProjectFiles(),
+      // 配信ルート（dev キャッシュ）の外に置いた、公開してはいけないファイル
+      'secret.html': '<html><body>SECRET</body></html>\n'
+    })
+    const rawPath = shapes[shape](escapeTo(server, 'secret.html'))
+
+    const response = await rawGet(server.context.server.port, rawPath)
+
+    // 届くはずのパスであることを確かめてから、届いていないことを確かめる
+    expect(rawPath).toMatch(/\.\.|%2e/)
+    expect(response).not.toContain('SECRET')
+  })
+
+  it('配信ルートの中の HTML は読み出せる（封じ込めが強すぎないことの確認）', async () => {
+    const server = await startDevServer({ ...minimalProjectFiles(), 'public/legacy.html': '<html>OK</html>\n' })
+    await server.builder.runTask('copy')
+
+    expect((await server.get('/legacy.html')).status).toBe(200)
+  })
+})
+
+describe('Pug 由来でない HTML', () => {
+  // public に置いた既存 HTML も dev で編集される。ライブリロードが効かないと、
+  // そのページだけ手動リロードが必要という分かりにくい状態になる
+  it('ライブリロードを注入する', async () => {
+    const server = await startDevServer({ ...minimalProjectFiles(), 'public/legacy.html': '<html>OK</html>\n' })
+    await server.builder.runTask('copy')
+
+    const html = await (await server.get('/legacy.html')).text()
+
+    expect(html).toContain('data-pugkit-live-reload')
+    expect(html).toContain('__pugkit_sse')
+  })
+
+  // 中身の作られ方を pugkit が知らないので、差分適用はさせずフルリロードにする
+  it('指紋は埋め込まない（差分適用の対象外）', async () => {
+    const server = await startDevServer({ ...minimalProjectFiles(), 'public/legacy.html': '<html>OK</html>\n' })
+    await server.builder.runTask('copy')
+
+    const html = await (await server.get('/legacy.html')).text()
+    // 開始タグだけを見る。スクリプト本体には属性名が文字列として現れる
+    const openingTag = html.match(/<script data-pugkit-live-reload[^>]*>/)?.[0]
+
+    expect(openingTag).toBeDefined()
+    expect(openingTag).not.toContain('data-pugkit-signature')
+  })
+})
+
+describe('URL の解決順', () => {
+  /**
+   * 同じ URL 形に対して、Pug ページ・public 由来の HTML・sirv の静的配信で
+   * 解決順が食い違ってはいけない。「dev で見えるものと本番で見えるものが違う」
+   * という形の事故になる。
+   *
+   * 基準は sirv の解決順（フラットファイル優先。末尾スラッシュは除去して同順）。
+   * resolvePugSource もこれに合わせてある。
+   */
+  const bothShapes = () => ({
+    ...minimalProjectFiles(),
+    'public/dir.html': '<html><body>FLAT</body></html>\n',
+    'public/dir/index.html': '<html><body>DIRINDEX</body></html>\n',
+    'src/page.pug': 'doctype html\nhtml\n  body\n    p PUG-FLAT\n',
+    'src/page/index.pug': 'doctype html\nhtml\n  body\n    p PUG-DIRINDEX\n'
+  })
+
+  const startWithPublic = async () => {
+    const server = await startDevServer(bothShapes())
+    await server.builder.runTask('copy')
+    return server
+  }
+
+  const bodyOf = async (server, url) => (await (await server.get(url)).text()).match(/FLAT|DIRINDEX|PUG-[A-Z]+/)?.[0]
+
+  it.each([['/dir'], ['/dir/']])('%s はフラットファイルを優先する', async url => {
+    const server = await startWithPublic()
+
+    expect(await bodyOf(server, url)).toBe('FLAT')
+  })
+
+  it('拡張子つきで指定すればそのファイルを返す', async () => {
+    const server = await startWithPublic()
+
+    expect(await bodyOf(server, '/dir.html')).toBe('FLAT')
+  })
+
+  it('Pug ページと非Pug HTML で解決順が一致する', async () => {
+    const server = await startWithPublic()
+
+    // どちらも「ディレクトリの index」ではなく「フラットなファイル」を選ぶ
+    expect(await bodyOf(server, '/page')).toBe('PUG-FLAT')
+    expect(await bodyOf(server, '/dir')).toBe('FLAT')
+  })
+})
+
+describe('build の出力先', () => {
+  /**
+   * dev が配信するのは src から導かれるものだけ。
+   * build の出力先を覗きに行くと、src から消したページが「復活」して見えたり、
+   * 前回ビルドの成果物が現在のソースの代わりに表示されたりする。
+   * outDir にしか無いファイルは public/ に置けば dev でも build でも同じに扱える。
+   */
+  it('outDir にしか無いファイルは配信しない', async () => {
+    const server = await startDevServer({
+      ...minimalProjectFiles(),
+      'dist/legacy.html': '<html><body>LEGACY</body></html>\n',
+      'dist/legacy.css': 'body{}\n'
+    })
+
+    expect((await server.get('/legacy.html')).status).toBe(404)
+    expect((await server.get('/legacy.css')).status).toBe(404)
+  })
+})
+
+describe('配信できないアセット', () => {
+  /**
+   * 静的配信は存在を確認してから読み出すので、その間にファイルが消えると失敗する。
+   * dev では watcher の削除・キャッシュ作り直しと配信が競合するため必ず起きる。
+   * 応答が壊れるのは許容するが、dev サーバーが落ちてはいけない
+   * （落ちるとエラーページも自動復帰も無く、原因も編集したファイルに見えない）。
+   *
+   * 読み取り権限を落としたファイルで、消失と同じ「存在するのに読めない」を作る。
+   */
+  it('読み出しに失敗してもサーバーは動き続ける', async () => {
+    const server = await startDevServer()
+    const unreadable = `${server.context.paths.outputRoot}/assets/css/style.css`
+    await mkdir(dirname(unreadable), { recursive: true })
+    await writeFile(unreadable, 'body{}')
+    await chmod(unreadable, 0o000)
+    onTestFinished(() => chmod(unreadable, 0o644))
+
+    await server.get('/assets/css/style.css').catch(() => null)
+
+    expect((await server.get('/')).status).toBe(200)
+  })
+})
+
+describe('SSE', () => {
+  it('リロード通知を種類つきで送る', async () => {
+    const server = await startDevServer()
+    const res = await server.get('/__pugkit_sse')
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+
+    // 接続直後の retry 行
+    await reader.read()
+
+    server.context.server.reload('html')
+    const { value } = await reader.read()
+
+    expect(decoder.decode(value)).toBe('event: reload\ndata: html\n\n')
+    await reader.cancel()
+  })
+
+  /**
+   * 切断されたクライアントを持ち続けると、リロードのたびに死んだ接続へ書き込む。
+   * 次の broadcast で結果的に取り除かれるので気づきにくいが、
+   * タブを開き閉じするたびに溜まる
+   */
+  it('切断されたクライアントを持ち続けない', async () => {
+    const server = await startDevServer()
+    const controller = new AbortController()
+    const res = await server.get('/__pugkit_sse', { signal: controller.signal })
+    res.body.getReader().read()
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(server.context.server.clientCount).toBe(1)
+
+    controller.abort()
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    expect(server.context.server.clientCount).toBe(0)
+  })
+
+  it('CSS 更新はリロードとは別のイベントで送る', async () => {
+    const server = await startDevServer()
+    const res = await server.get('/__pugkit_sse')
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    await reader.read()
+
+    server.context.server.reloadCSS()
+    const { value } = await reader.read()
+
+    expect(decoder.decode(value)).toContain('event: css-update')
+    await reader.cancel()
+  })
+})
+
+/**
+ * 幅違いはリクエスト時に作る。起動時に作らないのは、幅が imageInfo() の
+ * 呼び出し側で決まり、まだ開いていないページの要求を起動時には知れないため（docs/adr/0011）。
+ */
+describe('幅違いの画像', () => {
+  const loadSharp = () => import('sharp').then(module => module.default)
+
+  const jpegBuffer = async (width, height) => {
+    const sharp = await loadSharp()
+    return sharp({ create: { width, height, channels: 3, background: { r: 10, g: 20, b: 30 } } })
+      .jpeg()
+      .toBuffer()
+  }
+
+  async function startWithImages() {
+    const server = await startDevServer()
+
+    await mkdir(server.project.path('src/assets/img/_wip'), { recursive: true })
+    await writeFile(server.project.path('src/assets/img/hero.jpg'), await jpegBuffer(800, 600))
+    await writeFile(server.project.path('src/assets/img/_wip/draft.jpg'), await jpegBuffer(800, 600))
+    // 中身は JPEG のままでよい。ここで見たいのは拡張子による扱いの分かれ方
+    await writeFile(server.project.path('src/assets/img/anim.gif'), await jpegBuffer(800, 600))
+    await writeFile(
+      server.project.path('src/assets/img/mark.svg'),
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"></svg>'
+    )
+
+    return server
+  }
+
+  const outputPath = (server, name) => `${server.context.paths.output}/${name}`
+
+  it('要求された幅を生成して返す', async () => {
+    const server = await startWithImages()
+    const res = await server.get('/assets/img/hero@400w.webp')
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('image/webp')
+
+    const sharp = await loadSharp()
+    const { width, height } = await sharp(Buffer.from(await res.arrayBuffer())).metadata()
+    expect({ width, height }).toEqual({ width: 400, height: 300 })
+  })
+
+  /** 記述子を落とした名前で書くと、無印（原寸）を縮小版で上書きしてしまう */
+  it('記述子を含む名前で書き、無印には触らない', async () => {
+    const { existsSync } = await import('node:fs')
+    const server = await startWithImages()
+
+    await server.get('/assets/img/hero@400w.webp')
+
+    expect(existsSync(outputPath(server, 'assets/img/hero@400w.webp'))).toBe(true)
+    expect(existsSync(outputPath(server, 'assets/img/hero.webp'))).toBe(false)
+  })
+
+  it('2 回目は作り直さない', async () => {
+    const { stat } = await import('node:fs/promises')
+    const server = await startWithImages()
+
+    await server.get('/assets/img/hero@400w.webp')
+    const first = (await stat(outputPath(server, 'assets/img/hero@400w.webp'))).mtimeMs
+
+    await new Promise(resolve => setTimeout(resolve, 10))
+    await server.get('/assets/img/hero@400w.webp')
+
+    expect((await stat(outputPath(server, 'assets/img/hero@400w.webp'))).mtimeMs).toBe(first)
+  })
+
+  it.each([
+    ['原寸以上の幅', '/assets/img/hero@800w.webp'],
+    ['0 の幅', '/assets/img/hero@0w.webp'],
+    ['SVG', '/assets/img/mark@4w.svg'],
+    // GIF は build の DENSITY_EXTENSIONS から外れている。webp モードでは
+    // anim.gif -> anim.webp と読み替えられて元画像が見つかるので、
+    // ここで止めないと dev にだけ存在する画像ができる
+    ['アニメーション GIF', '/assets/img/anim@400w.webp'],
+    ['「_」配下', '/assets/img/_wip/draft@400w.webp'],
+    ['元画像が無い', '/assets/img/missing@400w.webp'],
+    // 先頭ゼロを許すと同じ幅に複数の出力先ができ、生成数の上限を素通りする
+    ['先頭ゼロの綴り', '/assets/img/hero@0400w.webp']
+  ])('%s は生成しない', async (_label, path) => {
+    const server = await startWithImages()
+
+    expect((await server.get(path)).status).toBe(404)
+  })
+
+  /**
+   * 出力先が dev キャッシュの外に出る URL。届かない段数を書くと
+   * 「元画像が無いから 404」で通ってしまい、封じ込めを外しても緑のままになる。
+   * 先に「同じ段数で src の画像に届くこと」を確かめてから、外へ出る側を見る
+   */
+  it('出力ルートの外へ書かせない', async () => {
+    const server = await startDevServer({
+      ...minimalProjectFiles(),
+      // 出力先を src の隣に置いて、1 段の traversal で src に届くようにする
+      'pugkit.config.mjs': "export default { cacheDir: '.cache' }\n"
+    })
+
+    await mkdir(server.project.path('src/assets/img'), { recursive: true })
+    await writeFile(server.project.path('src/assets/img/hero.jpg'), await jpegBuffer(800, 600))
+
+    // 前提: この段数で src の画像に届く（届かない URL では検査が空振りする）
+    const escaped = '/..%2fsrc%2fassets%2fimg%2fhero@400w.webp'
+    const source = server.project.path('src/assets/img/hero.jpg')
+    expect(existsSync(source)).toBe(true)
+
+    expect((await server.get(escaped)).status).toBe(404)
+    // src に生成物が紛れ込んでいないこと
+    expect(existsSync(server.project.path('src/assets/img/hero@400w.webp'))).toBe(false)
+  })
+
+  /**
+   * どの元画像を使うかを探索順まかせにしない。
+   * webp モードでは hero.jpg と hero.png がどちらも hero.webp になる
+   */
+  it('元画像の候補が 2 つあるときは生成しない', async () => {
+    const server = await startWithImages()
+
+    // 前提: 1 つだけなら作れている
+    expect((await server.get('/assets/img/hero@400w.webp')).status).toBe(200)
+
+    await writeFile(server.project.path('src/assets/img/hero.png'), await jpegBuffer(800, 600))
+
+    expect((await server.get('/assets/img/hero@200w.webp')).status).toBe(404)
+  })
+
+  /**
+   * build の glob は拡張子の大小を区別するので hero.JPG は 1 枚も出力されない。
+   * dev が大小を無視して当てると、dev だけが 200 を返すことになる
+   */
+  it('拡張子が大文字の元画像には当てない', async () => {
+    const server = await startWithImages()
+    await writeFile(server.project.path('src/assets/img/photo.JPG'), await jpegBuffer(800, 600))
+
+    expect((await server.get('/assets/img/photo@400w.webp')).status).toBe(404)
+  })
+
+  /** compress モードは拡張子を読み替えない。a.jpg は a@400w.webp を生まない */
+  it('元画像がその拡張子の出力を生まないなら生成しない', async () => {
+    const server = await startDevServer({
+      ...minimalProjectFiles(),
+      'pugkit.config.mjs': "export default { build: { image: { format: 'compress' } } }\n"
+    })
+
+    await mkdir(server.project.path('src/assets/img'), { recursive: true })
+    await writeFile(server.project.path('src/assets/img/hero.jpg'), await jpegBuffer(800, 600))
+
+    // 前提: 読み替えない形式なら作れている
+    expect((await server.get('/assets/img/hero@400w.jpg')).status).toBe(200)
+    expect((await server.get('/assets/img/hero@400w.webp')).status).toBe(404)
+  })
+
+  /** URL だけで決める以上、歯止めが無いと 1 枚のページで千を超えるエンコードが走る */
+  it('1 画像あたりの生成数に上限がある', async () => {
+    const server = await startWithImages()
+
+    for (let width = 1; width <= 32; width++) {
+      expect((await server.get(`/assets/img/hero@${width}w.webp`)).status, `${width}w`).toBe(200)
+    }
+
+    expect((await server.get('/assets/img/hero@33w.webp')).status).toBe(404)
+  })
+
+  it('subdir を前置きした URL でも生成する', async () => {
+    const server = await startDevServer({
+      ...minimalProjectFiles(),
+      'pugkit.config.mjs': "export default { subdir: 'sub' }\n"
+    })
+
+    await mkdir(server.project.path('src/assets/img'), { recursive: true })
+    await writeFile(server.project.path('src/assets/img/hero.jpg'), await jpegBuffer(800, 600))
+
+    expect((await server.get('/sub/assets/img/hero@400w.webp')).status).toBe(200)
+    // 前置きが無い URL は対象にしない。出力ルート直下に書くと build に無いものが dev だけに出る
+    expect((await server.get('/assets/img/hero@200w.webp')).status).toBe(404)
+  })
+})

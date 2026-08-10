@@ -1,8 +1,107 @@
 import { glob } from 'glob'
-import { resolve, relative, dirname, basename } from 'node:path'
+import { resolve } from 'node:path'
 import * as esbuild from 'esbuild'
+import { writeFile } from 'node:fs/promises'
 import { logger } from '../utils/logger.mjs'
-import { ensureDir } from '../utils/file.mjs'
+import { resolveRebuildTargets } from '../utils/rebuild-targets.mjs'
+import { ensureDir, ensureFileDir } from '../utils/file.mjs'
+
+const SCRIPT_BUILDER = 'script:builder'
+
+/**
+ * `/` 始まりの import を src からの指定として解く。
+ *
+ * Pug の `include /_templates/_layout` と同じ書き方を JS / TS でも使えるようにする。
+ * Sass 側の `srcRootImporter` と対になる。
+ *
+ * 解決そのものは `build.resolve()` に投げ直す。自前でパスを返すと拡張子の補完と
+ * ディレクトリの index が効かず、`/lib/util` が `lib/util.js` に当たらない。
+ * 投げ直す先は `./` 始まりなのでこのフックには戻ってこない。
+ *
+ * エントリポイントは対象外。走査済みの絶対パスがここに来るので、
+ * 素通ししないと src の下をもう一度探しに行く
+ */
+function srcRootPlugin(srcDir) {
+  return {
+    name: 'pugkit-src-root',
+    setup(build) {
+      build.onResolve({ filter: /^\// }, async args => {
+        if (args.kind === 'entry-point') return null
+        return build.resolve(`.${args.path}`, { kind: args.kind, resolveDir: srcDir })
+      })
+    }
+  }
+}
+
+/**
+ * dev で常駐させる esbuild の incremental build コンテキスト。
+ * 同じファイルの連続編集でモジュールグラフを再利用する。
+ *
+ * セッション（BuildContext）ごとに1つ。context.resources が寿命を持つ
+ */
+class DevScriptBuilder {
+  constructor() {
+    this.ctx = null
+    this.key = null
+    // 破棄後に作り直さないための印。キューに積まれたビルドは dispose を追い越せるので、
+    // これが無いと「捨てたあとに生まれ、二度と捨てられない」esbuild プロセスが残る
+    this.disposed = false
+    // watcher のイベントは直列化されないため、dev ビルドをキューで直列化して
+    // dispose 済み context への rebuild や context の二重生成を防ぐ
+    this.queue = Promise.resolve()
+  }
+
+  rebuild(esbuildConfig) {
+    return this.enqueue(async () => (await this.contextFor(esbuildConfig)).rebuild())
+  }
+
+  enqueue(fn) {
+    const run = this.queue.then(fn, fn)
+    this.queue = run.catch(() => {})
+    return run
+  }
+
+  /** エントリ構成が変わったら作り直す。増減したエントリは既存の context では扱えない */
+  async contextFor(esbuildConfig) {
+    if (this.disposed) throw new Error('dev のビルドコンテキストは破棄済みです')
+
+    const key = [...esbuildConfig.entryPoints].sort().join('\n')
+    if (!this.ctx || this.key !== key) {
+      const old = this.ctx
+      this.ctx = null
+      this.key = null
+      if (old) await old.dispose()
+
+      this.ctx = await esbuild.context(esbuildConfig)
+      this.key = key
+    }
+    return this.ctx
+  }
+
+  /**
+   * 常駐ビルドコンテキストを破棄する。プロセスを抱えたままだと dev を止めても終われない。
+   * 参照を捨てるので、次に使うときは作り直しになる
+   */
+  async dispose() {
+    this.disposed = true
+
+    const ctx = this.ctx
+    this.ctx = null
+    this.key = null
+    if (ctx) await ctx.dispose()
+  }
+}
+
+function getDevBuilder(context) {
+  return context.resources.get(SCRIPT_BUILDER, () => new DevScriptBuilder())
+}
+
+/**
+ * JS の出力先。esbuild が書く側と watcher の削除側で規則がずれないよう共有する
+ */
+export function scriptOutputPath(relativePath, paths) {
+  return resolve(paths.output, relativePath.replace(/\.ts$/, '.js'))
+}
 
 /**
  * esbuild（TypeScript/JavaScript）ビルドタスク
@@ -14,7 +113,7 @@ export async function scriptTask(context, options = {}) {
   const allEntryFiles = await glob('**/[^_]*.{ts,js}', {
     cwd: paths.src,
     absolute: true,
-    ignore: ['**/*.d.ts', '**/node_modules/**']
+    ignore: ['**/*.d.ts', '**/node_modules/**', '**/_*/**']
   })
 
   if (allEntryFiles.length === 0) {
@@ -25,68 +124,71 @@ export async function scriptTask(context, options = {}) {
   // 2. dev モードでのインクリメンタルビルド
   let filesToBuild = allEntryFiles
 
-  if (isDevelopment && options.files?.length > 0) {
-    const changedFile = options.files[0]
-    const isPartial = basename(changedFile).startsWith('_')
+  if (isDevelopment && options.changed) {
+    filesToBuild = resolveRebuildTargets(options.changed, allEntryFiles, scriptGraph)
 
-    if (isPartial) {
-      // パーシャル変更 → 依存グラフから影響を受けるエントリファイルを特定
-      const affected = scriptGraph.getAffectedParents(changedFile)
-      filesToBuild = affected.filter(f => allEntryFiles.includes(f))
-
-      if (filesToBuild.length === 0) {
-        // グラフにまだ情報がない場合はフルビルド
-        filesToBuild = allEntryFiles
-      } else {
-        logger.info('script', `Partial changed, rebuilding ${filesToBuild.length} affected file(s)`)
-      }
-    } else if (allEntryFiles.includes(changedFile)) {
-      // 非パーシャルのエントリファイル → そのファイルだけリビルド
-      filesToBuild = [changedFile]
+    if (filesToBuild.length === 0) {
+      logger.skip('script', 'No entry depends on the changed file')
+      return
     }
   }
 
   logger.info('script', `Building ${filesToBuild.length} file(s)`)
 
-  // debugモードはdevモード時のみ有効
-  const isDebugMode = !isProduction && config.debug
+  // dev は常に非圧縮 + ソースマップ、production は常に圧縮
+  const isDevBuild = !isProduction
 
   try {
     // 3. esbuild設定
     const esbuildConfig = {
       entryPoints: filesToBuild,
-      outdir: paths.dist,
+      outdir: paths.output,
       outbase: paths.src,
+      // metafile のパスはここを基準にした相対パスになる。既定はプロセスの作業
+      // ディレクトリなので、指定しないと CLI 以外の使い方で依存グラフが壊れる
+      absWorkingDir: paths.root,
       bundle: true,
       format: 'esm',
       target: 'es2022',
       platform: 'browser',
       splitting: false,
-      write: true,
-      sourcemap: isDebugMode,
+      // dev は自前で書き出す。esbuild に任せるとインクリメンタルビルドの失敗時に
+      // 出力ファイルが削除され、構文エラーの最中だけ JS が 404 になってしまう
+      write: !isDevelopment,
+      sourcemap: isDevBuild,
       minify: false,
       metafile: true,
       logLevel: 'error',
       keepNames: false,
       external: [],
-      plugins: [],
+      plugins: [srcRootPlugin(paths.src)],
       legalComments: 'none',
       treeShaking: true,
-      minifyWhitespace: !isDebugMode,
-      minifySyntax: !isDebugMode
+      minifyWhitespace: !isDevBuild,
+      minifySyntax: !isDevBuild
     }
 
-    // debugモードでない場合はconsole/debuggerを削除
-    if (!isDebugMode) {
+    // production はconsole/debuggerを削除
+    if (!isDevBuild) {
       esbuildConfig.drop = ['console', 'debugger']
     }
 
-    // 4. ビルド実行
-    await ensureDir(paths.dist)
-    const result = await esbuild.build(esbuildConfig)
+    // 4. ビルド実行（dev はコンテキスト再利用の増分ビルド、build は従来どおり単発実行）
+    await ensureDir(paths.output)
+    const result = isDevelopment
+      ? await getDevBuilder(context).rebuild(esbuildConfig)
+      : await esbuild.build(esbuildConfig)
 
     if (result.errors && result.errors.length > 0) {
       throw new Error(`esbuild errors: ${result.errors.length}`)
+    }
+
+    // dev のみ: ビルドが成功したものだけを書き出す（失敗時は前回の出力を残す）
+    if (isDevelopment && result.outputFiles) {
+      for (const file of result.outputFiles) {
+        await ensureFileDir(file.path)
+        await writeFile(file.path, file.contents)
+      }
     }
 
     // 5. 依存グラフを更新（metafile から依存関係を構築）

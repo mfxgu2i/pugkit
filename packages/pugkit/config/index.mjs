@@ -1,4 +1,3 @@
-export { loadConfig, resolveConfig } from './main.mjs'
-export { createGlobPatterns } from './patterns.mjs'
+export { loadConfig } from './main.mjs'
 export { defineConfig } from './define.mjs'
 export { defaultConfig } from './defaults.mjs'

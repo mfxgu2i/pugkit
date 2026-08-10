@@ -13,6 +13,14 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const REPO = 'mfxgu2i/pugkit/packages/create-pugkit/template'
+const SKILL_REPO = 'mfxgu2i/pugkit/skills/pugkit'
+
+// スキルの実体はリポジトリの skills/pugkit だけに置き、ここへ配る。
+// エージェントごとに探す場所が違うので、対応するディレクトリすべてに同じものを置く
+const SKILL_DIRS = [
+  path.join('.claude', 'skills', 'pugkit'), // Claude Code
+  path.join('.github', 'skills', 'pugkit') // GitHub Copilot
+]
 
 function pkgVersion() {
   const pkgPath = path.join(__dirname, '../package.json')
@@ -30,6 +38,55 @@ function mkdirp(dir) {
   } catch (err) {
     if (err.code === 'EEXIST') return
     throw err
+  }
+}
+
+/**
+ * Agent Skill を取得して、対応するエージェントのディレクトリすべてに置く。
+ *
+ * スキルはプロジェクトの必須物ではないので、取得に失敗してもスキャフォールドは続ける。
+ * ここで止めると、ネットワークの一時的な不調でプロジェクト作成そのものが失敗する。
+ */
+async function copySkill(cwd) {
+  const [primary, ...rest] = SKILL_DIRS
+  const primaryPath = path.join(cwd, primary)
+
+  try {
+    log('adding agent skill...')
+
+    const emitter = degit(SKILL_REPO, { cache: false, force: true, verbose: false })
+    await emitter.clone(primaryPath)
+
+    // degit は取得元が空でも例外を投げず、空のディレクトリだけが残る。
+    // 中身の無いスキルを置いてもエージェントは読めないので、作った跡ごと消す
+    if (!fs.existsSync(path.join(primaryPath, 'SKILL.md'))) {
+      removeSkillDir(cwd, primary)
+      log(pc.yellow('skipped agent skill (not found)'))
+      return
+    }
+
+    for (const dir of rest) {
+      const dest = path.join(cwd, dir)
+      mkdirp(path.dirname(dest))
+      fs.cpSync(primaryPath, dest, { recursive: true })
+    }
+  } catch {
+    removeSkillDir(cwd, primary)
+    log(pc.yellow('skipped agent skill (fetch failed)'))
+  }
+}
+
+/** スキルの置き場と、そのために作られた空の親ディレクトリを消す */
+function removeSkillDir(cwd, dir) {
+  fs.rmSync(path.join(cwd, dir), { recursive: true, force: true })
+
+  // .claude/skills → .claude の順に、空でなくなるまで遡って消す
+  let parent = path.dirname(dir)
+  while (parent !== '.') {
+    const parentPath = path.join(cwd, parent)
+    if (!fs.existsSync(parentPath) || fs.readdirSync(parentPath).length > 0) return
+    fs.rmdirSync(parentPath)
+    parent = path.dirname(parent)
   }
 }
 
@@ -72,6 +129,8 @@ async function main(root, options) {
       pkg.name = projectName
       fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
     }
+
+    await copySkill(cwd)
   } catch (err) {
     console.error(`${pc.cyan(pc.bold('CREATE-PUGKIT'))} ${pc.dim(`v${pkgVersion()}`)} ${pc.red(err.message)}`)
     process.exit(1)
@@ -82,9 +141,10 @@ async function main(root, options) {
 
   let step = 1
 
-  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm install'))}`);
-  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm run build'))}`);
-  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm run start'))}`);
+  // dev は dist を見ないので、起動前のビルドは要らない
+  console.log(`  ${step++}: ${pc.bold(pc.cyan('mise install'))}`)
+  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm install'))}`)
+  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm run start'))}`)
   console.log(`\nTo close the dev server, hit ${pc.bold(pc.cyan('Ctrl + C'))}`)
 }
 

@@ -5,14 +5,17 @@ export default defineConfig({
   siteUrl: 'https://example.com/',
   subdir: '',
   outDir: 'dist',
-  debug: false,
   server: {
     port: 5555,
     host: 'localhost',
     startPath: '/'
   },
   build: {
-    // 'avif' | 'webp' | 'compress' | false
-    imageOptimization: 'webp'
+    image: {
+      // 'avif' | 'webp' | 'compress'
+      format: 'webp',
+      // src の画像を何倍の原本として扱うか。2 なら等倍版を生成して srcset を出す
+      sourceDensity: 2
+    }
   }
 })

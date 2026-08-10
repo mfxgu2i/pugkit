@@ -61,6 +61,8 @@ logs
 *.swo
 
 # ツール・キャッシュ
+mise.local.toml
+.pugkit/
 .cache/
 .parcel-cache/
 .eslintcache

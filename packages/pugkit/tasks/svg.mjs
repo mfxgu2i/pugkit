@@ -4,6 +4,19 @@ import { relative, resolve } from 'node:path'
 import { optimize } from 'svgo'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
+import { FILE_CONCURRENCY, runWithConcurrency } from '../utils/concurrency.mjs'
+
+export const SVG_GLOB = '**/*.svg'
+// icons はスプライト用なので個別出力の対象外
+export const SVG_IGNORE = ['**/_*/**', '**/icons/**']
+
+/**
+ * SVG の出力先。生成側と watcher の削除側で規則がずれると、
+ * 消したはずのファイルが配信され続けるので、ここ一箇所に置く
+ */
+export function svgOutputPath(relativePath, paths) {
+  return resolve(paths.output, relativePath)
+}
 
 /**
  * SVG最適化タスク
@@ -11,19 +24,18 @@ import { ensureFileDir } from '../utils/file.mjs'
 export async function svgTask(context, options = {}) {
   const { paths } = context
 
-  // 特定のファイルが指定されている場合（watch時）
-  if (options.files && Array.isArray(options.files)) {
-    logger.info('svg', `Optimizing ${options.files.length} SVG file(s)`)
-    await Promise.all(options.files.map(file => optimizeSvg(file, context)))
-    logger.success('svg', `Optimized ${options.files.length} SVG file(s)`)
+  // 変更されたファイルだけ（dev の監視時）
+  if (options.changed) {
+    await optimizeSvg(options.changed, context)
+    logger.success('svg', `Optimized ${relative(paths.src, options.changed)}`)
     return
   }
 
   // 対象SVGを取得
-  const svgs = await glob('**/*.svg', {
+  const svgs = await glob(SVG_GLOB, {
     cwd: paths.src,
     absolute: true,
-    ignore: ['**/_*/**', '**/icons/**'] // iconsはスプライト用なので除外
+    ignore: SVG_IGNORE
   })
 
   if (svgs.length === 0) {
@@ -33,8 +45,7 @@ export async function svgTask(context, options = {}) {
 
   logger.info('svg', `Optimizing ${svgs.length} SVG file(s)`)
 
-  // 並列処理
-  await Promise.all(svgs.map(file => optimizeSvg(file, context)))
+  await runWithConcurrency(svgs, FILE_CONCURRENCY, file => optimizeSvg(file, context))
 
   logger.success('svg', `Optimized ${svgs.length} SVG file(s)`)
 }
@@ -56,7 +67,7 @@ async function optimizeSvg(filePath, context) {
     })
 
     // 出力
-    const outputPath = resolve(paths.dist, relativePath)
+    const outputPath = svgOutputPath(relativePath, paths)
     await ensureFileDir(outputPath)
     await writeFile(outputPath, result.data, 'utf8')
   } catch (error) {
