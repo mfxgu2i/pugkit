@@ -9,7 +9,8 @@ import {
   scaleDown,
   sourceDensityOf,
   supportsDensity,
-  supportsWidthVariants
+  supportsWidthVariants,
+  widthOutputs
 } from '../utils/image-density.mjs'
 import { logger as defaultLogger } from '../utils/logger.mjs'
 
@@ -82,42 +83,58 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
   const findImageFile = createImageResolver(filePath, paths)
 
   /**
-   * 呼び出し側が渡した幅のうち、実際に作れるものを記録する。
+   * 幅モードに入れる参照か。
    *
-   * 剪定はここでしかしない。生成側が sharp の metadata で独立に剪定すると、
-   * image-size と 1px でも食い違ったときに「srcset に載っているのにファイルが無い」か
-   * 「誰も参照しない孤児」が出る（docs/adr/0011）
+   * public は copyTask がバイト列のまま出すだけで、変換も縮小もされない。
+   * 幅違いを作れないので、書かれていても効かないことを知らせる。
+   * SVG と GIF は密度と同じく対象外
    */
-  const recordWidths = (src, found, widths, intrinsicWidth) => {
-    if (widths.length === 0) return []
-
-    // public は copyTask がバイト列のまま出すだけで、変換も縮小もされない。
-    // 幅違いを作れないので、書かれていても効かないことを知らせる
+  const canUseWidths = (src, found) => {
     if (found.fromPublic) {
       context.warnOnce?.(
         'pug',
         'widths-on-public-image',
         `public/ の画像には widths が効きません: ${src}。幅違いを作るには src/ に置いてください`
       )
-      return []
+      return false
     }
 
-    if (!supportsWidthVariants(src)) return []
-
-    const usable = pruneWidths(widths, intrinsicWidth)
-    context.imageWidths?.record(found.path, usable)
-
-    return usable
+    return supportsWidthVariants(src)
   }
 
   /**
-   * 参照パスと実ファイルから、出力側の src / 寸法 / srcset を組み立てる。
+   * 幅記述子の srcset を組み立てる。
+   *
+   * 剪定はここでしかしない。生成側が sharp の metadata で独立に剪定すると、
+   * image-size と 1px でも食い違ったときに「srcset に載っているのにファイルが無い」か
+   * 「誰も参照しない孤児」が出る（docs/adr/0011）。
+   *
+   * src と width/height は原寸。表示幅は sizes が決めるので、ここに表示サイズを焼くと
+   * 幅を二重に主張することになる
+   */
+  const describeWidths = (src, found, widths, sizes, size) => {
+    const { width, height, type } = size
+    const usable = pruneWidths(widths, width)
+    context.imageWidths?.record(found.path, usable)
+
+    const entries = widthOutputs(src, format, usable, width)
+
+    return {
+      src: entries.at(-1).name,
+      width,
+      height,
+      format: type,
+      srcset: entries.map(entry => `${encodeSrcsetUrl(entry.name)} ${entry.width}w`).join(', '),
+      sizes
+    }
+  }
+
+  /**
+   * 密度記述子の srcset を組み立てる。
    * 返す src は最小密度（表示サイズ）側で、srcset の 1x と一致する
    */
-  const describe = (src, found, widths = []) => {
-    const { width, height, type } = readImageSize(found.path, cache)
-
-    recordWidths(src, found, widths, width)
+  const describeDensity = (src, found, size) => {
+    const { width, height, type } = size
 
     // 縮小版が実在しないものは密度 1 として扱う。そうしないと 1x の無い
     // srcset="... 2x" だけを書くことになる（SVG / GIF / public 配下 / 極小画像）
@@ -143,8 +160,24 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
       width: smallest.width,
       height: smallest.height,
       format: type,
-      srcset: entries.map(entry => `${encodeSrcsetUrl(entry.src)} ${entry.density}x`).join(', ')
+      srcset: entries.map(entry => `${encodeSrcsetUrl(entry.src)} ${entry.density}x`).join(', '),
+      // sizes は幅記述子のときだけ意味を持つ。密度記述子に付けても無視される
+      sizes: undefined
     }
+  }
+
+  /**
+   * 参照パスと実ファイルから、出力側の src / 寸法 / srcset を組み立てる。
+   *
+   * モードは呼び出しで決まり、剪定では変わらない。widths を渡した画像は
+   * 候補がすべて剪定されても幅モードのままで、無印だけの幅記述子になる
+   */
+  const describe = (src, found, widths = [], sizes) => {
+    const size = readImageSize(found.path, cache)
+
+    return widths.length > 0 && canUseWidths(src, found)
+      ? describeWidths(src, found, widths, sizes, size)
+      : describeDensity(src, found, size)
   }
 
   return (src, options = {}) => {
@@ -155,6 +188,7 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
       format: undefined,
       isSvg: false,
       srcset: undefined,
+      sizes: undefined,
       variant: null
     }
 
@@ -193,12 +227,12 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
         if (!variantFound) return null
 
         onAccess?.(variantFound.path)
-        // _sp にも同じ幅一覧を掛ける。原寸が小さいぶんは剪定で落ちる
-        const { format, ...rest } = describe(variantSrc, variantFound, widths)
+        // _sp にも同じ幅一覧と sizes を掛ける。原寸が小さいぶんは剪定で落ちる
+        const { format, ...rest } = describe(variantSrc, variantFound, widths, options.sizes)
         return rest
       }
 
-      return { ...describe(src, found, widths), isSvg, variant: findVariant() }
+      return { ...describe(src, found, widths, options.sizes), isSvg, variant: findVariant() }
     } catch (error) {
       logger?.warn('pug', `Failed to read "${src}" in ${relative(paths.src, filePath)}: ${error.message}`)
       return fallback

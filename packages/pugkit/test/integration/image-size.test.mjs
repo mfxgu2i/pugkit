@@ -355,6 +355,60 @@ describe('幅の収集', () => {
     expect(warnings.map(w => w.reason)).toContain('invalid-image-widths')
   })
 
+  it('幅記述子の srcset を昇順で出し、無印が最大の候補を兼ねる', () => {
+    const { imageInfo } = createWithStore()
+    const result = imageInfo('/images/hero.jpg', { widths: [200, 400] })
+
+    expect(result.srcset).toBe('/images/hero@200w.webp 200w, /images/hero@400w.webp 400w, /images/hero.webp 800w')
+  })
+
+  it('src と width/height は原寸（表示幅は sizes が決める）', () => {
+    const { imageInfo } = createWithStore(config('webp', 2))
+    const result = imageInfo('/images/hero.jpg', { widths: [400] })
+
+    expect(result).toMatchObject({ src: '/images/hero.webp', width: 800, height: 600 })
+  })
+
+  it('sizes をそのまま返す', () => {
+    const { imageInfo } = createWithStore()
+    const sizes = '(max-width: 768px) 100vw, 800px'
+
+    expect(imageInfo('/images/hero.jpg', { widths: [400], sizes }).sizes).toBe(sizes)
+  })
+
+  /** 密度記述子に sizes を付けても無視される。納品HTMLに意味の無い属性を残さない */
+  it('密度モードでは sizes を返さない', () => {
+    const { imageInfo } = createWithStore()
+
+    expect(imageInfo('/images/hero.jpg', { sizes: '100vw' }).sizes).toBeUndefined()
+  })
+
+  /** 記述子の混在は仕様の適合要件。densityOutputs を流用するので事故が起きやすい */
+  it('w と x を 1 つの srcset に混ぜない', () => {
+    const { imageInfo } = createWithStore(config('webp', 2))
+    const { srcset } = imageInfo('/images/hero.jpg', { widths: [400] })
+
+    expect(srcset).not.toMatch(/\dx/)
+    expect(srcset).not.toContain('@half')
+  })
+
+  it('_sp は候補がすべて剪定されても幅モードのまま', () => {
+    const { imageInfo } = createWithStore()
+    const { variant } = imageInfo('/images/responsive.jpg', { widths: [600], sizes: '100vw' })
+
+    // _sp は 376px なので 600 は落ち、無印だけが残る
+    expect(variant.srcset).toBe('/images/responsive_sp.webp 376w')
+    expect(variant.sizes).toBe('100vw')
+  })
+
+  it('SVG は幅を渡しても密度モードのまま', () => {
+    const { imageInfo } = createWithStore()
+    const result = imageInfo('/images/icon.svg', { widths: [16], sizes: '100vw' })
+
+    expect(result.srcset).toBe('/images/icon.svg 1x')
+    expect(result.sizes).toBeUndefined()
+  })
+
   it('同じ画像を違う幅で参照したら和集合になる', () => {
     const { imageInfo, imageWidths } = createWithStore()
     imageInfo('/images/hero.jpg', { widths: [400] })
