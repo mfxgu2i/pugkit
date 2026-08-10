@@ -33,9 +33,18 @@ export const UNHANDLED_EXTENSIONS = ['webp', 'avif']
  */
 export const MEASURABLE_EXTENSIONS = [...CONVERTIBLE_EXTENSIONS, ...UNHANDLED_EXTENSIONS, 'svg']
 
+/**
+ * 画像として出力されうる拡張子。予約サフィックスの検査対象を絞るために使う。
+ *
+ * SVG は入らない。ベクターなので密度も幅も適用されず、`@half.svg` や `@400w.svg` を
+ * ビルドが作ることはないため、その名前を予約する理由が無い
+ */
+export const OUTPUT_EXTENSIONS = [...CONVERTIBLE_EXTENSIONS, ...UNHANDLED_EXTENSIONS]
+
 export const CONVERTIBLE_EXT_RE = toRe(CONVERTIBLE_EXTENSIONS)
 export const DENSITY_EXT_RE = toRe(DENSITY_EXTENSIONS)
 export const MEASURABLE_EXT_RE = toRe(MEASURABLE_EXTENSIONS)
+export const OUTPUT_EXT_RE = toRe(OUTPUT_EXTENSIONS)
 
 export const CONVERTIBLE_GLOB = toGlob(CONVERTIBLE_EXTENSIONS)
 export const UNHANDLED_GLOB = toGlob(UNHANDLED_EXTENSIONS)

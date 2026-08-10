@@ -4,6 +4,7 @@ import { writeFile, mkdir } from 'node:fs/promises'
 import sharp from 'sharp'
 import { createImageInfoHelper as createHelper } from '../../transform/image-size.mjs'
 import { CacheManager } from '../../core/cache.mjs'
+import { ImageWidthRequests } from '../../core/image-widths.mjs'
 import { createTempProject } from '../helpers/project.mjs'
 
 // リポジトリ内の固定パスに書くと、テストを並列に走らせたとき互いのフィクスチャを消し合う
@@ -133,17 +134,18 @@ describe('createImageInfoHelper', () => {
       const result = imageInfo('/images/logo.jpg')
 
       expect(result).toMatchObject({ width: 240, height: 80 })
-      expect(result.srcset).toBe('/images/logo.jpg 1x')
+      // 候補が 1 つなので srcset は書かない
+      expect(result.srcset).toBeUndefined()
     })
   })
 
   describe('build.image.sourceDensity', () => {
-    it('density 1 では原寸を返し srcset は 1 枚だけ', () => {
+    it('density 1 では原寸を返し srcset を出さない', () => {
       const imageInfo = createImageInfoHelper(mockPugFile, config('webp', 1))
       const result = imageInfo('/images/hero.jpg')
 
       expect(result).toMatchObject({ src: '/images/hero.webp', width: 800, height: 600 })
-      expect(result.srcset).toBe('/images/hero.webp 1x')
+      expect(result.srcset).toBeUndefined()
     })
 
     it('density 2 では src と width/height が表示サイズになる', () => {
@@ -170,7 +172,7 @@ describe('createImageInfoHelper', () => {
       const result = imageInfo('/images/tiny.jpg')
 
       expect(result).toMatchObject({ src: '/images/tiny.webp', width: 1, height: 1 })
-      expect(result.srcset).toBe('/images/tiny.webp 1x')
+      expect(result.srcset).toBeUndefined()
     })
 
     it('不正な密度は 1 として扱う（全画像が半分になる事故を防ぐ）', () => {
@@ -186,7 +188,8 @@ describe('createImageInfoHelper', () => {
       const result = imageInfo('/images/sibling.jpg')
 
       expect(result.retina).toBeUndefined()
-      expect(result.srcset).toBe('/images/sibling.webp 1x')
+      expect(result.src).toBe('/images/sibling.webp')
+      expect(result.srcset).toBeUndefined()
     })
   })
 
@@ -271,9 +274,171 @@ describe('createImageInfoHelper', () => {
       expect(result.isSvg).toBe(true)
       expect(result.src).toBe('/images/icon.svg')
       expect(result.variant).toBeNull()
-      // 密度の対象外なので縮小版は存在しない
-      expect(result.srcset).toBe('/images/icon.svg 1x')
+      // 密度の対象外なので候補は 1 つ。srcset は書かない
+      expect(result.srcset).toBeUndefined()
     })
+  })
+})
+
+/**
+ * 幅は呼び出し側が渡す。生成側はこの記録だけを見て作るので、
+ * ここで剪定を誤ると「srcset に載っているのにファイルが無い」か「誰も参照しない孤児」が出る。
+ */
+describe('幅の収集', () => {
+  const createWithStore = (imageConfig = webpConfig) => {
+    const imageWidths = new ImageWidthRequests()
+    const warnings = []
+    const warnOnce = (scope, reason, message) => warnings.push({ reason, message })
+    const imageInfo = createHelper(
+      mockPugFile,
+      { paths, config: imageConfig, cache, imageWidths, warnOnce },
+      {
+        logger: null
+      }
+    )
+
+    return { imageInfo, imageWidths, warnings }
+  }
+
+  it('渡さなければ何も記録しない', () => {
+    const { imageInfo, imageWidths } = createWithStore()
+    imageInfo('/images/hero.jpg')
+
+    expect(imageWidths.get(resolve(imagesDir, 'hero.jpg'))).toEqual([])
+  })
+
+  it('渡した幅を記録する', () => {
+    const { imageInfo, imageWidths } = createWithStore()
+    imageInfo('/images/hero.jpg', { widths: [400, 600] })
+
+    expect(imageWidths.get(resolve(imagesDir, 'hero.jpg'))).toEqual([400, 600])
+  })
+
+  /** 原寸は無印が兼ねる。作ると同じ中身が 2 枚出る */
+  it('原寸以上の幅は記録しない', () => {
+    const { imageInfo, imageWidths } = createWithStore()
+    imageInfo('/images/hero.jpg', { widths: [400, 800, 1200] })
+
+    expect(imageWidths.get(resolve(imagesDir, 'hero.jpg'))).toEqual([400])
+  })
+
+  it('_sp にも同じ幅を掛け、原寸の違いで別々に剪定する', () => {
+    const { imageInfo, imageWidths } = createWithStore()
+    imageInfo('/images/responsive.jpg', { widths: [200, 500] })
+
+    expect(imageWidths.get(resolve(imagesDir, 'responsive.jpg'))).toEqual([200, 500])
+    // _sp は 376px なので 500 は落ちる
+    expect(imageWidths.get(resolve(imagesDir, 'responsive_sp.jpg'))).toEqual([200])
+  })
+
+  it('SVG は幅の対象外', () => {
+    const { imageInfo, imageWidths } = createWithStore()
+    imageInfo('/images/icon.svg', { widths: [16] })
+
+    expect(imageWidths.get(resolve(imagesDir, 'icon.svg'))).toEqual([])
+  })
+
+  it('public の画像には効かないことを知らせる', async () => {
+    await mkdir(resolve(testDataDir, 'public/images'), { recursive: true })
+    await createJpeg(resolve(testDataDir, 'public/images/ogp.jpg'), 1200, 630)
+
+    const { imageInfo, imageWidths, warnings } = createWithStore()
+    imageInfo('/images/ogp.jpg', { widths: [400] })
+
+    expect(imageWidths.get(resolve(testDataDir, 'public/images/ogp.jpg'))).toEqual([])
+    expect(warnings.map(w => w.reason)).toContain('widths-on-public-image')
+  })
+
+  it('使えない値は落として知らせる', () => {
+    const { imageInfo, imageWidths, warnings } = createWithStore()
+    imageInfo('/images/hero.jpg', { widths: [400, -100, '600', 0] })
+
+    expect(imageWidths.get(resolve(imagesDir, 'hero.jpg'))).toEqual([400])
+    expect(warnings.map(w => w.reason)).toContain('invalid-image-widths')
+  })
+
+  it('幅記述子の srcset を昇順で出し、無印が最大の候補を兼ねる', () => {
+    const { imageInfo } = createWithStore()
+    const result = imageInfo('/images/hero.jpg', { widths: [200, 400] })
+
+    expect(result.srcset).toBe('/images/hero@200w.webp 200w, /images/hero@400w.webp 400w, /images/hero.webp 800w')
+  })
+
+  it('src と width/height は原寸（表示幅は sizes が決める）', () => {
+    const { imageInfo } = createWithStore(config('webp', 2))
+    const result = imageInfo('/images/hero.jpg', { widths: [400] })
+
+    expect(result).toMatchObject({ src: '/images/hero.webp', width: 800, height: 600 })
+  })
+
+  it('sizes をそのまま返す', () => {
+    const { imageInfo } = createWithStore()
+    const sizes = '(max-width: 768px) 100vw, 800px'
+
+    expect(imageInfo('/images/hero.jpg', { widths: [400], sizes }).sizes).toBe(sizes)
+  })
+
+  /** 密度記述子に sizes を付けても無視される。納品HTMLに意味の無い属性を残さない */
+  it('密度モードでは sizes を返さない', () => {
+    const { imageInfo } = createWithStore()
+
+    expect(imageInfo('/images/hero.jpg', { sizes: '100vw' }).sizes).toBeUndefined()
+  })
+
+  /** 記述子の混在は仕様の適合要件。densityOutputs を流用するので事故が起きやすい */
+  it('w と x を 1 つの srcset に混ぜない', () => {
+    const { imageInfo } = createWithStore(config('webp', 2))
+    const { srcset } = imageInfo('/images/hero.jpg', { widths: [400] })
+
+    expect(srcset).not.toMatch(/\dx/)
+    expect(srcset).not.toContain('@half')
+  })
+
+  it('_sp は候補がすべて剪定されても幅モードのまま', () => {
+    const { imageInfo } = createWithStore()
+    const { variant } = imageInfo('/images/responsive.jpg', { widths: [600], sizes: '100vw' })
+
+    // _sp は 376px なので 600 は落ち、無印だけが残る
+    expect(variant.srcset).toBe('/images/responsive_sp.webp 376w')
+    expect(variant.sizes).toBe('100vw')
+  })
+
+  it('SVG は幅を渡しても密度モードのまま', () => {
+    const { imageInfo } = createWithStore()
+    const result = imageInfo('/images/icon.svg', { widths: [16], sizes: '100vw' })
+
+    expect(result.src).toBe('/images/icon.svg')
+    expect(result.srcset).toBeUndefined()
+    expect(result.sizes).toBeUndefined()
+  })
+
+  /**
+   * srcset が無ければ sizes も意味を持たない。
+   * 片方だけ残すと、選びようのない候補に対する指定が納品 HTML に残る
+   */
+  it('候補が 1 つなら img の srcset も sizes も出さない', () => {
+    const { imageInfo } = createWithStore()
+    // 800px の画像に 800 以上だけを渡すと、剪定後は無印 1 枚になる
+    const result = imageInfo('/images/hero.jpg', { widths: [1200], sizes: '100vw' })
+
+    expect(result.srcset).toBeUndefined()
+    expect(result.sizes).toBeUndefined()
+  })
+
+  /** source は srcset が必須。落とすと source ごと無効になり SP 画像が出ない */
+  it('候補が 1 つでも variant の srcset は出す', () => {
+    const { imageInfo } = createWithStore()
+    const { variant } = imageInfo('/images/responsive.jpg', { widths: [600], sizes: '100vw' })
+
+    expect(variant.srcset).toBe('/images/responsive_sp.webp 376w')
+  })
+
+  it('同じ画像を違う幅で参照したら和集合になる', () => {
+    const { imageInfo, imageWidths } = createWithStore()
+    imageInfo('/images/hero.jpg', { widths: [400] })
+    imageInfo('/images/hero.jpg', { widths: [600] })
+
+    expect(imageWidths.get(resolve(imagesDir, 'hero.jpg'))).toEqual([400, 600])
   })
 })
 

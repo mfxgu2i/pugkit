@@ -6,7 +6,7 @@ import { logger } from '../utils/logger.mjs'
 import { isConvertibleImage, isMeasurableImage } from '../utils/image-formats.mjs'
 import { spriteOutputPath } from '../tasks/svg-sprite.mjs'
 import { svgOutputPath } from '../tasks/svg.mjs'
-import { imageOutputPaths } from '../tasks/image.mjs'
+import { existingWidthOutputs, imageOutputPaths } from '../tasks/image.mjs'
 import { sassOutputPath } from '../tasks/sass.mjs'
 import { scriptOutputPath } from '../tasks/script.mjs'
 import { publicOutputPath } from '../tasks/copy.mjs'
@@ -318,10 +318,23 @@ export class FileWatcher {
 
   // ---- Image ----
 
+  /**
+   * 幅違いを消す。dev は幅違いをリクエスト時に作るので、
+   * 元画像が変わったら消しておけば次のリクエストで作り直される（docs/adr/0011）
+   */
+  async removeWidthOutputs(relPath) {
+    const { paths, config } = this.context
+    const outputs = await existingWidthOutputs(relPath, config, paths)
+
+    await Promise.all(outputs.map(path => rm(path, { force: true })))
+  }
+
   onImageChange(filePath, event) {
     this.context.cache.clearImageSizes()
 
-    return this.rebuild('image', filePath, event, () => {
+    return this.rebuild('image', filePath, event, async () => {
+      // 古い原寸から作った幅違いを残さない。作り直しはリクエスト時に任せる
+      await this.removeWidthOutputs(relative(this.context.paths.src, filePath))
       this.invalidateAssetDependents(filePath, event)
       this.reload()
     })
@@ -340,7 +353,7 @@ export class FileWatcher {
     // 出力先が衝突する構成はビルドが中止されるため、ここに来る出力は必ず自分が作ったもの
     const outputs = imageOutputPaths(relPath, config, paths)
 
-    await Promise.all(outputs.map(out => rm(out.absolute, { force: true })))
+    await Promise.all([...outputs.map(out => rm(out.absolute, { force: true })), this.removeWidthOutputs(relPath)])
     logger.info('unlink', relPath)
     this.reload()
   }

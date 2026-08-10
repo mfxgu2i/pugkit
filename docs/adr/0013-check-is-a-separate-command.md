@@ -55,6 +55,11 @@ build は画像処理を含むので、検査だけしたいときに毎回そ�
 `references` は pugkit にしか書けない。`format: 'webp'` のとき
 `url(hero.jpg)` が壊れることは、変換後の名前を知っている側にしか判定できない。
 
+幅違いの画像も同じ形になる。`imageInfo()` を通らずにテンプレートが `hero@1200w.webp` と
+直書きした場合、dev はリクエスト時に生成して 200 を返すが build は作らない
+（[ADR 0011](0011-image-widths-are-caller-driven.md)）。dev で見えていたものが本番で
+消えるので、この検査だけが食い違いに気づける。
+
 `markup` は markuplint に渡す。pugkit の依存には含めず、利用者のプロジェクトに
 あるものを使う（optional peer）。設定も pugkit は持たず、markuplint が自分で見つけるものに従う。
 pugkit が別バージョンを連れてくると HTML 仕様の版が二重になり、エディタの表示と
