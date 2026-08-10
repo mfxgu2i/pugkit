@@ -1,10 +1,17 @@
 import { glob } from 'glob'
-import { readFile, writeFile } from 'node:fs/promises'
-import { relative, resolve, extname } from 'node:path'
+import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { basename, dirname, relative, resolve, extname } from 'node:path'
 import sharp from 'sharp'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
-import { densityOutputs, hasScaledVariant, scaleDown, sourceDensityOf } from '../utils/image-density.mjs'
+import {
+  convertExtension,
+  densityOutputs,
+  hasScaledVariant,
+  parseWidthName,
+  scaleDown,
+  sourceDensityOf
+} from '../utils/image-density.mjs'
 import { CONVERTIBLE_GLOB, UNHANDLED_GLOB } from '../utils/image-formats.mjs'
 import { FILE_CONCURRENCY, runWithConcurrency } from '../utils/concurrency.mjs'
 
@@ -27,6 +34,36 @@ export function imageOutputPaths(relativePath, config, paths) {
     relative: out.name,
     absolute: resolve(paths.output, out.name)
   }))
+}
+
+/**
+ * すでに書かれている幅違いの出力を拾う。
+ *
+ * 幅は imageInfo() の呼び出し側が決めるので、相対パスからは何が出るか列挙できない。
+ * 実際に置かれているものを見るしかない（docs/adr/0011）。
+ *
+ * glob は使わない。ファイル名に glob のメタ文字が入ると取り違える。
+ * `a{1,2}.jpg` に対する `a{1,2}@*w.webp` は `a1@400w.webp` と `a2@400w.webp` に当たり、
+ * 自分の出力を残したまま他人の出力を消す。
+ *
+ * 拡張子まで見るのは compress モードのため。拡張子を読み替えないので
+ * `a.jpg` と `a.png` が共存でき、幹だけで判断すると隣の出力を巻き添えにする
+ */
+export async function existingWidthOutputs(relativePath, config, paths) {
+  const absolute = resolve(paths.output, convertExtension(relativePath, config.build.image.format))
+  const dir = dirname(absolute)
+  const ext = extname(absolute)
+  const stem = basename(absolute, ext)
+
+  // 出力先は build の clean と dev のキャッシュ作り直しで日常的に存在しない
+  const entries = await readdir(dir).catch(() => [])
+
+  return entries
+    .filter(entry => {
+      const parsed = parseWidthName(entry)
+      return parsed !== null && parsed.base === stem && parsed.ext === ext
+    })
+    .map(entry => resolve(dir, entry))
 }
 
 /**
