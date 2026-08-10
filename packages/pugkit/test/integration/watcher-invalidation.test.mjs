@@ -292,6 +292,88 @@ describe('画像の変更', () => {
     expect(existsSync(resolve(context.paths.output, 'assets/hero.webp'))).toBe(false)
     expect(existsSync(resolve(context.paths.output, 'assets/hero@half.webp'))).toBe(false)
   })
+
+  /**
+   * 幅違いは相対パスから列挙できないので、出力ディレクトリを見て消す。
+   * 判定が緩いと隣の画像の出力を巻き添えにするため、消えないことも一緒に確かめる
+   */
+  it('画像削除で幅違いの出力も消す', async () => {
+    const { writeFile, mkdir } = await import('node:fs/promises')
+    const { existsSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+
+    await mkdir(resolve(context.paths.output, 'assets'), { recursive: true })
+    for (const name of ['hero.webp', 'hero@400w.webp', 'hero@1200w.webp']) {
+      await writeFile(resolve(context.paths.output, `assets/${name}`), 'x')
+    }
+
+    await watcher.onImageUnlink(at('assets/hero.jpg'))
+
+    expect(existsSync(resolve(context.paths.output, 'assets/hero@400w.webp'))).toBe(false)
+    expect(existsSync(resolve(context.paths.output, 'assets/hero@1200w.webp'))).toBe(false)
+  })
+
+  /**
+   * 幹の前方一致で判定すると hero2 や hero_sp を巻き添えにする。
+   * 拡張子を見ないと、compress モードで共存する同名別形式の出力を消す
+   */
+  it('名前が前置きになっているだけの画像は消さない', async () => {
+    const { writeFile, mkdir } = await import('node:fs/promises')
+    const { existsSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+
+    await mkdir(resolve(context.paths.output, 'assets'), { recursive: true })
+    const kept = ['hero2@400w.webp', 'hero_sp@400w.webp', 'hero@400w.png', 'hero@halfw.webp']
+    for (const name of ['hero@400w.webp', ...kept]) {
+      await writeFile(resolve(context.paths.output, `assets/${name}`), 'x')
+    }
+
+    await watcher.onImageUnlink(at('assets/hero.jpg'))
+
+    // 前提: 自分の幅違いは消えている
+    expect(existsSync(resolve(context.paths.output, 'assets/hero@400w.webp'))).toBe(false)
+    for (const name of kept) {
+      expect(existsSync(resolve(context.paths.output, `assets/${name}`)), `${name} が消えている`).toBe(true)
+    }
+  })
+
+  /**
+   * dev は幅違いをリクエスト時に作り、既にあれば作り直さない。
+   * 元画像を編集したときに消しておかないと、古い中身が配信され続ける
+   */
+  it('元画像の変更でも幅違いを消す', async () => {
+    const { writeFile, mkdir } = await import('node:fs/promises')
+    const { existsSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+
+    await mkdir(resolve(context.paths.output, 'assets'), { recursive: true })
+    await writeFile(resolve(context.paths.output, 'assets/hero@400w.webp'), 'x')
+    await writeFile(resolve(context.paths.output, 'assets/hero2@400w.webp'), 'x')
+
+    await watcher.onImageChange(at('assets/hero.jpg'), 'change')
+
+    expect(existsSync(resolve(context.paths.output, 'assets/hero@400w.webp'))).toBe(false)
+    // 隣の画像は巻き添えにしない
+    expect(existsSync(resolve(context.paths.output, 'assets/hero2@400w.webp'))).toBe(true)
+  })
+
+  /** glob を使うと `a{1,2}@*w.webp` が a1 と a2 に当たり、自分のを残して他人のを消す */
+  it('glob のメタ文字を含む名前でも自分の幅違いだけを消す', async () => {
+    const { writeFile, mkdir } = await import('node:fs/promises')
+    const { existsSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+
+    await mkdir(resolve(context.paths.output, 'assets'), { recursive: true })
+    for (const name of ['a{1,2}@400w.webp', 'a1@400w.webp', 'a2@400w.webp']) {
+      await writeFile(resolve(context.paths.output, `assets/${name}`), 'x')
+    }
+
+    await watcher.onImageUnlink(at('assets/a{1,2}.jpg'))
+
+    expect(existsSync(resolve(context.paths.output, 'assets/a{1,2}@400w.webp'))).toBe(false)
+    expect(existsSync(resolve(context.paths.output, 'assets/a1@400w.webp'))).toBe(true)
+    expect(existsSync(resolve(context.paths.output, 'assets/a2@400w.webp'))).toBe(true)
+  })
 })
 
 describe('SVG の変更', () => {

@@ -132,7 +132,7 @@ export default defineConfig({
 | `server.startPath`               | 起動ログに表示する URL のパス                                                                                                                        | `string`                             | `'/'`         |
 | `server.domDiff`                 | ライブリロードで DOM の差分適用を使うか（`false` で常にフルリロード）                                                                                | `boolean`                            | `true`        |
 | `build.image.format`             | 画像の出力形式                                                                                                                                       | `'avif'` \| `'webp'` \| `'compress'` | `'webp'`      |
-| `build.image.sourceDensity`      | `src/` の画像を何倍の原本として扱うか。`2` なら等倍版を生成して `srcset` を出す                                                                      | `1` \| `2`                           | `2`           |
+| `build.image.sourceDensity`      | `src/` の画像を何倍の原本として扱うか。`2` なら等倍版を生成して `srcset` を出す。`imageInfo()` に `widths` を渡した画像には効かない                  | `1` \| `2`                           | `2`           |
 | `build.image.options.avif`       | AVIF変換オプション（[Sharp AVIF options](https://sharp.pixelplumbing.com/api-output#avif)）                                                          | `object`                             | -             |
 | `build.image.options.webp`       | WebP変換オプション（[Sharp WebP options](https://sharp.pixelplumbing.com/api-output#webp)）                                                          | `object`                             | -             |
 | `build.image.options.jpeg`       | JPEG圧縮オプション（[Sharp JPEG options](https://sharp.pixelplumbing.com/api-output#jpeg)）                                                          | `object`                             | -             |
@@ -198,22 +198,39 @@ meta(property='og:url', content=Builder.url.href)
 
 #### imageInfo()
 
-`src/` 配下の画像のメタデータを取得します。`build.image.format` に応じて `src` が最適化後のパスに変換され、`build.image.sourceDensity` に応じた `srcset` が組み立てられます。アートディレクション画像が存在する場合も自動的に解決されます。
+`src/` 配下の画像のメタデータを取得します。`build.image.format` に応じて `src` が最適化後のパスに変換され、`srcset` が組み立てられます。アートディレクション画像が存在する場合も自動的に解決されます。
 
 ```pug
 - const info = imageInfo('/assets/img/hero.jpg')
 img(src=info.src srcset=info.srcset width=info.width height=info.height alt='')
 ```
 
-| Property  | Type                                     | Description                                                       |
-| --------- | ---------------------------------------- | ----------------------------------------------------------------- |
-| `src`     | `string`                                 | 表示サイズ側のパス（`srcset` の `1x` と一致する）                 |
-| `width`   | `number \| undefined`                    | 表示サイズの幅（px）                                              |
-| `height`  | `number \| undefined`                    | 表示サイズの高さ（px）                                            |
-| `srcset`  | `string \| undefined`                    | 密度記述子つきの `srcset`。画像が見つからない場合のみ `undefined` |
-| `format`  | `string \| undefined`                    | 画像フォーマット（`'jpg'` / `'png'` / `'svg'` など）              |
-| `isSvg`   | `boolean`                                | SVG かどうか                                                      |
-| `variant` | `{ src, width, height, srcset } \| null` | `build.image.artDirectionSuffix` に応じたアートディレクション画像 |
+第2引数で幅を指定できます。指定しなければ `build.image.sourceDensity` に応じた密度記述子になります。
+
+```pug
+- const info = imageInfo('/assets/img/hero.jpg', { widths: [400, 800, 1200], sizes: '(max-width: 768px) 100vw, 800px' })
+img(src=info.src srcset=info.srcset sizes=info.sizes width=info.width height=info.height alt='')
+```
+
+| Option   | Type       | Description                                                                            |
+| -------- | ---------- | -------------------------------------------------------------------------------------- |
+| `widths` | `number[]` | 生成する幅の一覧。指定すると `srcset` が幅記述子になる。正の整数以外は除外して警告する |
+| `sizes`  | `string`   | 表示幅の指定。そのまま返るので `sizes` 属性に渡す。`widths` と組で使う                 |
+
+| Property  | Type                                            | Description                                                           |
+| --------- | ----------------------------------------------- | --------------------------------------------------------------------- |
+| `src`     | `string`                                        | 密度モードは表示サイズ側、幅モードは原寸のパス                        |
+| `width`   | `number \| undefined`                           | 密度モードは表示サイズの幅、幅モードは原寸の幅（px）                  |
+| `height`  | `number \| undefined`                           | 同上（px）                                                            |
+| `srcset`  | `string \| undefined`                           | 候補が 2 つ以上あるときだけ返る。画像が見つからない場合も `undefined` |
+| `sizes`   | `string \| undefined`                           | 幅記述子の `srcset` を出したときだけ返る                              |
+| `format`  | `string \| undefined`                           | 画像フォーマット（`'jpg'` / `'png'` / `'svg'` など）                  |
+| `isSvg`   | `boolean`                                       | SVG かどうか                                                          |
+| `variant` | `{ src, width, height, srcset, sizes } \| null` | `build.image.artDirectionSuffix` に応じたアートディレクション画像     |
+
+`srcset` は候補が 1 つしかないときには返りません。SVG、GIF、`public/` 配下の画像、縮小しても寸法が変わらない画像、`sourceDensity: 1` のプロジェクトの画像、そして幅がすべて剪定された画像が該当します。`sizes` も一緒に落ちます。`variant.srcset` は `<source>` の必須属性なので、候補が 1 つでも必ず返ります。
+
+`widths` を渡したのに `srcset` が返らないときは、指定した幅がすべて原寸以上だった場合です。1600px の画像に `widths: [2000]` を渡すと候補は無印だけになります。このとき `width` と `height` は原寸に切り替わったままなので、CSS で幅を決めていないと表示が変わります。
 
 ```pug
 - const info = imageInfo('/assets/img/hero.jpg')
@@ -235,8 +252,37 @@ picture
 />
 ```
 
+同じ画像に `widths: [400, 800, 1200]` を渡すと次のようになります。
+
+```html
+<img
+  src="/assets/img/hero.webp"
+  srcset="
+    /assets/img/hero@400w.webp   400w,
+    /assets/img/hero@800w.webp   800w,
+    /assets/img/hero@1200w.webp 1200w,
+    /assets/img/hero.webp       1600w
+  "
+  sizes="(max-width: 768px) 100vw, 800px"
+  width="1600"
+  height="1200"
+/>
+```
+
+アートディレクション画像にも同じ幅が掛かります。`hero_sp.jpg` が 750px なら、`hero_sp@400w.webp` と無印の 2 つが候補になります。原寸を超える幅は落ちるので、指定した幅がそのまま並ぶとは限りません。
+
+#### 幅モードは CSS で幅を決めることが前提です
+
+`widths` を渡すと、`imageInfo()` が返す `width` と `height` は原寸の実寸になります。密度モードでは表示サイズ、つまり原寸を `sourceDensity` で割った値でした。同じ画像に `widths` を足すと、この値が変わります。
+
+`width` と `height` 属性は、アスペクト比だけでなく CSS の `width` と `height` にも写ります。優先度は最も低い扱いなので、スタイルシートが幅を指定していれば必ずそちらが勝ちます。指定していない画像だけが、属性の値そのままの幅で描画されます。
+
+レイアウトシフトは起きません。読み込み前に確保される箱は比率から決まり、比率は実寸から導いているためです。
+
+幅モードを使う画像には、CSS で幅を与えてください。あわせて `sizes` を必ず書いてください。書かないとブラウザは `100vw`、つまり画面いっぱいに表示されるものとして候補を選びます。サムネイルでも全幅想定で選ぶので、密度記述子より重いファイルを取りに行くことになります。
+
 > `imageInfo()` は `src/` 配下を探し、見つからなければ `public/` 配下も探します。
-> `public/` の画像は変換も縮小もされないため、`src` は元のパスのまま返り、`srcset` は 1 枚だけになります。
+> `public/` の画像は変換も縮小もされないため、`src` は元のパスのまま返り、`srcset` は返りません。`widths` を渡しても効かず、警告が出ます。
 
 ### Sass
 
@@ -335,18 +381,40 @@ dist/assets/img/hero@half.webp   ( 800x600)
 
 無印を原寸のままにしているのは、CSS の `url()` 直書きや OGP 画像など `imageInfo()` を通らない参照が壊れないようにするためです。
 
-| 設定               | 挙動                                                      |
-| ------------------ | --------------------------------------------------------- |
-| `sourceDensity: 2` | 等倍版を生成し、`srcset` に `1x` / `2x` を並べる（既定）  |
-| `sourceDensity: 1` | 原寸を 1 枚出すだけ。縮小しない（`srcset` は 1 候補のみ） |
+| 設定               | 挙動                                                                 |
+| ------------------ | -------------------------------------------------------------------- |
+| `sourceDensity: 2` | 等倍版を生成し、`srcset` に `1x` / `2x` を並べる（既定）             |
+| `sourceDensity: 1` | 原寸を 1 枚出すだけ。縮小しない。候補が 1 つなので `srcset` は出ない |
 
 等倍のまま出したい画像（ロゴやアイコンなど）は `public/` に置いてください。`public/` の画像は変換も縮小もされません。
 
-> GIF と SVG は密度の対象外です。
+> GIF と SVG は密度の対象外です。幅記述子の対象にもなりません。
+
+#### 幅違いの生成
+
+`imageInfo()` に `widths` を渡した画像だけ、幅違いが生成されます。設定項目はありません。どの幅が要るかはレイアウトによって決まるので、その場所を書いている側で指定します。
+
+```
+src/assets/img/hero.jpg   (1600x1200)
+  ↓  widths: [400, 800, 1200]
+dist/assets/img/hero.webp        (1600x1200)
+dist/assets/img/hero@half.webp   ( 800x600)
+dist/assets/img/hero@400w.webp   ( 400x300)
+dist/assets/img/hero@800w.webp   ( 800x600)
+dist/assets/img/hero@1200w.webp  (1200x900)
+```
+
+原寸以上の幅は作られません。`hero.jpg` が 1600px なら `widths: [1200, 1600, 2000]` で作られるのは 1200 だけで、1600 は無印が兼ねます。
+
+`widths` を渡した画像にも `@half` は作られます。同じ画像を別のページが密度記述子で参照したときに、その `srcset` が指す先が必要になるためです。
+
+dev では幅違いを起動時に作らず、ブラウザから要求された時点で作ります。起動が遅くならない代わりに、dev と build のアセットが揃うのはページを開いた後になります。dev が 1 枚の画像に作る幅は 32 本までです。それを超えると 404 を返し、画像ごとに 1 度だけログに出します。数え方はセッション単位なので、幅の値をいろいろ試していると当たることがあります。そのときは dev を再起動してください。build に上限はありません。
+
+> `@half` と `@<数字>w` はビルドが作る名前です。この形の画像を `src/` や `public/` に置くと、build が中止します。
 
 #### 特定画像の個別オプション指定
 
-`build.image.overrides` で特定の画像にのみ別の圧縮オプションを適用できます。キーは `src/` からの相対パス、値はグローバル設定に上書きマージされる [Sharp](https://sharp.pixelplumbing.com/api-output) オプションオブジェクトです。
+`build.image.overrides` で特定の画像にのみ別の圧縮オプションを適用できます。キーは `src/` からの相対パス、値はグローバル設定に上書きマージされる [Sharp](https://sharp.pixelplumbing.com/api-output) オプションオブジェクトです。幅違いにも同じ値が掛かります。幅ごとに変えることはできません。
 
 ```js
 build: {
@@ -407,6 +475,8 @@ src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow
 `public/` に置いたファイルは、ディレクトリ構成を保ったまま出力先へコピーされます（`subdir` を指定している場合はその配下）。変換も縮小もされないので、favicon・OGP画像のほか、等倍のまま出したい画像の置き場としても使います。
 
 `src/` と `public/` で同じ出力先になるファイルがあった場合は、どちらが残るかが決まらないため `build` を中止します。どちらか一方を削除してください。`dev` は起動時に検査してログに出しますが、起動は続けます。
+
+`@half` と `@<数字>w` で終わる画像も同じ扱いで中止します。これはビルドが縮小版と幅違いに使う名前で、幅違いの出力先は事前に列挙できないため、名前を予約することで衝突を防いでいます。`@2x` のようなデザインツールの書き出し名は対象外です。
 
 出力先が重なるかは設定によります。既定の `build.image.format: 'webp'` では `src/logo.png` は `logo.webp` になるため `public/logo.png` とは衝突しません。`compress` では両方が `logo.png` を取り合います。
 

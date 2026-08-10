@@ -22,8 +22,12 @@ pugkit build
   │
   ├─ [ sass │ script │ sprite ]   並列
   ├─ [ pug ]                      CSS/JS の出力を参照するため後
-  └─ [ image │ svg │ copy ]       並列
+  └─ [ image │ svg │ copy ]       並列。pug が集めた幅をここで作る
 ```
+
+pug が image より先に走ることは、幅記述子の前提になっている
+（[ADR 0011](adr/0011-image-widths-are-caller-driven.md)）。
+順序を入れ替えると、HTML が指している幅違いが 1 枚も出なくなる。
 
 レイヤーは `core/builder.mjs` の `BUILD_PHASES` が持つ。同じレイヤーのタスクは並列に走る。
 
@@ -68,14 +72,15 @@ pugkit dev
 1 回の build、または 1 つの dev セッションが持つ状態の入れ物。
 `dev` / `build` を実行するたびに `new BuildContext()` で作られる。
 
-| プロパティ   | 中身                                    |
-| ------------ | --------------------------------------- |
-| `config`     | 解決済みの設定                          |
-| `paths`      | src / public / 出力先                   |
-| `cache`      | コンパイル結果・ページ HTML・画像の寸法 |
-| `graph` ほか | 依存グラフ 4 種                         |
-| `resources`  | 常駐リソース（Sass / esbuild）          |
-| `server`     | dev サーバーの操作口。build では null   |
+| プロパティ    | 中身                                            |
+| ------------- | ----------------------------------------------- |
+| `config`      | 解決済みの設定                                  |
+| `paths`       | src / public / 出力先                           |
+| `cache`       | コンパイル結果・ページ HTML・画像の寸法         |
+| `graph` ほか  | 依存グラフ 4 種                                 |
+| `imageWidths` | imageInfo() が要求した幅。build で image が読む |
+| `resources`   | 常駐リソース（Sass / esbuild）                  |
+| `server`      | dev サーバーの操作口。build では null           |
 
 状態がすべてここに集まっているため、同じプロセスで 2 つ目のビルダーを作っても干渉しない。
 モジュール変数に状態を置かないのはこのため（[ADR 0007](adr/0007-resources-live-in-context.md)）。
@@ -160,7 +165,7 @@ build ではグラフを絞り込みに使わない。構築はするが、全�
 
 おおまかな依存の向きは `cli` → `index` → `core` → `tasks` → `transform` / `utils`。
 
-ただし `core` から `tasks` への参照が 2 種類ある。どちらも意図したもので、
+ただし `core` から `tasks` への参照が 3 種類ある。どれも意図したもので、
 向きを守るために消してはいけない。
 
 出力先の導出（`core/watcher.mjs` と `core/output-conflicts.mjs` が
@@ -169,6 +174,10 @@ build ではグラフを絞り込みに使わない。構築はするが、全�
 
 リクエスト時ビルド（`core/dev/lazy-builder.mjs` が `buildPageHtml` を呼ぶ）。
 dev と build で同じ関数を通すためのもの。
+
+幅違いの生成（`core/dev/width-images.mjs` が `writeWidthVariant` を呼ぶ）。
+これも dev と build で同じ関数を通すためで、別々に持つと同じ URL が
+モードによって違うバイト列になる。
 
 一方で、タスクの生存期間に関わる知識は `core` に持たせない。
 どのタスクが常駐プロセスを抱えるかは `core/resources.mjs` を介して隠れており、
@@ -186,6 +195,7 @@ dev と build で同じ関数を通すためのもの。
 | `core/dev/page-candidates.mjs` | URL からページ候補への展開と、ルート配下への封じ込め |
 | `core/dev/page-source.mjs`     | URL から src の Pug ソースへの解決                   |
 | `core/dev/lazy-builder.mjs`    | リクエスト時ビルドと、同時リクエストの重複排除       |
+| `core/dev/width-images.mjs`    | 幅違いの画像のリクエスト時生成                       |
 | `core/dev/client-script.mjs`   | 注入するスクリプトタグと、差分適用可否の指紋計算     |
 | `core/dev/response.mjs`        | HTML の送出・エラーページ・静的配信の失敗の受け止め  |
 | `client/live-reload.js`        | ブラウザ側のライブリロード                           |
@@ -212,6 +222,12 @@ Pug ページ・`public` 由来の HTML・sirv の静的配信で順序が違う
 出力先の衝突検査（`core/output-conflicts.mjs`）もこれらのうち image / svg / sprite / public の
 4 つを通す。CSS と JS は検査の対象外で、同じ名前を取り合う相手が構造上いないため
 （[ADR 0005](adr/0005-abort-on-output-conflict.md)）。
+
+幅違い（`@400w`）だけはこの不変条件から外れる。幅は `imageInfo()` の呼び出し側が決めるので、
+相対パスからは何が出るか列挙できない（[ADR 0011](adr/0011-image-widths-are-caller-driven.md)）。
+生成は集めた要求、削除は出力ディレクトリの走査、衝突検査は名前の予約と、3 つに分かれる。
+名前の規則そのものは `utils/image-density.mjs` に集約してあるので、そこを迂回して
+独自に組み立てないこと。
 
 ### 画像の寸法は生成側と参照側で共有する
 

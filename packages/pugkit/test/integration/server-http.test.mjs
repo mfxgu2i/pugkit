@@ -1,5 +1,6 @@
 import { describe, expect, it, onTestFinished } from 'vitest'
 import net from 'node:net'
+import { existsSync } from 'node:fs'
 import { chmod, mkdir, writeFile } from 'node:fs/promises'
 import { dirname, relative } from 'node:path'
 import { createTempProject, minimalProjectFiles, createTestBuilder } from '../helpers/project.mjs'
@@ -380,5 +381,183 @@ describe('SSE', () => {
 
     expect(decoder.decode(value)).toContain('event: css-update')
     await reader.cancel()
+  })
+})
+
+/**
+ * 幅違いはリクエスト時に作る。起動時に作らないのは、幅が imageInfo() の
+ * 呼び出し側で決まり、まだ開いていないページの要求を起動時には知れないため（docs/adr/0011）。
+ */
+describe('幅違いの画像', () => {
+  const loadSharp = () => import('sharp').then(module => module.default)
+
+  const jpegBuffer = async (width, height) => {
+    const sharp = await loadSharp()
+    return sharp({ create: { width, height, channels: 3, background: { r: 10, g: 20, b: 30 } } })
+      .jpeg()
+      .toBuffer()
+  }
+
+  async function startWithImages() {
+    const server = await startDevServer()
+
+    await mkdir(server.project.path('src/assets/img/_wip'), { recursive: true })
+    await writeFile(server.project.path('src/assets/img/hero.jpg'), await jpegBuffer(800, 600))
+    await writeFile(server.project.path('src/assets/img/_wip/draft.jpg'), await jpegBuffer(800, 600))
+    // 中身は JPEG のままでよい。ここで見たいのは拡張子による扱いの分かれ方
+    await writeFile(server.project.path('src/assets/img/anim.gif'), await jpegBuffer(800, 600))
+    await writeFile(
+      server.project.path('src/assets/img/mark.svg'),
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"></svg>'
+    )
+
+    return server
+  }
+
+  const outputPath = (server, name) => `${server.context.paths.output}/${name}`
+
+  it('要求された幅を生成して返す', async () => {
+    const server = await startWithImages()
+    const res = await server.get('/assets/img/hero@400w.webp')
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('image/webp')
+
+    const sharp = await loadSharp()
+    const { width, height } = await sharp(Buffer.from(await res.arrayBuffer())).metadata()
+    expect({ width, height }).toEqual({ width: 400, height: 300 })
+  })
+
+  /** 記述子を落とした名前で書くと、無印（原寸）を縮小版で上書きしてしまう */
+  it('記述子を含む名前で書き、無印には触らない', async () => {
+    const { existsSync } = await import('node:fs')
+    const server = await startWithImages()
+
+    await server.get('/assets/img/hero@400w.webp')
+
+    expect(existsSync(outputPath(server, 'assets/img/hero@400w.webp'))).toBe(true)
+    expect(existsSync(outputPath(server, 'assets/img/hero.webp'))).toBe(false)
+  })
+
+  it('2 回目は作り直さない', async () => {
+    const { stat } = await import('node:fs/promises')
+    const server = await startWithImages()
+
+    await server.get('/assets/img/hero@400w.webp')
+    const first = (await stat(outputPath(server, 'assets/img/hero@400w.webp'))).mtimeMs
+
+    await new Promise(resolve => setTimeout(resolve, 10))
+    await server.get('/assets/img/hero@400w.webp')
+
+    expect((await stat(outputPath(server, 'assets/img/hero@400w.webp'))).mtimeMs).toBe(first)
+  })
+
+  it.each([
+    ['原寸以上の幅', '/assets/img/hero@800w.webp'],
+    ['0 の幅', '/assets/img/hero@0w.webp'],
+    ['SVG', '/assets/img/mark@4w.svg'],
+    // GIF は build の DENSITY_EXTENSIONS から外れている。webp モードでは
+    // anim.gif -> anim.webp と読み替えられて元画像が見つかるので、
+    // ここで止めないと dev にだけ存在する画像ができる
+    ['アニメーション GIF', '/assets/img/anim@400w.webp'],
+    ['「_」配下', '/assets/img/_wip/draft@400w.webp'],
+    ['元画像が無い', '/assets/img/missing@400w.webp'],
+    // 先頭ゼロを許すと同じ幅に複数の出力先ができ、生成数の上限を素通りする
+    ['先頭ゼロの綴り', '/assets/img/hero@0400w.webp']
+  ])('%s は生成しない', async (_label, path) => {
+    const server = await startWithImages()
+
+    expect((await server.get(path)).status).toBe(404)
+  })
+
+  /**
+   * 出力先が dev キャッシュの外に出る URL。届かない段数を書くと
+   * 「元画像が無いから 404」で通ってしまい、封じ込めを外しても緑のままになる。
+   * 先に「同じ段数で src の画像に届くこと」を確かめてから、外へ出る側を見る
+   */
+  it('出力ルートの外へ書かせない', async () => {
+    const server = await startDevServer({
+      ...minimalProjectFiles(),
+      // 出力先を src の隣に置いて、1 段の traversal で src に届くようにする
+      'pugkit.config.mjs': "export default { cacheDir: '.cache' }\n"
+    })
+
+    await mkdir(server.project.path('src/assets/img'), { recursive: true })
+    await writeFile(server.project.path('src/assets/img/hero.jpg'), await jpegBuffer(800, 600))
+
+    // 前提: この段数で src の画像に届く（届かない URL では検査が空振りする）
+    const escaped = '/..%2fsrc%2fassets%2fimg%2fhero@400w.webp'
+    const source = server.project.path('src/assets/img/hero.jpg')
+    expect(existsSync(source)).toBe(true)
+
+    expect((await server.get(escaped)).status).toBe(404)
+    // src に生成物が紛れ込んでいないこと
+    expect(existsSync(server.project.path('src/assets/img/hero@400w.webp'))).toBe(false)
+  })
+
+  /**
+   * どの元画像を使うかを探索順まかせにしない。
+   * webp モードでは hero.jpg と hero.png がどちらも hero.webp になる
+   */
+  it('元画像の候補が 2 つあるときは生成しない', async () => {
+    const server = await startWithImages()
+
+    // 前提: 1 つだけなら作れている
+    expect((await server.get('/assets/img/hero@400w.webp')).status).toBe(200)
+
+    await writeFile(server.project.path('src/assets/img/hero.png'), await jpegBuffer(800, 600))
+
+    expect((await server.get('/assets/img/hero@200w.webp')).status).toBe(404)
+  })
+
+  /**
+   * build の glob は拡張子の大小を区別するので hero.JPG は 1 枚も出力されない。
+   * dev が大小を無視して当てると、dev だけが 200 を返すことになる
+   */
+  it('拡張子が大文字の元画像には当てない', async () => {
+    const server = await startWithImages()
+    await writeFile(server.project.path('src/assets/img/photo.JPG'), await jpegBuffer(800, 600))
+
+    expect((await server.get('/assets/img/photo@400w.webp')).status).toBe(404)
+  })
+
+  /** compress モードは拡張子を読み替えない。a.jpg は a@400w.webp を生まない */
+  it('元画像がその拡張子の出力を生まないなら生成しない', async () => {
+    const server = await startDevServer({
+      ...minimalProjectFiles(),
+      'pugkit.config.mjs': "export default { build: { image: { format: 'compress' } } }\n"
+    })
+
+    await mkdir(server.project.path('src/assets/img'), { recursive: true })
+    await writeFile(server.project.path('src/assets/img/hero.jpg'), await jpegBuffer(800, 600))
+
+    // 前提: 読み替えない形式なら作れている
+    expect((await server.get('/assets/img/hero@400w.jpg')).status).toBe(200)
+    expect((await server.get('/assets/img/hero@400w.webp')).status).toBe(404)
+  })
+
+  /** URL だけで決める以上、歯止めが無いと 1 枚のページで千を超えるエンコードが走る */
+  it('1 画像あたりの生成数に上限がある', async () => {
+    const server = await startWithImages()
+
+    for (let width = 1; width <= 32; width++) {
+      expect((await server.get(`/assets/img/hero@${width}w.webp`)).status, `${width}w`).toBe(200)
+    }
+
+    expect((await server.get('/assets/img/hero@33w.webp')).status).toBe(404)
+  })
+
+  it('subdir を前置きした URL でも生成する', async () => {
+    const server = await startDevServer({
+      ...minimalProjectFiles(),
+      'pugkit.config.mjs': "export default { subdir: 'sub' }\n"
+    })
+
+    await mkdir(server.project.path('src/assets/img'), { recursive: true })
+    await writeFile(server.project.path('src/assets/img/hero.jpg'), await jpegBuffer(800, 600))
+
+    expect((await server.get('/sub/assets/img/hero@400w.webp')).status).toBe(200)
+    // 前置きが無い URL は対象にしない。出力ルート直下に書くと build に無いものが dev だけに出る
+    expect((await server.get('/assets/img/hero@200w.webp')).status).toBe(404)
   })
 })
