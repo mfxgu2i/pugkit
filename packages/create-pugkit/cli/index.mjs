@@ -82,8 +82,9 @@ async function main(root, options) {
 
   let step = 1
 
+  // dev は dist を見ないので、起動前のビルドは要らない
+  console.log(`  ${step++}: ${pc.bold(pc.cyan('mise install'))}`)
   console.log(`  ${step++}: ${pc.bold(pc.cyan('npm install'))}`)
-  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm run build'))}`)
   console.log(`  ${step++}: ${pc.bold(pc.cyan('npm run start'))}`)
   console.log(`\nTo close the dev server, hit ${pc.bold(pc.cyan('Ctrl + C'))}`)
 }

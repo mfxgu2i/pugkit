@@ -73,14 +73,19 @@ npm test
 # 1. パッケージを作る
 cd packages/pugkit && npm pack
 
-# 2. 何も無いディレクトリに入れて、CLI から叩く
-mkdir /tmp/pk-check && cd /tmp/pk-check
-npm init -y && npm install /path/to/pugkit-X.Y.Z.tgz
-npx pugkit build            # コマンドは cwd を見る。引数でルートは渡せない
-npx pugkit check            # markuplint を入れていないので markup は飛ぶ
-npm install -D markuplint && npx pugkit check   # 入れると markup も動く
+# 2. テンプレートを複製して、CLI から叩く
+cp -R packages/create-pugkit/template /tmp/pk-check && cd /tmp/pk-check
+npm install /path/to/pugkit-X.Y.Z.tgz
+npx pugkit build            # コマンドは cwd を見る。引数は無視される
+npx pugkit check            # 0 件で通ること
 npx pugkit --port 5810      # dev も起動して配信を確認
 ```
+
+空のディレクトリではなくテンプレートを使う。以下の確認項目は画像・`.browserslistrc`・
+`imageInfo()` を前提にしているので、`npm init -y` だけのディレクトリでは 1 つも実行できない。
+
+テンプレートは markuplint を同梱しているので、`check` は markup まで走る。
+未導入のときに飛ばす挙動を見たい場合は、`node_modules/markuplint` を退避して確かめる。
 
 ### build で確認すること
 

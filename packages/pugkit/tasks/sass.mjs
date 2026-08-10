@@ -1,7 +1,7 @@
 import { glob } from 'glob'
 import { writeFile } from 'node:fs/promises'
 import { relative, resolve, basename } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import * as sass from 'sass-embedded'
 import { transform } from 'lightningcss'
 import { resolveCssTargets } from '../utils/css-targets.mjs'
@@ -55,6 +55,27 @@ class DevSassCompiler {
 
 function getDevCompiler(context) {
   return context.resources.get(SASS_COMPILER, () => new DevSassCompiler()).compiler()
+}
+
+/**
+ * `/` 始まりの `@use` / `@forward` を src からの指定として解く。
+ *
+ * Pug の `include /_templates/_layout` と同じ書き方を Sass でも使えるようにする。
+ * 深い階層から `../../` を数える必要がなくなり、ファイルを移動しても書き換えずに済む。
+ *
+ * 相対指定には触らない。Sass は読み込み元からの相対解決を先に試し、
+ * それで見つかったものはここに来ない。
+ *
+ * FileImporter として返すのは、パーシャルの `_` と拡張子の補完を Sass に任せるため。
+ * 自前で解決すると `/sass/test` が `_test.scss` に当たらない
+ */
+function srcRootImporter(srcDir) {
+  return {
+    findFileUrl(url) {
+      if (!url.startsWith('/')) return null
+      return pathToFileURL(resolve(srcDir, `.${url}`))
+    }
+  }
 }
 
 /**
@@ -129,6 +150,7 @@ async function compileSassFile(filePath, context, isDevBuild, compiler, targets)
     const result = await compiler.compileAsync(filePath, {
       silenceDeprecations: ['legacy-js-api'],
       style: isDevBuild ? 'expanded' : 'compressed',
+      importers: [srcRootImporter(paths.src)],
       loadPaths: [resolve(paths.root, 'node_modules')],
       charset: false,
       quietDeps: true,

@@ -127,7 +127,7 @@ dev と build のアセット一致が弱まる。従来は dev の起動直後�
 
 `imageInfo()` を通らずにテンプレートが `hero@400w.webp` を直書きすると、dev では
 リクエスト時に生成されて 200 が返り、build では生成されないので 404 になる。
-この食い違いは `docs/planned-features.md` の参照検査が扱う。
+この食い違いは `pugkit check references` が扱う（[ADR 0013](0013-check-is-a-separate-command.md)）。
 
 予約サフィックスは、衝突していない場合でも build を中止する。支給素材に
 `banner@1200w.jpg` という名前が混ざっているだけで止まる。`@half` も同じで、

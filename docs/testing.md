@@ -94,10 +94,21 @@ const builder = await createTestBuilder(project.root, 'development')
 出力先の削除を伴う処理（unlink 系）に実在しないパスを渡すと、
 そのパスが存在する環境でユーザーのファイルを消す。必ず一時プロジェクトを使う。
 
-### タイマーや sleep を使わない
+### 並行性は sleep で待たない
 
-並行性は関数注入と Deferred で決定論的に制御する
+自分たちのコードの並行性は、関数注入と Deferred で決定論的に制御する
 （`test/unit/lazy-page-builder.test.mjs` が見本）。
+
+例外は 2 つある。どちらも「こちらから制御できない外部の都合」で、
+決定論的な合図が取れない場合に限る。
+
+外部が発する事象の待ち。chokidar の初期走査や、切断したソケットが
+サーバー側に伝わるまでがこれにあたる（`test/integration/dev-startup.test.mjs`、
+`test/integration/server-http.test.mjs`）。合図が取れるものは合図を使う。
+chokidar の `ready` イベントは取れるので、そちらを優先する。
+
+ファイルシステムの mtime の解像度。書き込みの前後で mtime を比べるには
+数ミリ秒空ける必要がある。これは待ち合わせではなく単位の問題。
 
 ### 待ち上限を自前で持つなら、vitest 側の上限より短くする
 
