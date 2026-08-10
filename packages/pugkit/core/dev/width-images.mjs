@@ -6,7 +6,6 @@ import { convertExtension, parseWidthName, supportsWidthVariants } from '../../u
 import { CONVERTIBLE_EXTENSIONS } from '../../utils/image-formats.mjs'
 import { writeWidthVariant } from '../../tasks/image.mjs'
 import { contains } from '../../utils/safe-dir.mjs'
-import { logger } from '../../utils/logger.mjs'
 import { stripSubdir } from './page-source.mjs'
 
 /**
@@ -169,9 +168,12 @@ export function createWidthImageResponder(context, subdir = '') {
     if (!contentType) return null
 
     if (!withinCap(request.sourcePath, request.width)) {
-      logger.warn(
+      // 超えた後はリクエストのたびに当たるので、画像ごとに 1 度だけ知らせる
+      const name = relative(context.paths.src, request.sourcePath)
+      context.warnOnce?.(
         'server',
-        `幅違いの生成が 1 画像あたり ${MAX_WIDTHS_PER_IMAGE} 件を超えました: ${relative(context.paths.src, request.sourcePath)}`
+        `width-cap:${request.sourcePath}`,
+        `幅違いの生成が 1 画像あたり ${MAX_WIDTHS_PER_IMAGE} 件を超えました: ${name}。これ以上は 404 になります。幅を試している途中なら dev を再起動してください`
       )
       return null
     }
