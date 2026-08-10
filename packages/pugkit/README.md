@@ -502,6 +502,16 @@ pugkit 自身の不具合を調べたい場合は `PUGKIT_DEBUG=1` を付ける�
 PUGKIT_DEBUG=1 npx pugkit build
 ```
 
+## AI Agent Skill
+
+pugkitの規約をAIコーディングエージェントに伝える公式の[Agent Skill](https://github.com/agentskills/agentskills)を提供しています。`Builder`によるパスの組み立て、`imageInfo()`を通した画像の出力、`_`によるビルド対象の除外といった、知らないと壊れる仕様をエージェントに守らせます。
+
+`npm create pugkit@latest` で作成したプロジェクトには `.claude/skills/pugkit/`（Claude Code）と `.github/skills/pugkit/`（GitHub Copilot）へ同梱されます。既存のプロジェクトに追加する場合は次のコマンドを使います。
+
+```sh
+$ npx skills add mfxgu2i/pugkit
+```
+
 ## Tech Stack
 
 | ライブラリ                                                 | 役割                                 |
