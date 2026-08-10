@@ -58,3 +58,4 @@ pugkit がある形になっている理由を、決定ごとに 1 ファイル�
 | [0010](0010-css-postprocess-is-lightningcss.md)     | CSS の後処理を Lightning CSS に一本化する |
 | [0011](0011-image-widths-are-caller-driven.md)      | 画像の幅は呼び出し側が決める              |
 | [0012](0012-single-candidate-drops-srcset.md)       | 候補が 1 つなら img の srcset を出さない  |
+| [0013](0013-check-is-a-separate-command.md)         | 出力の検査は build と分けたコマンドにする |

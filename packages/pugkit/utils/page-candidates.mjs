@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { existsSync } from 'node:fs'
-import { contains } from '../../utils/safe-dir.mjs'
+import { contains } from './safe-dir.mjs'
 
 /**
  * URL をページの候補ファイルに展開する。
@@ -14,8 +14,9 @@ import { contains } from '../../utils/safe-dir.mjs'
  *
  * ページとして扱えない URL（.html 以外の拡張子つき）は null。
  *
- * Pug ページ・public 由来の HTML・sirv の 3 経路で順序が違うと、同じ形の URL でも
- * 別のファイルが選ばれる。展開をここ一箇所に置き、拡張子だけを差し替えて共有する。
+ * Pug ページ・public 由来の HTML・sirv・build 後の参照検査で順序が違うと、
+ * 同じ形の URL でも別のファイルが選ばれる。展開をここ一箇所に置き、
+ * 拡張子だけを差し替えて共有する。
  *
  * @param urlPath  「/」始まりの URL パス（subdir は呼び出し側で処理済み）
  * @param extension 候補に付ける拡張子（'.pug' / '.html'）
@@ -25,9 +26,13 @@ export function pageCandidates(urlPath, extension) {
 
   const p = urlPath === '/' ? '/' : urlPath.replace(/\/+$/, '') || '/'
 
+  // 末尾スラッシュはディレクトリ指定であることが確定している。
+  // 見ないと「/v1.2/」の「.2」を拡張子と読んで候補を出さず、index.html に届かない
+  const isDirectory = urlPath !== '/' && /\/$/.test(urlPath)
+
   if (p === '/') return [`/index${extension}`]
   if (/\.html$/i.test(p)) return [p.replace(/\.html$/i, extension)]
-  if (!path.posix.extname(p)) return [`${p}${extension}`, `${p}/index${extension}`]
+  if (isDirectory || !path.posix.extname(p)) return [`${p}${extension}`, `${p}/index${extension}`]
 
   return null
 }

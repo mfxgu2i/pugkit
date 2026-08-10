@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pageCandidates } from '../../core/dev/page-candidates.mjs'
+import { pageCandidates } from '../../utils/page-candidates.mjs'
 
 /**
  * URL からページ候補への展開。

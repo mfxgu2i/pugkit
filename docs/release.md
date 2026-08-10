@@ -12,11 +12,11 @@ feature/* → develop → main
 
 `packages/pugkit` は semver に従う。判断に迷ったら、利用者の設定やテンプレートが動かなくなるかで決める。
 
-| 種別  | 例                                                           |
-| ----- | ------------------------------------------------------------ |
-| major | 設定オプションの廃止、Pug ヘルパーの削除、出力先の扱いの変更 |
-| minor | 設定オプションの追加、新しいタスク、既定の挙動を変えない改善 |
-| patch | 不具合修正、性能改善、ドキュメント                           |
+| 種別  | 例                                                                             |
+| ----- | ------------------------------------------------------------------------------ |
+| major | 設定オプションの廃止、Pug ヘルパーの削除、出力先の扱いの変更、CLI の引数の廃止 |
+| minor | 設定オプションの追加、新しいタスク、新しいコマンド、既定の挙動を変えない改善   |
+| patch | 不具合修正、性能改善、ドキュメント                                             |
 
 コミットメッセージの `!`（`feat!:` / `refactor!:`）が破壊的変更の目印。`main..develop` で拾える。
 
@@ -65,7 +65,7 @@ major を上げたときは `^1.6.0` のままだと新版が入らない。
 
 ## リリース前の確認
 
-テストが通ることに加えて、実際にパッケージ化して別プロジェクトで動かす。テストはすべて絶対パスの一時プロジェクトを使うため、CLI 特有の壊れ方（相対パス指定など）を拾えない。
+テストが通ることに加えて、実際にパッケージ化して別プロジェクトで動かす。テストは公開 API にプロジェクトルートを渡して一時プロジェクトを使うため、cwd を見る CLI 特有の壊れ方を拾えない。
 
 ```bash
 npm test
@@ -76,8 +76,10 @@ cd packages/pugkit && npm pack
 # 2. 何も無いディレクトリに入れて、CLI から叩く
 mkdir /tmp/pk-check && cd /tmp/pk-check
 npm init -y && npm install /path/to/pugkit-X.Y.Z.tgz
-npx pugkit build .          # 相対パスで叩くこと
-npx pugkit . --port 5810    # dev も起動して配信を確認
+npx pugkit build            # コマンドは cwd を見る。引数でルートは渡せない
+npx pugkit check            # markuplint を入れていないので markup は飛ぶ
+npm install -D markuplint && npx pugkit check   # 入れると markup も動く
+npx pugkit --port 5810      # dev も起動して配信を確認
 ```
 
 ### build で確認すること
@@ -90,6 +92,39 @@ CSS と JS が圧縮されていること。
 
 ソースマップが混ざっていないこと。
 
+CSS が対象ブラウザに合わせて変換されていること。ここはテンプレートの
+`.browserslistrc` を古い対象に書き換えて、出力が変わることで確かめる。
+プレフィックスが付き、モダン構文が降りていれば通っている。
+
+```scss
+// 確認用に足す .scss
+.probe {
+  user-select: none;
+
+  @media (400px <= width <= 900px) {
+    inset: 0;
+  }
+}
+```
+
+`chrome >= 90` と `safari >= 14` を対象にすると、build の出力はこうなる。
+圧縮後なので改行は入らない。
+
+```text
+.probe{-webkit-user-select:none;user-select:none}@media (min-width:400px) and (max-width:900px){.probe{top:0;bottom:0;left:0;right:0}}
+```
+
+テンプレートの既定（`last 2` 系）では `-webkit-user-select` は付くが、
+範囲構文と `inset` はそのまま残る。対象が対応しているので降ろす必要がない。
+書き換えの前後で差が出ることが確認したい点で、どちらか一方の出力だけを見ても分からない。
+
+対象ブラウザの解決は browserslist と caniuse-lite に依存する。
+出力が想定と違うときは、まず対象がどう展開されたかを見る。
+
+```bash
+npx browserslist
+```
+
 ### dev で確認すること
 
 全ページが 200 を返すこと。CSS は非圧縮でソースマップつき、JS は `console` が残っていること。
@@ -98,6 +133,12 @@ CSS と JS が圧縮されていること。
 リクエスト時に生成するので、build とは別の経路になる。
 
 ライブリロードが注入されていること。
+
+CSS のソースマップから `.scss` まで辿れること。`sources` に `.scss` が入っていれば通っている。
+Lightning CSS を通すため、Sass のマップを引き継げていないと CSS 止まりになる。
+
+プレフィックスと降格は dev でも効くこと。build と同じ変換が掛かっていないと、
+開発中に見えていたものと納品物がずれる。
 
 dev の稼働中に `outDir` が変化しないこと。checksum で比較する。
 
