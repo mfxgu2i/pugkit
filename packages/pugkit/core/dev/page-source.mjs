@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { resolvePageFile } from './page-candidates.mjs'
+import { resolvePageFile } from '../../utils/page-candidates.mjs'
 
 /**
  * リクエストURLを src 内の Pug ソースに解決する。

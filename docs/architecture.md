@@ -27,6 +27,28 @@ pugkit build
 
 レイヤーは `core/builder.mjs` の `BUILD_PHASES` が持つ。同じレイヤーのタスクは並列に走る。
 
+### check コマンド
+
+```
+pugkit check [...項目]
+  │
+  ├─ 設定を読む（config/main.mjs）
+  │    そのあと出力先の有無を見て、無ければ中止する（index.mjs）。check はビルドしない
+  │
+  ├─ 項目を選ぶ（core/check/index.mjs）
+  │    指定が無ければ全部。知らない id は中止する
+  │
+  ├─ [ references ]  出力の .html / .css を読み、参照が実在するかを見る
+  └─ [ markup ]      出力の .html を markuplint に渡す
+```
+
+build とは独立していて、build は検査を一切しない（[ADR 0011](adr/0011-check-is-a-separate-command.md)）。
+検査の入力は `paths.outputRoot` 配下のファイルで、`src` は見ない。
+
+参照の解決も `outputRoot` が基点になる。`output` ではない。dist の中身は
+`outputRoot/subdir/...` に置かれ、URL にも `/subdir/` が入るので、URL をそのまま
+継ぎ足せば一致する。subdir を付け忘れた絶対パスが報告されるのは、これで正しい。
+
 ### dev コマンド
 
 ```
@@ -104,6 +126,26 @@ sass と script は依存グラフを使って影響エントリに絞り込む�
 dev で `outputRoot` が `dist` にならないのは、outDir を build 専用にしているため
 （[ADR 0003](adr/0003-outdir-is-build-only.md)）。
 
+### 対象ブラウザ
+
+CSS の出力内容を決めるのは pugkit の設定ではない。`utils/css-targets.mjs` が
+browserslist に問い合わせ、`.browserslistrc` か `package.json` の `browserslist` を読む。
+pugkit が独自の設定項目を持たないのは、CSS 以外の道具が見ている対象とずらさないため
+（[ADR 0010](adr/0010-css-postprocess-is-lightningcss.md)）。
+
+対象はプロジェクトに 1 つなので、`sassTask` の中で 1 回だけ引いて全ファイルに渡す。
+ファイルごとに引き直さない。
+
+読むときに気をつける点が 2 つある。
+
+browserslist は読んだ設定をプロセス内にキャッシュする。dev の稼働中に
+`.browserslistrc` を書き換えても、`.scss` の保存で再コンパイルは走るが、
+対象ブラウザは起動時のまま変わらない。反映には dev の再起動が要る。
+
+対象の解決には caniuse-lite が要る。`last 2 Chrome versions` のような書き方は、
+依存が新しくなると指す先が変わるため、同じソースからでも出力が変わりうる。
+build の再現性はソースに対して保証するもので、依存のバージョンを跨いでは保証しない。
+
 ## キャッシュ
 
 すべてメモリ上にのみ存在し、ディスクには保存しない。
@@ -149,7 +191,7 @@ build ではグラフを絞り込みに使わない。構築はするが、全�
 
 | ディレクトリ | 役割                                            |
 | ------------ | ----------------------------------------------- |
-| `cli/`       | コマンドの入口。引数の解釈とエラー表示          |
+| `cli/`       | コマンドの入口。引数の解釈と結果の表示          |
 | `config/`    | 設定の読み込み・既定値の適用・検証              |
 | `core/`      | ビルダー・コンテキスト・キャッシュ・グラフ・dev |
 | `tasks/`     | 実際に何かを生成する処理                        |
@@ -174,33 +216,55 @@ dev と build で同じ関数を通すためのもの。
 どのタスクが常駐プロセスを抱えるかは `core/resources.mjs` を介して隠れており、
 `Builder.close()` は個別のタスクを名指ししない（[ADR 0007](adr/0007-resources-live-in-context.md)）。
 
+### 検査
+
+項目の登録表は `core/check/index.mjs` が持つ。項目を増やすときはここに 1 行足す。
+CLI も設定も触らない。各項目は `{ file, line, column, rule, message, severity? }` の配列を返し、
+整形する側は中身を知らずに並べられる。`severity` は表示の色にだけ使い、終了コードには使わない。
+
+| モジュール                       | 役割                                       |
+| -------------------------------- | ------------------------------------------ |
+| `cli/check.mjs`                  | 結果の整形と終了コードの決定               |
+| `core/check/index.mjs`           | 項目の登録表・選択・実行                   |
+| `core/check/references.mjs`      | 出力を歩いて参照を突き合わせる             |
+| `core/check/html-references.mjs` | HTML から参照を集める（htmlparser2）       |
+| `core/check/css-references.mjs`  | CSS から `url()` を集める（Lightning CSS） |
+| `core/check/reference-url.mjs`   | URL の正規化と、出力ルート配下への解決     |
+| `core/check/markup.mjs`          | markuplint の読み込みと呼び出し            |
+
+終了コードを決めるのは `cli/` だけにする。公開 API の `check()` は結果を返すだけで、
+プロセスを終わらせない。テストから呼んだ瞬間にテストランナーごと落ちるため。
+
 ### dev サーバー
 
 `core/server.mjs` は HTTP と SSE の結線だけを持ち、それ以外は責務ごとに分ける。
 
-| モジュール                     | 役割                                                 |
-| ------------------------------ | ---------------------------------------------------- |
-| `core/server.mjs`              | HTTP サーバー・SSE・ルーティングの結線               |
-| `core/dev/startup.mjs`         | 起動シーケンス                                       |
-| `core/watcher.mjs`             | chokidar の結線と、変更の種別ごとの反応              |
-| `core/dev/page-candidates.mjs` | URL からページ候補への展開と、ルート配下への封じ込め |
-| `core/dev/page-source.mjs`     | URL から src の Pug ソースへの解決                   |
-| `core/dev/lazy-builder.mjs`    | リクエスト時ビルドと、同時リクエストの重複排除       |
-| `core/dev/client-script.mjs`   | 注入するスクリプトタグと、差分適用可否の指紋計算     |
-| `core/dev/response.mjs`        | HTML の送出・エラーページ・静的配信の失敗の受け止め  |
-| `client/live-reload.js`        | ブラウザ側のライブリロード                           |
+| モジュール                   | 役割                                                |
+| ---------------------------- | --------------------------------------------------- |
+| `core/server.mjs`            | HTTP サーバー・SSE・ルーティングの結線              |
+| `core/dev/startup.mjs`       | 起動シーケンス                                      |
+| `core/watcher.mjs`           | chokidar の結線と、変更の種別ごとの反応             |
+| `core/dev/page-source.mjs`   | URL から src の Pug ソースへの解決                  |
+| `core/dev/lazy-builder.mjs`  | リクエスト時ビルドと、同時リクエストの重複排除      |
+| `core/dev/client-script.mjs` | 注入するスクリプトタグと、差分適用可否の指紋計算    |
+| `core/dev/response.mjs`      | HTML の送出・エラーページ・静的配信の失敗の受け止め |
+| `client/live-reload.js`      | ブラウザ側のライブリロード                          |
 
 ## 守るべき不変条件
 
 コードを分けて書くと壊れやすい箇所。壊れても例外にならないものを挙げる。
 
-### URL の解決順は 3 経路で揃える
+### URL の解決順は 4 経路で揃える
 
-Pug ページ・`public` 由来の HTML・sirv の静的配信で順序が違うと、
+Pug ページ・`public` 由来の HTML・sirv の静的配信・`check` の参照検査で順序が違うと、
 同じ形の URL でも別の階層のファイルが選ばれる。
 
-展開は `core/dev/page-candidates.mjs` に置き、拡張子（`.pug` / `.html`）だけを
+展開は `utils/page-candidates.mjs` に置き、拡張子（`.pug` / `.html`）だけを
 差し替えて共有する。sirv に合わせてフラットファイル優先、末尾スラッシュは除去して同順。
+dev 専用ではないので `core/dev/` には置かない。
+
+末尾スラッシュの有無は、除去する前に見る。`/v1.2/` の `.2` を拡張子と読むと
+候補が出ず、`index.html` に届かない。
 
 ### 出力先の導出は生成側と削除側で共有する
 
@@ -267,13 +331,14 @@ Sass と Script のインクリメンタル処理も `isDevelopment` の条件�
 
 新しい判断をするときの拠り所。それぞれの根拠は ADR にある。
 
-| 原則                             | 意味                                                       | 根拠                                                                                                                                                |
-| -------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| build は再現性を優先する         | 同じソースからは必ず同じ出力が出る。速度はここでは求めない | [0001](adr/0001-build-is-always-full.md)                                                                                                            |
-| dev は応答性を優先する           | 反映までの時間がプロジェクトの規模に依存しないようにする   | [0002](adr/0002-dev-html-lazy-build.md)                                                                                                             |
-| 出力のパスと名前は入力のまま保つ | ハッシュを付けず、専用ディレクトリへも移さない             | [0006](adr/0006-single-source-image-density.md)                                                                                                     |
-| 静かに壊れるより、うるさく止まる | 気づけない不具合は、気づける不具合より高くつく             | [0004](adr/0004-cachedir-is-not-persisted.md) / [0005](adr/0005-abort-on-output-conflict.md) / [0008](adr/0008-config-key-mistakes-are-reported.md) |
-| 整形は表示を変えない             | 納品する HTML なので、綺麗さより先に同じ見た目であること   | [0009](adr/0009-html-formatting-follows-js-beautify.md)                                                                                             |
+| 原則                             | 意味                                                             | 根拠                                                                                                                                                |
+| -------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| build は再現性を優先する         | 同じソースからは必ず同じ出力が出る。速度はここでは求めない       | [0001](adr/0001-build-is-always-full.md)                                                                                                            |
+| dev は応答性を優先する           | 反映までの時間がプロジェクトの規模に依存しないようにする         | [0002](adr/0002-dev-html-lazy-build.md)                                                                                                             |
+| 出力のパスと名前は入力のまま保つ | ハッシュを付けず、専用ディレクトリへも移さない                   | [0006](adr/0006-single-source-image-density.md)                                                                                                     |
+| 静かに壊れるより、うるさく止まる | 気づけない不具合は、気づける不具合より高くつく                   | [0004](adr/0004-cachedir-is-not-persisted.md) / [0005](adr/0005-abort-on-output-conflict.md) / [0008](adr/0008-config-key-mistakes-are-reported.md) |
+| 整形は表示を変えない             | 納品する HTML なので、綺麗さより先に同じ見た目であること         | [0009](adr/0009-html-formatting-follows-js-beautify.md)                                                                                             |
+| 出力は対象ブラウザで動く形にする | 書いた構文をそのまま出すのではなく、対象が読める形に変換して出す | [0010](adr/0010-css-postprocess-is-lightningcss.md)                                                                                                 |
 
 最後の 2 つは結びついている。パスと名前を保つ以上、ハッシュ化で衝突を構造的に
 避けることができないので、代わりに検知して止める必要がある。

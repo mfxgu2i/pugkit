@@ -8,7 +8,7 @@ import { publicOverrideFor } from '../utils/page-conflict.mjs'
 import { subdirPrefix } from '../utils/subdir.mjs'
 import { SSE_PATH, computeMorphSignature, createReloadTag } from './dev/client-script.mjs'
 import { resolvePugSource } from './dev/page-source.mjs'
-import { resolvePageFile } from './dev/page-candidates.mjs'
+import { resolvePageFile } from '../utils/page-candidates.mjs'
 import { createLazyPageBuilder } from './dev/lazy-builder.mjs'
 import { buildErrorPage, guardStaticServe, injectReload, sendHtml } from './dev/response.mjs'
 

@@ -24,6 +24,7 @@ $ touch ./src/index.pug
 "scripts": {
   "start": "pugkit",
   "build": "pugkit build",
+  "check": "pugkit check",
   "sprite": "pugkit sprite"
 }
 ```
@@ -34,13 +35,10 @@ $ touch ./src/index.pug
 | --------------- | ----------------------------- | ----------------------------- |
 | `pugkit`        | `pugkit dev` / `pugkit watch` | 開発モード（Ctrl + C で停止） |
 | `pugkit build`  | -                             | 本番ビルド                    |
+| `pugkit check`  | -                             | ビルド済みの出力を検査        |
 | `pugkit sprite` | -                             | SVGスプライト生成             |
 
-いずれも第1引数でプロジェクトルートを指定できます（デフォルトはカレントディレクトリ）。
-
-```sh
-pugkit build ./path/to/project
-```
+いずれもカレントディレクトリをプロジェクトルートとして扱います。
 
 ### Options
 
@@ -264,6 +262,23 @@ picture
 }
 ```
 
+プレフィックスと降格は dev でも同じように行われます。dev と build で違うのは圧縮とソースマップの有無だけなので、対象ブラウザ向けの変換結果は開発中に確認できます。
+
+#### 降格できるものとできないもの
+
+Lightning CSS はトランスパイラであって、ポリフィルではありません。古い書き方に置き換えられるものだけを変換します。
+
+|            | 例                                                                                                                                                |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 変換される | 入れ子、メディアクエリの範囲構文、相対カラー構文、`oklch()`、論理プロパティ、`inset`、`image-set()`、ベンダープレフィックス                       |
+| 素通りする | `:has()`、`@container`、`@layer`、`@property`、`subgrid`、`svh` / `dvh`、`aspect-ratio`、`accent-color`、`text-wrap: balance`、`scrollbar-gutter` |
+
+下の段は、置き換え先が古い CSS に存在しないため降格できません。対象ブラウザが未対応でもそのまま出力され、警告も出ません。
+
+つまり browserslist の指定が防げるのは「その機能はあるが書き方が違う」という食い違いだけです。「その機能がそもそも無い」場合は防げないので、対象ブラウザに存在するかどうかは書く側で確認してください。Lightning CSS が通したことは、対象で動くことの証明になりません。
+
+> `.browserslistrc` と `package.json` の `browserslist` は、dev の起動時に一度だけ読まれます。稼働中に書き換えても反映されないので、変更したら dev を再起動してください。
+
 > pugkit は PostCSS のプラグインを受け付けません。CSS の後処理は Lightning CSS に一本化されています。
 
 ### JavaScript / TypeScript
@@ -435,6 +450,54 @@ src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow
 
 また、別の dev サーバーが同じ `cacheDir` を使用中の場合も中止します。ポートを変えれば 2 つ目を起動できてしまうため、ポートではなくディレクトリ側で判定しています。
 
+### 出力の検査
+
+`pugkit check` はビルド済みの出力を検査します。ビルドはしないので、出力ディレクトリが無ければ中止します。あっても中身が空なら、検査対象が無かったことを表示します。
+
+```sh
+pugkit build && pugkit check
+```
+
+build から分けているのは、過去の負債でビルドが止まると、今の更新を出すために関係のない箇所まで直すことになるためです。検査を実行するかどうかは利用者が決めます。詳しくは [ADR 0011](https://github.com/mfxgu2i/pugkit/blob/main/docs/adr/0011-check-is-a-separate-command.md) を参照してください。
+
+検査項目は引数で選べます。指定しなければ全項目を実行します。
+
+| 項目         | 内容                                                    |
+| ------------ | ------------------------------------------------------- |
+| `references` | HTML と CSS に書かれた参照が出力に実在するか            |
+| `markup`     | 出力 HTML が HTML として妥当か（markuplint に渡します） |
+
+```sh
+pugkit check                     # 全部
+pugkit check references          # 参照の実在だけ
+```
+
+違反が 1 件でもあれば終了コード `1` を返します。markuplint が `warning` や `info` に落としたルールも同じ扱いです。重さは表示の色で分けますが、終了コードは変えません。落としたいルールは markuplint の設定で切ってください。
+
+#### references
+
+`href` / `src` / `srcset` の各候補 / `poster` / `xlink:href` と、`meta` の `og:image` / `og:url` / `twitter:image`、CSS の `url()` / `image-set()` / `@import` を集めて、出力に実在するかを見ます。`<base href>` があれば相対参照の基点に使います。
+
+とくに CSS の `url()` は静かに壊れます。pugkit は Sass の `url()` を書き換えないため、`format: 'webp'` の設定で `url(hero.jpg)` と書いてもビルドは成功し、背景画像だけが出ません。
+
+外部の URL は叩きません。スキーム付きの URL、`//` 始まり、`#` だけのアンカー、`mailto:`、`tel:`、`data:`、`{{ }}` や `<?php` を含む値は検査しません。
+
+`siteUrl` を設定している場合、それと同じ origin の絶対 URL は内部の参照として解決します。`Builder.url()` で組み立てた canonical や `og:image` が、存在しないファイルを指していないかを見るためです。
+
+`subdir` を設定している場合、URL にも `/subdir/` が必要です。付け忘れた絶対パスは本番で 404 になるため、実在しない参照として報告します。
+
+#### markup
+
+[markuplint](https://markuplint.dev/) に出力 HTML を渡します。markuplint は pugkit の依存に含まれないため、使う場合はプロジェクトに入れてください。
+
+```sh
+npm install --save-dev markuplint
+```
+
+入っていなければ、その旨を表示して `markup` は飛ばします。設定は `markuplint.config.js` などプロジェクトのものをそのまま使い、pugkit は独自の設定を持ちません。設定が見つからない場合は markuplint の既定ルールで検査し、そう表示します。
+
+ソースの `.pug` ではなく出力の `.html` を検査します。報告される行番号は出力側のものです。
+
 ### エラー表示
 
 CLI が異常終了したときは、原因のメッセージだけを表示して終了コード `1` を返します。設定ミスや出力先の衝突など、ソースを直せば済むエラーがスタックトレースに埋もれないようにするためです。
@@ -447,13 +510,14 @@ PUGKIT_DEBUG=1 npx pugkit build
 
 ## Tech Stack
 
-| ライブラリ                                        | 役割                                    |
-| ------------------------------------------------- | --------------------------------------- |
-| [Pug](https://pugjs.org/)                         | HTMLテンプレートエンジン                |
-| [Sass](https://sass-lang.com/)                    | CSSプリプロセッサー                     |
-| [esbuild](https://esbuild.github.io/)             | TypeScript/JavaScriptバンドラー         |
-| [Lightning CSS](https://lightningcss.dev/)        | CSS後処理（プレフィックス・降格・圧縮） |
-| [Sharp](https://sharp.pixelplumbing.com/)         | 画像最適化                              |
-| [SVGO](https://svgo.dev/)                         | SVG最適化                               |
-| [Chokidar](https://github.com/paulmillr/chokidar) | ファイル監視                            |
-| [sirv](https://github.com/lukeed/sirv)            | 静的配信（開発サーバー、SSE と併用）    |
+| ライブラリ                                         | 役割                                    |
+| -------------------------------------------------- | --------------------------------------- |
+| [Pug](https://pugjs.org/)                          | HTMLテンプレートエンジン                |
+| [Sass](https://sass-lang.com/)                     | CSSプリプロセッサー                     |
+| [esbuild](https://esbuild.github.io/)              | TypeScript/JavaScriptバンドラー         |
+| [Lightning CSS](https://lightningcss.dev/)         | CSS後処理（プレフィックス・降格・圧縮） |
+| [Sharp](https://sharp.pixelplumbing.com/)          | 画像最適化                              |
+| [SVGO](https://svgo.dev/)                          | SVG最適化                               |
+| [Chokidar](https://github.com/paulmillr/chokidar)  | ファイル監視                            |
+| [sirv](https://github.com/lukeed/sirv)             | 静的配信（開発サーバー、SSE と併用）    |
+| [htmlparser2](https://github.com/fb55/htmlparser2) | 出力 HTML からの参照の収集              |
