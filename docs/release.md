@@ -10,13 +10,13 @@ feature/* → develop → main
 
 ## バージョンの決め方
 
-`packages/pugkit` は semver に従う。判断に迷ったら**利用者の設定やテンプレートが動かなくなるか**で決める。
+`packages/pugkit` は semver に従う。判断に迷ったら、利用者の設定やテンプレートが動かなくなるかで決める。
 
-| 種別      | 例                                                                     |
-| --------- | ---------------------------------------------------------------------- |
-| **major** | 設定オプションの廃止、Pug ヘルパーの削除、出力先の扱いの変更           |
-| **minor** | 設定オプションの追加、新しいタスク、既定の挙動を変えない改善           |
-| **patch** | 不具合修正、性能改善、ドキュメント                                     |
+| 種別  | 例                                                                             |
+| ----- | ------------------------------------------------------------------------------ |
+| major | 設定オプションの廃止、Pug ヘルパーの削除、出力先の扱いの変更、CLI の引数の廃止 |
+| minor | 設定オプションの追加、新しいタスク、新しいコマンド、既定の挙動を変えない改善   |
+| patch | 不具合修正、性能改善、ドキュメント                                             |
 
 コミットメッセージの `!`（`feat!:` / `refactor!:`）が破壊的変更の目印。`main..develop` で拾える。
 
@@ -24,21 +24,48 @@ feature/* → develop → main
 git log --oneline main..develop | grep '!:'
 ```
 
-## 版を上げるとき
+## テンプレートがどう配られるか
 
-**`packages/pugkit` と `create-pugkit/template` は必ず同時に上げる。**
+手順を間違えやすいので先に書く。
 
-| ファイル                                       | 内容                                                     |
-| ---------------------------------------------- | -------------------------------------------------------- |
-| `packages/pugkit/package.json`                 | `version`                                                 |
-| `packages/create-pugkit/template/package.json` | `devDependencies.pugkit` の範囲                           |
-| `packages/create-pugkit/package.json`          | `version`（テンプレートを変えたら最低でも minor を上げる） |
+`create-pugkit` の npm パッケージにはテンプレートが入っていない（`files` は `cli` だけ）。
+`create-pugkit` は実行時に degit で GitHub から取ってくる。
 
-テンプレートの範囲指定を忘れると、**`create-pugkit` で作った新規プロジェクトが古い pugkit を掴む**。major を上げたときは `^1.6.0` のままだと新版が入らない。
+```js
+// packages/create-pugkit/cli/index.mjs
+const REPO = 'mfxgu2i/pugkit/packages/create-pugkit/template'
+```
+
+ref を指定していないので、取得元はリポジトリのデフォルトブランチ（`main`）になる。
+
+ここから 3 つのことが決まる。
+
+テンプレートを配るのは publish ではなく `main` へのマージ。
+`npm run publish:create-pugkit` はテンプレートの中身に影響しない。
+
+`main` にマージした瞬間から、既存の `create-pugkit` 利用者全員に新しいテンプレートが渡る。
+古いバージョンの `create-pugkit` を使っていても同じ。
+
+したがって pugkit の公開より先に `main` へマージすると、
+まだ npm に無いバージョンを要求するテンプレートが配られる。
+逆に遅らせると、新しい pugkit が公開済みなのに古いテンプレートが配られる。
+
+## バージョンを上げるとき
+
+`packages/pugkit` と `create-pugkit/template` は必ず同時に上げる。
+
+| ファイル                                       | 内容                              |
+| ---------------------------------------------- | --------------------------------- |
+| `packages/pugkit/package.json`                 | `version`                         |
+| `packages/create-pugkit/template/package.json` | `devDependencies.pugkit` の範囲   |
+| `packages/create-pugkit/package.json`          | `version`（cli を変えたときだけ） |
+
+テンプレートの範囲指定を忘れると、`create-pugkit` で作った新規プロジェクトが古い pugkit を掴む。
+major を上げたときは `^1.6.0` のままだと新版が入らない。
 
 ## リリース前の確認
 
-テストが通ることに加えて、**実際にパッケージ化して別プロジェクトで動かす**。テストはすべて絶対パスの一時プロジェクトを使うため、CLI 特有の壊れ方（相対パス指定など）を拾えない。
+テストが通ることに加えて、実際にパッケージ化して別プロジェクトで動かす。テストは公開 API にプロジェクトルートを渡して一時プロジェクトを使うため、cwd を見る CLI 特有の壊れ方を拾えない。
 
 ```bash
 npm test
@@ -49,29 +76,92 @@ cd packages/pugkit && npm pack
 # 2. 何も無いディレクトリに入れて、CLI から叩く
 mkdir /tmp/pk-check && cd /tmp/pk-check
 npm init -y && npm install /path/to/pugkit-X.Y.Z.tgz
-npx pugkit build .          # 相対パスで叩くこと
-npx pugkit . --port 5810    # dev も起動して配信を確認
+npx pugkit build            # コマンドは cwd を見る。引数でルートは渡せない
+npx pugkit check            # markuplint を入れていないので markup は飛ぶ
+npm install -D markuplint && npx pugkit check   # 入れると markup も動く
+npx pugkit --port 5810      # dev も起動して配信を確認
 ```
 
-確認すること:
+### build で確認すること
 
-- `build` — 出力ファイル一式、画像の変換と寸法の焼き込み、CSS/JS の圧縮、**ソースマップが混ざっていないこと**
-- `dev` — 全ページ 200、CSS は非圧縮＋ソースマップ、JS は `console` を残す、ライブリロードの注入
-- `dev` 稼働中に **`outDir` が変化しないこと**（checksum で比較する）
-- Ctrl+C で常駐プロセス（Sass / esbuild）ごと終了すること
+出力ファイル一式が揃っていること。画像が変換され、寸法が HTML に焼き込まれていること。
+CSS と JS が圧縮されていること。
+
+`imageInfo()` に `widths` を渡したページで、`srcset` の候補がすべて dist に実在すること。
+ここは pug と image のフェーズをまたぐので、テストが通っていても CLI で一度は見ておく。
+
+ソースマップが混ざっていないこと。
+
+CSS が対象ブラウザに合わせて変換されていること。ここはテンプレートの
+`.browserslistrc` を古い対象に書き換えて、出力が変わることで確かめる。
+プレフィックスが付き、モダン構文が降りていれば通っている。
+
+```scss
+// 確認用に足す .scss
+.probe {
+  user-select: none;
+
+  @media (400px <= width <= 900px) {
+    inset: 0;
+  }
+}
+```
+
+`chrome >= 90` と `safari >= 14` を対象にすると、build の出力はこうなる。
+圧縮後なので改行は入らない。
+
+```text
+.probe{-webkit-user-select:none;user-select:none}@media (min-width:400px) and (max-width:900px){.probe{top:0;bottom:0;left:0;right:0}}
+```
+
+テンプレートの既定（`last 2` 系）では `-webkit-user-select` は付くが、
+範囲構文と `inset` はそのまま残る。対象が対応しているので降ろす必要がない。
+書き換えの前後で差が出ることが確認したい点で、どちらか一方の出力だけを見ても分からない。
+
+対象ブラウザの解決は browserslist と caniuse-lite に依存する。
+出力が想定と違うときは、まず対象がどう展開されたかを見る。
+
+```bash
+npx browserslist
+```
+
+### dev で確認すること
+
+全ページが 200 を返すこと。CSS は非圧縮でソースマップつき、JS は `console` が残っていること。
+
+`widths` を使ったページで幅違いの画像が 200 を返すこと。dev は起動時に作らず
+リクエスト時に生成するので、build とは別の経路になる。
+
+ライブリロードが注入されていること。
+
+CSS のソースマップから `.scss` まで辿れること。`sources` に `.scss` が入っていれば通っている。
+Lightning CSS を通すため、Sass のマップを引き継げていないと CSS 止まりになる。
+
+プレフィックスと降格は dev でも効くこと。build と同じ変換が掛かっていないと、
+開発中に見えていたものと納品物がずれる。
+
+dev の稼働中に `outDir` が変化しないこと。checksum で比較する。
+
+Ctrl+C で常駐プロセス（Sass / esbuild）ごと終了すること。
 
 ## 公開
 
+順序が重要。テンプレートは `main` から配られるので、
+pugkit を npm に上げる前にマージすると、存在しないバージョンを要求するテンプレートが配られる。
+
 ```bash
+# 1. pugkit を公開する
 npm run publish:pugkit
-npm run publish:create-pugkit   # テンプレートを変えたときだけ
+
+# 2. cli を変えたときだけ create-pugkit も公開する
+npm run publish:create-pugkit
+
+# 3. 公開を確認してから main へマージする
+npm view pugkit version
+git switch main && git merge develop && git push
+
+# 4. タグを打つ
 ```
 
-公開後に `develop` を `main` へマージし、タグを打つ。
-
-## 破壊的変更があるとき
-
-CHANGELOG は置いていないので、**利用者が気づける形にしておく**。
-
-- 設定オプションを消した場合、黙って無視されると事故になる（`build.clean` を消したとき、`clean: false` で運用していた利用者の `outDir` が丸ごと削除される、という形の壊れ方をする）
-- README から記述を消すだけでなく、**壊れ方が静かなものは移行先を README に残す**か、起動時に検知して止めることを検討する
+3 を先にやらない。マージした瞬間にテンプレートが配られるため、
+npm に該当バージョンが無いと `npm install` が失敗する。

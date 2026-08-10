@@ -1,9 +1,9 @@
 import { describe, expect, it, beforeEach, onTestFinished } from 'vitest'
 import { readFile } from 'node:fs/promises'
 import sharp from 'sharp'
-import { build, createBuilder } from '../../index.mjs'
+import { build } from '../../index.mjs'
 import { buildPageHtml } from '../../tasks/pug.mjs'
-import { createTempProject, listFiles } from '../helpers/project.mjs'
+import { createTempProject, listFiles, createTestBuilder } from '../helpers/project.mjs'
 
 /**
  * dev で見ているものと build が出すものが食い違わないこと。
@@ -41,14 +41,17 @@ async function createProject(overrides = {}) {
     'src/assets/js/main.js': 'console.log("hi")\n',
     'src/assets/icons/arrow.svg':
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#f00" d="M1 1h2v2H1z"/></svg>\n',
-    'src/assets/logo.svg': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20"><rect width="40" height="20"/></svg>\n',
+    'src/assets/logo.svg':
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20"><rect width="40" height="20"/></svg>\n',
     'public/robots.txt': 'User-agent: *\n',
     ...overrides
   })
 
   // 画像の寸法は HTML に焼き込まれるので、dev/build で同じ値になるか確かめる材料にする
   const jpeg = (w, h) =>
-    sharp({ create: { width: w, height: h, channels: 3, background: { r: 10, g: 20, b: 30 } } }).jpeg().toBuffer()
+    sharp({ create: { width: w, height: h, channels: 3, background: { r: 10, g: 20, b: 30 } } })
+      .jpeg()
+      .toBuffer()
   const { writeFile, mkdir } = await import('node:fs/promises')
   await mkdir(project.path('src/assets/img'), { recursive: true })
   // 寸法は imageSize()/imageInfo() を呼んだときだけ HTML に焼き込まれる。
@@ -56,21 +59,20 @@ async function createProject(overrides = {}) {
   await project.write({
     'src/_partials/_mixins.pug': `mixin figure
   - const info = imageInfo('/assets/img/hero.jpg')
-  img(src=info.src, width=info.width, height=info.height)
-  if info.retina
-    img(src=info.retina.src, width=info.retina.width)
+  img(src=info.src, srcset=info.srcset, width=info.width, height=info.height)
+  if info.variant
+    source(srcset=info.variant.srcset, width=info.variant.width, height=info.variant.height)
 `
   })
-  await writeFile(project.path('src/assets/img/hero.jpg'), await jpeg(400, 300))
-  await writeFile(project.path('src/assets/img/hero@2x.jpg'), await jpeg(800, 600))
-  await writeFile(project.path('src/assets/img/hero_sp.jpg'), await jpeg(200, 150))
+  await writeFile(project.path('src/assets/img/hero.jpg'), await jpeg(800, 600))
+  await writeFile(project.path('src/assets/img/hero_sp.jpg'), await jpeg(376, 300))
 
   return project
 }
 
 /** dev の初期タスク（Pug 以外）を build と同じ材料から走らせる */
 async function runDevAssets(project) {
-  const builder = await createBuilder(project.root, 'development')
+  const builder = await createTestBuilder(project.root, 'development')
   builder.context.config.server.port = 0
   const { context } = builder
 
@@ -85,10 +87,7 @@ let project
 
 beforeEach(async () => {
   project = await createProject({
-    'src/_partials/_layout.pug': layout.replace(
-      'block content',
-      "include /_partials/_mixins.pug\n    block content"
-    )
+    'src/_partials/_layout.pug': layout.replace('block content', 'include /_partials/_mixins.pug\n    block content')
   })
 })
 
@@ -96,7 +95,7 @@ describe('HTML', () => {
   it('すべてのページで dev の配信内容と build の出力が一致する', async () => {
     await build(project.root)
 
-    const devContext = (await createBuilder(project.root, 'development')).context
+    const devContext = (await createTestBuilder(project.root, 'development')).context
     const pages = ['index.pug', 'about.pug', 'blog/index.pug', 'blog/deep/nested.pug']
 
     for (const relativePath of pages) {
@@ -107,7 +106,50 @@ describe('HTML', () => {
     }
 
     // 寸法が焼き込まれていること自体も確かめる（両方とも空なら一致してしまう）
+    // imageSourceDensity: 2 が既定なので 800x600 の原本は表示 400x300 になる
     expect(await project.read('dist/index.html')).toMatch(/width="400"/)
+  })
+
+  it('焼き込まれた width/height が、実際に出力された画像の寸法と一致する', async () => {
+    await build(project.root)
+
+    const html = await project.read('dist/index.html')
+    const src = html.match(/<img src="([^"]+)"/)[1]
+    const width = Number(html.match(/width="(\d+)"/)[1])
+    const height = Number(html.match(/height="(\d+)"/)[1])
+
+    const output = await sharp(project.path(`dist${src}`)).metadata()
+
+    expect(output).toMatchObject({ width, height })
+  })
+
+  it('srcset に並ぶ URL がすべて実ファイルに対応する', async () => {
+    await build(project.root)
+
+    const html = await project.read('dist/index.html')
+    const srcset = html.match(/srcset="([^"]+)"/)[1]
+    const urls = srcset.split(',').map(entry => entry.trim().split(/\s+/)[0])
+
+    // 前提: 密度つきの srcset が実際に出ている（1 枚だけなら以下の検査が骨抜きになる）
+    expect(urls).toHaveLength(2)
+    expect(srcset).toBe('/assets/img/hero@half.webp 1x, /assets/img/hero.webp 2x')
+
+    const built = await listFiles(project.path('dist'))
+    for (const url of urls) {
+      expect(built, `${url} が出力されていない`).toContain(url.replace(/^\//, ''))
+    }
+  })
+
+  it('アートディレクション画像にも密度が効く（source の寸法が実寸の 2 倍にならない）', async () => {
+    await build(project.root)
+
+    const html = await project.read('dist/index.html')
+    const source = html.match(/<source srcset="([^"]+)" width="(\d+)" height="(\d+)"/)
+
+    expect(source[1]).toBe('/assets/img/hero_sp@half.webp 1x, /assets/img/hero_sp.webp 2x')
+
+    const output = await sharp(project.path(`dist/assets/img/hero_sp@half.webp`)).metadata()
+    expect(output).toMatchObject({ width: Number(source[2]), height: Number(source[3]) })
   })
 
   it('subdir を設定しても一致する', async () => {
@@ -116,7 +158,7 @@ describe('HTML', () => {
     })
     await build(project.root)
 
-    const devContext = (await createBuilder(project.root, 'development')).context
+    const devContext = (await createTestBuilder(project.root, 'development')).context
     const served = await buildPageHtml(project.path('src/blog/index.pug'), devContext)
 
     expect(served).toBe(await project.read('dist/sub/blog/index.html'))
@@ -125,10 +167,9 @@ describe('HTML', () => {
   it('dev サーバー越しでも（注入分を除けば）build と一致する', async () => {
     await build(project.root)
 
-    const builder = await createBuilder(project.root, 'development')
+    const builder = await createTestBuilder(project.root, 'development')
     builder.context.config.server.port = 0
     await builder.tasks.server(builder.context)
-    onTestFinished(() => builder.context.server.close())
 
     const res = await fetch(`http://localhost:${builder.context.server.port}/about.html`)
     const html = await res.text()
@@ -151,11 +192,10 @@ describe('src と public に同名の HTML があるとき', () => {
     await project.write({ 'public/about.html': publicPage })
     await build(project.root)
 
-    const builder = await createBuilder(project.root, 'development')
+    const builder = await createTestBuilder(project.root, 'development')
     builder.context.config.server.port = 0
     await builder.runTask('copy')
     await builder.tasks.server(builder.context)
-    onTestFinished(() => builder.context.server.close())
 
     const served = await (await fetch(`http://localhost:${builder.context.server.port}/about.html`)).text()
 
@@ -165,7 +205,7 @@ describe('src と public に同名の HTML があるとき', () => {
 
   it('衝突していることを警告する（黙って上書きされると気づけない）', async () => {
     await project.write({ 'public/about.html': publicPage })
-    const builder = await createBuilder(project.root, 'development')
+    const builder = await createTestBuilder(project.root, 'development')
     const warnings = []
     const { logger } = await import('../../utils/logger.mjs')
     const original = logger.warn
@@ -180,7 +220,7 @@ describe('src と public に同名の HTML があるとき', () => {
   })
 
   it('衝突していなければ警告しない', async () => {
-    const builder = await createBuilder(project.root, 'development')
+    const builder = await createTestBuilder(project.root, 'development')
     const warnings = []
     const { logger } = await import('../../utils/logger.mjs')
     const original = logger.warn

@@ -33,7 +33,6 @@ describe('出力ディレクトリの作り直し', () => {
 
     expect(await listFiles(project.path('dist'))).not.toContain('legacy.html')
   })
-
 })
 
 describe('消してはいけない場所を outDir にしたとき', () => {
@@ -62,7 +61,7 @@ describe('廃止された build.clean', () => {
   it('指定されていても出力ディレクトリを作り直す', async () => {
     const project = await createTempProject({
       ...minimalProjectFiles({
-        'pugkit.config.mjs': "export default { build: { clean: false } }\n"
+        'pugkit.config.mjs': 'export default { build: { clean: false } }\n'
       }),
       'dist/legacy.html': '<html>old</html>'
     })

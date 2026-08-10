@@ -7,8 +7,6 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace=pugkit",
-    "build": "npm run build --workspace=pugkit",
     "test": "vitest run",
     "test:ui": "vitest --ui",
     "publish:pugkit": "cd packages/pugkit && npm publish",
@@ -25,7 +23,8 @@
   "author": "mfxgu2i <mfxgu2i@gmail.com>",
   "license": "MIT",
   "devDependencies": {
-    "vitest": "^3.2.4",
-    "@vitest/ui": "^3.2.4"
+    "@vitest/ui": "^3.2.4",
+    "markuplint": "^4.18.3",
+    "vitest": "^3.2.4"
   }
 }

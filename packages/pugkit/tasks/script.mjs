@@ -6,44 +6,69 @@ import { logger } from '../utils/logger.mjs'
 import { resolveRebuildTargets } from '../utils/rebuild-targets.mjs'
 import { ensureDir, ensureFileDir } from '../utils/file.mjs'
 
-// dev では esbuild の incremental build コンテキストをエントリ構成ごとに使い回し、
-// 同じファイルの連続編集でモジュールグラフを再利用する（プロセス終了時に自動破棄される）
-let _devCtx = null
-let _devCtxKey = null
-// watcher のイベントは直列化されないため、dev ビルドをキューで直列化して
-// dispose 済み context への rebuild や context の二重生成を防ぐ
-let _devBuildQueue = Promise.resolve()
-
-function enqueueDevBuild(fn) {
-  const run = _devBuildQueue.then(fn, fn)
-  _devBuildQueue = run.catch(() => {})
-  return run
-}
-
-async function getDevContext(esbuildConfig) {
-  const key = [...esbuildConfig.entryPoints].sort().join('\n')
-  if (!_devCtx || _devCtxKey !== key) {
-    if (_devCtx) {
-      const old = _devCtx
-      _devCtx = null
-      _devCtxKey = null
-      await old.dispose()
-    }
-    _devCtx = await esbuild.context(esbuildConfig)
-    _devCtxKey = key
-  }
-  return _devCtx
-}
+const SCRIPT_BUILDER = 'script:builder'
 
 /**
- * 常駐ビルドコンテキストを破棄する。プロセスを抱えたままだと dev を止めても終われない。
- * 参照を捨てるので、次に使うときは作り直しになる
+ * dev で常駐させる esbuild の incremental build コンテキスト。
+ * 同じファイルの連続編集でモジュールグラフを再利用する。
+ *
+ * セッション（BuildContext）ごとに1つ。context.resources が寿命を持つ
  */
-export async function disposeDevContext() {
-  const ctx = _devCtx
-  _devCtx = null
-  _devCtxKey = null
-  if (ctx) await ctx.dispose()
+class DevScriptBuilder {
+  constructor() {
+    this.ctx = null
+    this.key = null
+    // 破棄後に作り直さないための印。キューに積まれたビルドは dispose を追い越せるので、
+    // これが無いと「捨てたあとに生まれ、二度と捨てられない」esbuild プロセスが残る
+    this.disposed = false
+    // watcher のイベントは直列化されないため、dev ビルドをキューで直列化して
+    // dispose 済み context への rebuild や context の二重生成を防ぐ
+    this.queue = Promise.resolve()
+  }
+
+  rebuild(esbuildConfig) {
+    return this.enqueue(async () => (await this.contextFor(esbuildConfig)).rebuild())
+  }
+
+  enqueue(fn) {
+    const run = this.queue.then(fn, fn)
+    this.queue = run.catch(() => {})
+    return run
+  }
+
+  /** エントリ構成が変わったら作り直す。増減したエントリは既存の context では扱えない */
+  async contextFor(esbuildConfig) {
+    if (this.disposed) throw new Error('dev のビルドコンテキストは破棄済みです')
+
+    const key = [...esbuildConfig.entryPoints].sort().join('\n')
+    if (!this.ctx || this.key !== key) {
+      const old = this.ctx
+      this.ctx = null
+      this.key = null
+      if (old) await old.dispose()
+
+      this.ctx = await esbuild.context(esbuildConfig)
+      this.key = key
+    }
+    return this.ctx
+  }
+
+  /**
+   * 常駐ビルドコンテキストを破棄する。プロセスを抱えたままだと dev を止めても終われない。
+   * 参照を捨てるので、次に使うときは作り直しになる
+   */
+  async dispose() {
+    this.disposed = true
+
+    const ctx = this.ctx
+    this.ctx = null
+    this.key = null
+    if (ctx) await ctx.dispose()
+  }
+}
+
+function getDevBuilder(context) {
+  return context.resources.get(SCRIPT_BUILDER, () => new DevScriptBuilder())
 }
 
 /**
@@ -126,7 +151,7 @@ export async function scriptTask(context, options = {}) {
     // 4. ビルド実行（dev はコンテキスト再利用の増分ビルド、build は従来どおり単発実行）
     await ensureDir(paths.output)
     const result = isDevelopment
-      ? await enqueueDevBuild(async () => (await getDevContext(esbuildConfig)).rebuild())
+      ? await getDevBuilder(context).rebuild(esbuildConfig)
       : await esbuild.build(esbuildConfig)
 
     if (result.errors && result.errors.length > 0) {

@@ -42,7 +42,9 @@ npm create pugkit@latest .
 プロジェクト作成後の手順：
 
 ```sh
+mise install
 npm install
-npm run build
 npm run start
 ```
+
+[mise](https://mise.jdx.dev/) を使わない場合は `mise install` を飛ばしてください。Node 22 以上であれば動きます。

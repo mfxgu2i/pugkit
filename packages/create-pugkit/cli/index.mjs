@@ -82,9 +82,9 @@ async function main(root, options) {
 
   let step = 1
 
-  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm install'))}`);
-  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm run build'))}`);
-  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm run start'))}`);
+  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm install'))}`)
+  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm run build'))}`)
+  console.log(`  ${step++}: ${pc.bold(pc.cyan('npm run start'))}`)
   console.log(`\nTo close the dev server, hit ${pc.bold(pc.cyan('Ctrl + C'))}`)
 }
 

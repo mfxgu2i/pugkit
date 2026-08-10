@@ -76,7 +76,8 @@ describe('fill / stroke の変換', () => {
 describe('viewBox', () => {
   it('viewBox をそのまま引き継ぐ', async () => {
     await project.write({
-      'src/assets/icons/a.svg': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 32"><path d="M1 1h2v2H1z"/></svg>\n'
+      'src/assets/icons/a.svg':
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 32"><path d="M1 1h2v2H1z"/></svg>\n'
     })
 
     await spriteTask(createContext())

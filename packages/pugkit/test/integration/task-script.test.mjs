@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createBuilder } from '../../index.mjs'
 import { readFile, stat } from 'node:fs/promises'
-import { createTempProject } from '../helpers/project.mjs'
+import { createTempProject, createTestBuilder } from '../helpers/project.mjs'
 
 /**
  * esbuild が解決した import を依存グラフに記録する。
@@ -18,7 +17,7 @@ async function buildScripts(files) {
     'src/index.pug': 'doctype html\nhtml\n  body\n    p x\n',
     ...files
   })
-  const builder = await createBuilder(project.root, 'development')
+  const builder = await createTestBuilder(project.root, 'development')
   await builder.runTask('script')
 
   return { project, graph: builder.context.scriptGraph }
@@ -60,7 +59,6 @@ describe('依存グラフ', () => {
       project.path('src/assets/js/main.js')
     ])
   })
-
 })
 
 describe('dev の差分ビルド', () => {
@@ -68,8 +66,7 @@ describe('dev の差分ビルド', () => {
    * 変更を反映する範囲は依存グラフで決める。
    * ファイル名で判断すると「_ が付かない共有ファイル」を取りこぼす。
    */
-  const readOut = async (builder, name) =>
-    readFile(`${builder.context.paths.outputRoot}/assets/js/${name}`, 'utf8')
+  const readOut = async (builder, name) => readFile(`${builder.context.paths.outputRoot}/assets/js/${name}`, 'utf8')
 
   it('共有ファイルの変更を、参照しているエントリに反映する', async () => {
     const project = await createTempProject({
@@ -80,7 +77,7 @@ describe('dev の差分ビルド', () => {
       'src/assets/js/shared.js': "export const v = 'V1'\n",
       'src/assets/js/main.js': "import { v } from './shared.js'\nconsole.log(v)\n"
     })
-    const builder = await createBuilder(project.root, 'development')
+    const builder = await createTestBuilder(project.root, 'development')
     await builder.runTask('script')
 
     await project.write({ 'src/assets/js/shared.js': "export const v = 'V2'\n" })
@@ -98,7 +95,7 @@ describe('dev の差分ビルド', () => {
       'src/assets/js/main.js': "import { tag } from './_lib/util.js'\nconsole.log(tag)\n",
       'src/assets/js/other.js': "console.log('other')\n"
     })
-    const builder = await createBuilder(project.root, 'development')
+    const builder = await createTestBuilder(project.root, 'development')
     await builder.runTask('script')
     const before = (await stat(`${builder.context.paths.outputRoot}/assets/js/other.js`)).mtimeMs
 

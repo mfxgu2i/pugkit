@@ -1,7 +1,6 @@
 import { describe, expect, it, onTestFinished } from 'vitest'
-import { createBuilder } from '../../index.mjs'
 import { FileWatcher } from '../../core/watcher.mjs'
-import { createTempProject, listFiles, minimalProjectFiles } from '../helpers/project.mjs'
+import { createTempProject, listFiles, minimalProjectFiles, createTestBuilder } from '../helpers/project.mjs'
 import { DEV_CACHE_MARKER } from '../../utils/file.mjs'
 
 /**
@@ -16,15 +15,18 @@ async function startWatcher(files = minimalProjectFiles()) {
   const project = await createTempProject({
     ...files,
     'public/robots.txt': 'User-agent: *\n',
-    'src/assets/icons/arrow.svg': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>\n'
+    'src/assets/icons/arrow.svg':
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg>\n'
   })
-  const builder = await createBuilder(project.root, 'development')
+  const builder = await createTestBuilder(project.root, 'development')
   // start() はキャッシュを消す前にポートの空きを確認する。
   // 0 なら OS 割り当てになるので、並列実行しても既定ポートを取り合わない
   builder.context.config.server.port = 0
   const watcher = new FileWatcher(builder.context, runTaskOf(builder))
 
   await watcher.start()
+  // builder.watch() を通していないので builder.close() は watcher を知らない。
+  // 監視の停止はここで別に登録する（常駐リソースの破棄は createTestBuilder が持つ）
   onTestFinished(() => watcher.stop())
 
   return { project, context: builder.context, watcher, runTask: runTaskOf(builder) }
@@ -40,14 +42,14 @@ describe('dev サーバーの起動', () => {
   it('前回セッションの残骸を配信しない', async () => {
     const project = await createTempProject(minimalProjectFiles())
     // 1回目のセッションが作った古い生成物
-    const builder1 = await createBuilder(project.root, 'development')
+    const builder1 = await createTestBuilder(project.root, 'development')
     builder1.context.config.server.port = 0
     const watcher1 = new FileWatcher(builder1.context, runTaskOf(builder1))
     await watcher1.start()
     await watcher1.stop()
     await project.write({ [`${builder1.context.paths.outputRoot}/stale.css`]: 'body{}' })
 
-    const builder2 = await createBuilder(project.root, 'development')
+    const builder2 = await createTestBuilder(project.root, 'development')
     builder2.context.config.server.port = 0
     const watcher2 = new FileWatcher(builder2.context, runTaskOf(builder2))
     await watcher2.start()
@@ -77,7 +79,6 @@ describe('dev サーバーの起動', () => {
 
     expect((await listFiles(context.paths.outputRoot)).filter(f => f.endsWith('.html'))).toEqual([])
   })
-
 })
 
 describe('dev の差分ビルド', () => {
@@ -113,10 +114,12 @@ describe('dev の差分ビルド', () => {
     const otherBefore = await mtimeOf(context, 'assets/css/other.css')
 
     await new Promise(r => setTimeout(r, 10))
-    await project.write({ 'src/assets/css/style.scss': '.a { color: rebeccapurple; }\n' })
+    // 目印に色名を使わない。Lightning CSS は dev でも色を短い表記に正規化するため、
+    // 書いた文字列がそのまま出力に現れるとは限らない
+    await project.write({ 'src/assets/css/style.scss': '.rebuilt { margin: 7px; }\n' })
     await runTask('sass', { changed: project.path('src/assets/css/style.scss') })
 
-    expect(await read('assets/css/style.css')).toContain('rebeccapurple')
+    expect(await read('assets/css/style.css')).toContain('.rebuilt')
     expect(await mtimeOf(context, 'assets/css/other.css')).toBe(otherBefore)
   })
 
@@ -139,10 +142,12 @@ describe('依存で決める差分ビルド', () => {
    * tokens.scss のように「それ自体エントリで、かつ他からも @use される」
    * 共有ファイルは名前では見分けられず、名前で判断すると反映されない。
    */
+  // 変数の値には色名を使わない。Lightning CSS が短い表記へ正規化するため、
+  // 「書いた文字列が出力にあるか」で伝播を確かめられなくなる
   const sharedEntryProject = () =>
     minimalProjectFiles({
-      'src/assets/css/tokens.scss': '$brand: red;\n.tokens { --x: 1; }\n',
-      'src/assets/css/style.scss': "@use 'tokens';\n.a { color: tokens.$brand; }\n"
+      'src/assets/css/tokens.scss': '$gap: 3px;\n.tokens { --x: 1; }\n',
+      'src/assets/css/style.scss': "@use 'tokens';\n.a { margin: tokens.$gap; }\n"
     })
 
   const readCss = (context, name) =>
@@ -151,10 +156,10 @@ describe('依存で決める差分ビルド', () => {
   it('「_」が付かない共有ファイルの変更を、参照しているエントリに反映する', async () => {
     const { project, context, runTask } = await startWatcher(sharedEntryProject())
 
-    await project.write({ 'src/assets/css/tokens.scss': '$brand: blue;\n.tokens { --x: 2; }\n' })
+    await project.write({ 'src/assets/css/tokens.scss': '$gap: 9px;\n.tokens { --x: 2; }\n' })
     await runTask('sass', { changed: project.path('src/assets/css/tokens.scss') })
 
-    expect(await readCss(context, 'style.css')).toContain('blue')
+    expect(await readCss(context, 'style.css')).toContain('9px')
   })
 
   it('「_」ディレクトリ配下のパーシャルでも反映する', async () => {
@@ -236,7 +241,7 @@ describe('監視の対象', () => {
 
   it('「.」始まりのディレクトリに置いたプロジェクトでも監視できる', async () => {
     const project = await createTempProject(minimalProjectFiles(), { prefix: '.pugkit-hidden-' })
-    const builder = await createBuilder(project.root, 'development')
+    const builder = await createTestBuilder(project.root, 'development')
     builder.context.config.server.port = 0
     const watcher = new FileWatcher(builder.context, runTaskOf(builder))
     await watcher.start()

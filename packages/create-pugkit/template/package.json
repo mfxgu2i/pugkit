@@ -6,9 +6,11 @@
   "scripts": {
     "start": "pugkit dev",
     "build": "pugkit build",
+    "check": "pugkit check",
     "sprite": "pugkit sprite"
   },
   "devDependencies": {
+    "markuplint": "^4.18.3",
     "pugkit": "^2.0.0"
   }
 }

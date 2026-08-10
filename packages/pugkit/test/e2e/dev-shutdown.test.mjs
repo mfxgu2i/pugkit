@@ -14,8 +14,25 @@ import { createTempProject, minimalProjectFiles } from '../helpers/project.mjs'
  */
 const ENTRY = new URL('../../index.mjs', import.meta.url).href
 
-/** process.exit を呼ばずに終わるか。終わらなければ 'timeout' */
-function runUntilExit(source, timeoutMs = 20000) {
+/**
+ * 子プロセスの終了を待つ上限。
+ *
+ * 待ち時間は「終わるまで」ではなく上限なので、長く取っても正常時は速い。
+ * 短くすると、他のテストと同時に走ったときの揺れ（実測 8〜20 秒）を拾って偽の失敗になる。
+ */
+const EXIT_TIMEOUT_MS = 60000
+
+/**
+ * vitest 側の上限。**内部の上限より必ず長くする。**
+ * 逆にすると vitest が先に打ち切り、「終わらなかった」のか「遅かっただけ」なのか
+ * 区別できないまま失敗する（vitest.config.mjs の既定は 20 秒）
+ */
+const TEST_TIMEOUT_MS = EXIT_TIMEOUT_MS + 30000
+
+/**
+ * process.exit を呼ばずに終わるか。終わらなければ 'timeout'。
+ */
+function runUntilExit(source, timeoutMs = EXIT_TIMEOUT_MS) {
   const child = spawn(process.execPath, ['--input-type=module', '-e', source], { stdio: 'ignore' })
 
   return new Promise(resolve => {
@@ -49,10 +66,12 @@ describe('dev の停止', () => {
   })
 
   // 2周するので「1周目の close() が効いていること」も同時に確かめられる
-  it('close() すればプロセスが終わり、同じプロセスで再び起動もできる', async () => {
-    const project = await createTempProject(minimalProjectFiles())
+  it(
+    'close() すればプロセスが終わり、同じプロセスで再び起動もできる',
+    async () => {
+      const project = await createTempProject(minimalProjectFiles())
 
-    const result = await runUntilExit(`
+      const result = await runUntilExit(`
       import { createBuilder } from '${ENTRY}'
       for (const _ of [1, 2]) {
         const builder = await createBuilder(${JSON.stringify(project.root)}, 'development')
@@ -62,6 +81,8 @@ describe('dev の停止', () => {
       }
     `)
 
-    expect(result).toBe(0)
-  })
+      expect(result).toBe(0)
+    },
+    TEST_TIMEOUT_MS
+  )
 })

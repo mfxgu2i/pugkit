@@ -1,11 +1,12 @@
 import { glob } from 'glob'
-import { basename } from 'node:path'
+import { basename, relative } from 'node:path'
 import { compilePugFile } from '../transform/pug.mjs'
 import { formatHtml } from '../transform/html.mjs'
 import { createBuilderVars } from '../transform/builder-vars.mjs'
 import { createImageInfoHelper } from '../transform/image-size.mjs'
 import { generatePage } from '../generate/page.mjs'
 import { logger } from '../utils/logger.mjs'
+import { FILE_CONCURRENCY, runWithConcurrency } from '../utils/concurrency.mjs'
 
 export async function pugTask(context) {
   const { paths } = context
@@ -17,7 +18,7 @@ export async function pugTask(context) {
   }
 
   logger.info('pug', `Building ${filesToBuild.length} file(s)`)
-  await runWithConcurrency(filesToBuild, 8, file => processFile(file, context))
+  await runWithConcurrency(filesToBuild, FILE_CONCURRENCY, file => processFile(file, context))
   logger.success('pug', `Built ${filesToBuild.length} file(s)`)
 }
 
@@ -27,17 +28,6 @@ async function resolveFiles(paths) {
     absolute: true,
     ignore: ['**/_*/**', '**/_*.pug']
   })
-}
-
-
-async function runWithConcurrency(items, concurrency, fn) {
-  let i = 0
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (i < items.length) {
-      await fn(items[i++])
-    }
-  })
-  await Promise.all(workers)
 }
 
 /**
@@ -67,12 +57,19 @@ export async function buildPageHtml(filePath, context) {
       template = result.template
     }
 
-    const builderVars = createBuilderVars(filePath, paths, config)
+    const builderVars = createBuilderVars(filePath, paths, config, {
+      onMissingSiteUrl: () =>
+        context.warnOnce(
+          'config',
+          'missing-site-url',
+          `siteUrl が空のまま Builder.url を参照しています: ${relative(paths.src, filePath)}。OGP や canonical に相対パスが入ります。pugkit.config.mjs の siteUrl か、build の --site-url で指定してください`
+        )
+    })
 
     // dev 時のみ: imageGraph に Pug->画像 の依存を記録して画像変更時の最小再ビルドに使う
     const accessedImages = new Set()
     const onAccess = context.isDevelopment ? imgPath => accessedImages.add(imgPath) : undefined
-    const imageInfo = createImageInfoHelper(filePath, paths, logger, config, { onAccess })
+    const imageInfo = createImageInfoHelper(filePath, context, { onAccess })
 
     const html = template({ Builder: builderVars, imageInfo })
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { build, createBuilder } from '../../index.mjs'
-import { createTempProject, listFiles, minimalProjectFiles } from '../helpers/project.mjs'
+import { build } from '../../index.mjs'
+import { createTempProject, listFiles, minimalProjectFiles, createTestBuilder } from '../helpers/project.mjs'
 
 /**
  * architecture.md の中核:
@@ -53,7 +53,7 @@ describe('build の再現性', () => {
     const expected = await checksum(project.path('dist'), await listFiles(project.path('dist')))
 
     // 同一プロセスで dev のコンテキストを作り、テンプレートキャッシュを汚す
-    const devBuilder = await createBuilder(project.root, 'development')
+    const devBuilder = await createTestBuilder(project.root, 'development')
     const { buildPageHtml } = await import('../../tasks/pug.mjs')
     await buildPageHtml(project.path('src/index.pug'), devBuilder.context)
 
@@ -69,7 +69,7 @@ describe('dev は build の出力先に書き込まない', () => {
     await build(project.root)
     const before = await checksum(project.path('dist'), await listFiles(project.path('dist')))
 
-    const devBuilder = await createBuilder(project.root, 'development')
+    const devBuilder = await createTestBuilder(project.root, 'development')
     await devBuilder.tasks.sass(devBuilder.context)
     await devBuilder.tasks.script(devBuilder.context)
 

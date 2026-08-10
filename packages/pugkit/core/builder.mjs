@@ -1,14 +1,11 @@
 import { BuildContext } from './context.mjs'
 import { logger } from '../utils/logger.mjs'
 import { cleanDir } from '../utils/file.mjs'
+import { assertUniqueOutputs } from './output-conflicts.mjs'
 
 // ビルドの順序。同じ段のタスクは並列に走る。
 // Pug は Sass/Script の出力を参照するため中段に置く
-const BUILD_PHASES = [
-  ['sass', 'script', 'sprite'],
-  ['pug'],
-  ['image', 'svg', 'copy']
-]
+const BUILD_PHASES = [['sass', 'script', 'sprite'], ['pug'], ['image', 'svg', 'copy']]
 
 /**
  * メインビルダー
@@ -46,6 +43,10 @@ export class Builder {
 
     logger.info('build', `Building in ${context.mode} mode`)
 
+    // 出力先が衝突していると、どちらが残るかが決まらない。
+    // 消す前に確かめる（中止するなら、前回の成果物は残したままにする）
+    await assertUniqueOutputs(context)
+
     await this.clean()
 
     for (const phase of BUILD_PHASES) {
@@ -68,19 +69,15 @@ export class Builder {
   /**
    * dev を止めて、抱えている常駐プロセスも終わらせる。
    *
-   * Sass と esbuild の常駐プロセスはモジュール単位で共有されるので、
-   * 停止の指示はプロセス全体の話になる。watcher.stop() に含めると、
-   * 同一プロセスで別の dev が動いている場合にそちらまで巻き込む
+   * 常駐プロセス（Sass / esbuild）は context.resources が持つので、core は
+   * 「どのタスクが何を抱えているか」を知らずに捨てられる。
+   * リソースはセッション単位なので、同一プロセスで動く別のビルダーは巻き込まない
    */
   async close() {
     await this.watcher?.stop()
     this.context.server?.close()
 
-    const [{ disposeDevCompiler }, { disposeDevContext }] = await Promise.all([
-      import('../tasks/sass.mjs'),
-      import('../tasks/script.mjs')
-    ])
-    await Promise.all([disposeDevCompiler(), disposeDevContext()])
+    await this.context.resources.disposeAll()
   }
 
   /**
@@ -110,7 +107,13 @@ export class Builder {
 
     // 出力を消したら、それを前提にしていた状態も一緒に捨てる
     this.context.cache.clear()
-    for (const graph of [this.context.graph, this.context.sassGraph, this.context.scriptGraph, this.context.imageGraph]) {
+    this.context.imageWidths.clear()
+    for (const graph of [
+      this.context.graph,
+      this.context.sassGraph,
+      this.context.scriptGraph,
+      this.context.imageGraph
+    ]) {
       graph.clear()
     }
 

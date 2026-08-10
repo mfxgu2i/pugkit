@@ -13,7 +13,7 @@
   "bugs": "https://github.com/mfxgu2i/pugkit/issues",
   "homepage": "https://github.com/mfxgu2i/pugkit#readme",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "publishConfig": {
     "access": "public"
@@ -42,18 +42,26 @@
     "transform",
     "utils"
   ],
+  "peerDependencies": {
+    "markuplint": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "markuplint": {
+      "optional": true
+    }
+  },
   "dependencies": {
-    "autoprefixer": "^10.4.21",
+    "browserslist": "^4.28.0",
     "cac": "^6.7.14",
     "chokidar": "^4.0.3",
-    "cssnano": "^7.1.1",
     "esbuild": "^0.25.5",
     "glob": "^13.0.6",
+    "htmlparser2": "^12.0.0",
     "idiomorph": "^0.7.4",
     "image-size": "^2.0.2",
     "js-beautify": "^1.15.4",
+    "lightningcss": "^1.33.0",
     "picocolors": "^1.1.1",
-    "postcss": "^8.4.49",
     "pug": "^3.0.3",
     "sass-embedded": "^1.100.0",
     "sharp": "^0.34.2",

@@ -1,9 +1,8 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { buildPageHtml, pugTask } from '../../tasks/pug.mjs'
-import { createBuilder } from '../../index.mjs'
 import { BuildContext } from '../../core/context.mjs'
 import { defaultConfig } from '../../config/defaults.mjs'
-import { createTempProject, listFiles } from '../helpers/project.mjs'
+import { createTempProject, listFiles, createTestBuilder } from '../helpers/project.mjs'
 
 /**
  * ページ1枚のレンダリング。dev の遅延ビルドと production のフルビルドが共用する。
@@ -117,7 +116,7 @@ describe('依存グラフの更新', () => {
       'src/shared.pug': 'p SHARED\n',
       'src/page.pug': 'doctype html\nhtml\n  body\n    include shared.pug\n'
     })
-    const builder = await createBuilder(project.root, 'development')
+    const builder = await createTestBuilder(project.root, 'development')
     const { context } = builder
     const shared = project.path('src/shared.pug')
 

@@ -46,7 +46,9 @@ describe('computeMorphSignature', () => {
   })
 
   it('body への <script> 追加を検出する', () => {
-    expect(computeMorphSignature(page())).not.toBe(computeMorphSignature(page({ body: '<p>hi</p><script>a()</script>' })))
+    expect(computeMorphSignature(page())).not.toBe(
+      computeMorphSignature(page({ body: '<p>hi</p><script>a()</script>' }))
+    )
   })
 
   it('head 内 <script> の変更を検出する', () => {

@@ -2,7 +2,15 @@
 //- Image mixin
 //- ============================================================
 //- imageInfoヘルパーを使用して画像のメタデータ・パスを自動解決します。
-//- ※ src/配下の画像のみ対応。public/配下の画像は非対応。
+//- ※ src/ 配下の画像は build.image.sourceDensity に応じて srcset が自動生成されます。
+//-   等倍のまま変換せずに出したい画像は public/ 配下に置いてください。
+//-
+//- widths を渡すと密度記述子（1x / 2x）ではなく幅記述子（400w）になります。
+//- そのときは sizes も必ず渡してください。省くとブラウザは 100vw、つまり
+//- 画面いっぱいに表示されるものとして候補を選び、重いファイルを取りに行きます。
+//- sizes だけを渡しても効きません。widths とセットで使ってください。
+//- 幅記述子では width / height 属性が原寸になるため、CSS 側で幅を決めてください。
+//- sizes のメディア条件は media のブレークポイントと境界を揃えてください。
 //-
 //- 引数
 //-   path  {string}  img/配下の画像パス
@@ -11,36 +19,42 @@
 //-     media         {string}  SP 用ブレークポイントキー 'sm' | 'md' | 'lg'（デフォルト: 'md'）
 //-     lazy          {boolean} 遅延読み込み（デフォルト: true）
 //-     class         {string}  img / picture 要素のクラス
+//-     widths        {number[]} 生成する幅の一覧。原寸以上は作られません
+//-     sizes         {string}  表示幅の指定。widths とセットで使います
 //-
 //- 使用例
-//-   +Image('hero.jpg', { alt: '', media: 'md', lazy: true, class: '' })
+//-   +Image('logo.png', { alt: 'ロゴ' })
+//-   +Image('hero.jpg', {
+//-     alt: '',
+//-     lazy: false,
+//-     widths: [640, 960, 1280],
+//-     sizes: '(max-width: 767px) 100vw, 1280px'
+//-   })
 
 mixin Image(path, args = {})
   -
-    const info          = imageInfo(`${Builder.dir}assets/img/${path}`)
+    const info          = imageInfo(`${Builder.dir}assets/img/${path}`, { widths: args.widths, sizes: args.sizes })
     const alt           = args.alt || ''
     const media         = BREAK_POINTS[args.media] || BREAK_POINTS.md
     const loading       = args.lazy !== false ? 'lazy' : undefined
     const fetchpriority = args.lazy === false ? 'high' : undefined
 
-    // 2x画像が存在する場合のみsrcsetに含める
-    const imgSrcset = (!info.isSvg && info.retina)
-      ? `${info.src} 1x, ${info.retina.src} 2x`
-      : undefined
-
   picture(class=args.class)
 
     //- アートディレクション画像が存在する場合のみ出力
+    //- sizes は幅記述子のときだけ返るので、そのまま渡してよい
     if info.variant
       source(
         media=media
-        srcset=info.variant.src
+        srcset=info.variant.srcset
+        sizes=info.variant.sizes
         width=info.variant.width
         height=info.variant.height
       )
     img(
       src=info.src
-      srcset=imgSrcset
+      srcset=info.srcset
+      sizes=info.sizes
       alt=alt
       width=info.width
       height=info.height

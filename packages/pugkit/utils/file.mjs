@@ -88,4 +88,3 @@ export async function resetDevCache(dirPath) {
   await mkdir(dirPath, { recursive: true })
   await writeFile(resolve(dirPath, DEV_CACHE_MARKER), String(process.pid))
 }
-

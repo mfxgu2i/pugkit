@@ -20,9 +20,28 @@ export class CacheManager {
     this.pageHtmlCacheLimit = pageHtmlCacheLimit
     this.pageEpochs = new Map() // ファイルパス -> 無効化世代
     this.globalPageEpoch = 0 // 全ページ無効化の世代
+    this.imageSizes = new Map() // 画像ファイル -> 実寸（imageInfo 用）
     this.isDevelopment = mode === 'development'
   }
 
+  /**
+   * 画像の実寸。同じ画像は複数ページから参照されるので読み取り結果を使い回す。
+   *
+   * build でも有効（1回のビルド中の再利用）。テンプレートやページ HTML と違い、
+   * ソースが変わらなければ結果も変わらないため、production で捨てる理由がない
+   */
+  getImageSize(filePath) {
+    return this.imageSizes.get(filePath)
+  }
+
+  setImageSize(filePath, size) {
+    this.imageSizes.set(filePath, size)
+  }
+
+  /** 画像が変わったときに捨てる。どの画像が変わったかによらず全部捨てる */
+  clearImageSizes() {
+    this.imageSizes.clear()
+  }
 
   /**
    * Pugテンプレートのキャッシュ取得
@@ -123,7 +142,6 @@ export class CacheManager {
     this.globalPageEpoch++
   }
 
-
   /**
    * すべてのキャッシュをクリア
    */
@@ -131,6 +149,7 @@ export class CacheManager {
     this.compiledCache.clear()
     this.pageHtmlCache.clear()
     this.pageHtmlBytes = 0
+    this.imageSizes.clear()
     // 世代は後退させない: per-file 世代の最大値を global に繰り上げてからクリアすることで
     // 全ページの合成世代が厳密に増加し、実行中ビルドの古い結果が書き戻されることはない
     const maxFileEpoch = this.pageEpochs.size > 0 ? Math.max(...this.pageEpochs.values()) : 0
