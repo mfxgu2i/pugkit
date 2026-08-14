@@ -45,6 +45,6 @@ pugkit check              # 全項目
 pugkit check references   # 参照の実在だけ
 ```
 
-`markup` は markuplint に渡す。**markuplint が入っていないと検査されずに成功扱いで終わる**ため、使うなら `npm i -D markuplint` で入れる。markuplint が `warning` や `info` に落としたルールも違反として扱われる。落としたいルールは markuplint の設定で切る。
+`markup` は markuplint に渡す。テンプレートには設定ファイルだけが入っていて markuplint 自体は入らないので、使うなら `npm i -D markuplint` で入れる。入っていないときは検査せずに知らせて終わるため、通ったからといって妥当とは限らない。markuplint が `warning` や `info` に落としたルールも違反として扱われる。落としたいルールは markuplint の設定で切る。
 
 異常終了したときの読み方は [errors.md](errors.md) を参照。

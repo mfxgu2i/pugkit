@@ -47,7 +47,17 @@ npm install
 npm run start
 ```
 
-[mise](https://mise.jdx.dev/) を使わない場合は `mise install` を飛ばしてください。Node 22 以上であれば動きます。
+[mise](https://mise.jdx.dev/) を使わない場合は `mise install` を飛ばしてください。Node 22.22.2 以上であれば動きます。
+
+npm 11.19 以降は、依存の install スクリプトのうち `allowScripts` で許可していないものを警告として並べます。npm 12 からは許可していないものを飛ばします。esbuild はこのスクリプトで実行ファイルの整合性を確かめて、必要なら取得し直すので、テンプレートの `package.json` で許可しています。
+
+## HTML の文法チェック
+
+`npm run check` は出力 HTML の参照が実在するかを検査します。HTML として妥当かどうかの検査は [markuplint](https://markuplint.dev/) に任せるので、そこまで見る場合は入れてください。設定ファイル `markuplint.config.mjs` はテンプレートに入っています。
+
+```sh
+npm install --save-dev markuplint
+```
 
 ## Agent Skill
 

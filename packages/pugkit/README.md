@@ -11,7 +11,7 @@
 
 ## How To Use
 
-Node.js 22 以上が必要です。
+Node.js 22.22.2 以上が必要です。
 
 ```sh
 $ npm install --save-dev pugkit
@@ -492,6 +492,12 @@ pugkit check references          # 参照の実在だけ
 
 違反が 1 件でもあれば終了コード `1` を返します。markuplint が `warning` や `info` に落としたルールも同じ扱いです。重さは表示の色で分けますが、終了コードは変えません。落としたいルールは markuplint の設定で切ってください。
 
+`markup` は markuplint に依存します。入っていなければ検査せずに知らせるので、使う場合は入れてください。
+
+```sh
+$ npm install --save-dev markuplint
+```
+
 ### エラー表示
 
 CLI が異常終了したときは、原因のメッセージだけを表示して終了コード `1` を返します。設定ミスや出力先の衝突など、ソースを直せば済むエラーがスタックトレースに埋もれないようにするためです。
@@ -514,19 +520,19 @@ $ npx skills add mfxgu2i/pugkit
 
 ## Tech Stack
 
-| ライブラリ                                                 | 役割                                 |
-| ---------------------------------------------------------- | ------------------------------------ |
-| [Pug](https://pugjs.org/)                                  | HTMLテンプレートエンジン             |
-| [Sass](https://sass-lang.com/)                             | CSSプリプロセッサー                  |
-| [esbuild](https://esbuild.github.io/)                      | TypeScript/JavaScriptバンドラー      |
-| [Lightning CSS](https://lightningcss.dev/)                 | CSS後処理（プレフィックス・圧縮）    |
-| [Sharp](https://sharp.pixelplumbing.com/)                  | 画像最適化                           |
-| [SVGO](https://svgo.dev/)                                  | SVG最適化                            |
-| [js-beautify](https://github.com/beautify-web/js-beautify) | HTML整形                             |
-| [Chokidar](https://github.com/paulmillr/chokidar)          | ファイル監視                         |
-| [sirv](https://github.com/lukeed/sirv)                     | 静的配信（開発サーバー、SSE と併用） |
-| [image-size](https://github.com/image-size/image-size)     | 画像の寸法の読み取り                 |
-| [idiomorph](https://github.com/bigskysoftware/idiomorph)   | ライブリロードの DOM 差分適用        |
-| [htmlparser2](https://github.com/fb55/htmlparser2)         | 出力 HTML からの参照の収集           |
+| ライブラリ                                                           | 役割                                 |
+| -------------------------------------------------------------------- | ------------------------------------ |
+| [Pug](https://pugjs.org/)                                            | HTMLテンプレートエンジン             |
+| [Sass](https://sass-lang.com/)                                       | CSSプリプロセッサー                  |
+| [esbuild](https://esbuild.github.io/)                                | TypeScript/JavaScriptバンドラー      |
+| [Lightning CSS](https://lightningcss.dev/)                           | CSS後処理（プレフィックス・圧縮）    |
+| [Sharp](https://sharp.pixelplumbing.com/)                            | 画像最適化                           |
+| [SVGO](https://svgo.dev/)                                            | SVG最適化                            |
+| [js-beautify](https://github.com/beautify-web/js-beautify)           | HTML整形                             |
+| [Chokidar](https://github.com/paulmillr/chokidar)                    | ファイル監視                         |
+| [sirv](https://github.com/lukeed/sirv)                               | 静的配信（開発サーバー、SSE と併用） |
+| [image-dimensions](https://github.com/sindresorhus/image-dimensions) | 画像の寸法の読み取り                 |
+| [idiomorph](https://github.com/bigskysoftware/idiomorph)             | ライブリロードの DOM 差分適用        |
+| [htmlparser2](https://github.com/fb55/htmlparser2)                   | 出力 HTML からの参照の収集           |
 
-[markuplint](https://markuplint.dev/) は optional peer dependency です。`pugkit check markup` を使う場合はプロジェクトに入れてください。
+[markuplint](https://markuplint.dev/) は optional peer dependency です。`pugkit check markup` を使う場合だけプロジェクトに入れてください。使わないプロジェクトに `@markuplint/*` と HTML 仕様データを持ち込まないよう、pugkit の依存には含めていません。

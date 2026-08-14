@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { readdir, rename, rm } from 'node:fs/promises'
 import { basename, dirname, extname, relative, resolve } from 'node:path'
-import sizeOf from 'image-size'
+import { imageSizeOf } from '../../utils/image-dimensions.mjs'
 import { convertExtension, parseWidthName, supportsWidthVariants } from '../../utils/image-density.mjs'
 import { CONVERTIBLE_EXTENSIONS } from '../../utils/image-formats.mjs'
 import { writeWidthVariant } from '../../tasks/image.mjs'
@@ -107,9 +107,9 @@ async function resolveWidthRequest(urlPath, context, subdir) {
   // SVG と GIF は幅の対象外。密度と同じ集合にそろえる
   if (!supportsWidthVariants(sourcePath)) return null
 
-  // 剪定の判定は参照側と同じ image-size で行う。sharp と食い違うと
+  // 剪定の判定は参照側と同じ寸法の読み取りで行う。sharp と食い違うと
   // 「HTML が指しているのに 404」か「誰も参照しない孤児」が出る
-  const { width, height } = sizeOf(readFileSync(sourcePath))
+  const { width, height } = imageSizeOf(sourcePath)
   if (!width || parsed.width >= width) return null
 
   return { sourcePath, outputPath, width: parsed.width, size: { width, height } }

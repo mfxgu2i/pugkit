@@ -2,14 +2,14 @@
 
 ## create-pugkit でスキャフォールド
 
-Node.js 22 以上が必要。新規 pugkit プロジェクトは公式スキャフォールダーでセットアップする。
+Node.js 22.22.2 以上が必要。新規 pugkit プロジェクトは公式スキャフォールダーでセットアップする。
 
 ```sh
 npm create pugkit@latest           # カレントディレクトリに作成
 npm create pugkit@latest my-site   # ./my-site に作成
 ```
 
-テンプレートには共通レイアウト、Meta / Image mixin、Sass エントリ、`pugkit.config.mjs`、markuplint の設定が含まれる。スキャフォールド後:
+テンプレートには共通レイアウト、Meta / Image mixin、Sass エントリ、`pugkit.config.mjs`、markuplint の設定が含まれる。依存は pugkit だけで、markuplint 自体は入らない（`pugkit check markup` を使うなら `npm i -D markuplint` で足す）。スキャフォールド後:
 
 ```sh
 npm install
