@@ -432,22 +432,25 @@ build: {
 
 ### SVG Optimization
 
-`icons/`以外に配置した SVG ファイルはSVGOで自動最適化されて出力されます。
+`icons/`配下以外に配置した SVG ファイルはSVGOで自動最適化されて出力されます。
 
 ### SVG Sprite
 
-`src/`配下の`icons/`ディレクトリに配置したSVGを1つのスプライトファイルにまとめます。
+`src/`配下の`icons/`ディレクトリに配置したSVGを1つのスプライトファイルにまとめます。サブディレクトリに分けて置いても、同じ1つのスプライトにまとまります。
 
 ```
-src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow
+src/assets/icons/arrow.svg     →  <outDir>/assets/icons.svg#arrow
+src/assets/icons/social/x.svg  →  <outDir>/assets/icons.svg#social/x
 ```
 
 ```html
-<svg><use href="assets/icons.svg#arrow"></use></svg>
+<svg><use href="assets/icons.svg#arrow"></use></svg> <svg><use href="assets/icons.svg#social/x"></use></svg>
 ```
 
-- SVG ファイル名がそのまま `<symbol id>` になります
+- `icons/`からの相対パスから拡張子を除いたものが `<symbol id>` になります。直下に置いたSVGはファイル名がそのまま id です
 - `fill` / `stroke` は自動的に `currentColor` に変換されます
+- `<symbol>` は id の昇順で並びます。同じ入力なら環境が変わっても同じ内容が出ます
+- `icons.svg` はスプライトの出力に使う名前です。`src/` と `public/` に同じ名前のファイルがあると `build` を中止します
 
 ### Public Directory
 
@@ -456,6 +459,8 @@ src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow
 - `src/` と `public/` で同じ出力先になるファイルがあった場合は、どちらが残るかが決まらないため `build` を中止します。どちらか一方を削除してください。`dev` は起動時に検査してログに出しますが、起動は続けます。
 
 - `@half` と `@<数字>w` で終わる画像も同じ扱いで中止します。これはビルドが縮小版と幅違いに使う名前で、幅違いの出力先は事前に列挙できないため、名前を予約することで衝突を防いでいます。
+
+- `icons.svg` も同じ扱いで中止します。スプライトの出力に使う名前で、`icons/` ディレクトリを後から足したときに黙って取り合わないよう、ディレクトリの有無に関わらず予約しています。
 
 ### Dev / Build の出力の違い
 
