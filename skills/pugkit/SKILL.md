@@ -18,6 +18,7 @@ description: pugkitの公式規約。pugkit.config.mjs があるプロジェク�
 - `.pug` / `.scss` / `.ts` / `.js` は `_` の付かないファイルがすべてビルドの起点になる。他から読み込まれるだけの部品には `_` を付ける。
 - `outDir` は pugkit が占有し、build のたびに中身を削除してから書き出す。出力に含めたいファイル（`.htaccess` など）は `public/` に置く。
 - `@half` と `@<数字>w` で終わる画像名はビルドの予約名。`src/` にも `public/` にも置かない。
+- `icons.svg` もスプライトの出力に使う予約名。`src/` にも `public/` にも置かない。
 - `src/` と `public/` で出力先が同じになるファイルを作らない。
 
 ## Builder オブジェクト
@@ -67,7 +68,7 @@ Sass のエントリは `_` なし、パーシャルは `_` 付きで `@use` で
 
 ## コマンド
 
-Node.js 22 以上が必要。
+Node.js 22.22.2 以上が必要。
 
 | コマンド        | 用途                                            |
 | --------------- | ----------------------------------------------- |
@@ -80,43 +81,43 @@ Node.js 22 以上が必要。
 
 ## Do / Don't
 
-| Don't（禁止）                                                     | Do（正しい書き方）                                              |
-| ----------------------------------------------------------------- | --------------------------------------------------------------- |
-| Builder を使わないパスの直書き（例: `a(href='/about/')`）         | Builder オブジェクトで組み立てる（例: ``a(href=`${Builder.dir}about/`)``） |
-| サイト URL の直書き（例: `content='https://example.com/about/'`） | `content=Builder.url.href`                                      |
+| Don't（禁止）                                                      | Do（正しい書き方）                                                                                                         |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Builder を使わないパスの直書き（例: `a(href='/about/')`）          | Builder オブジェクトで組み立てる（例: ``a(href=`${Builder.dir}about/`)``）                                                 |
+| サイト URL の直書き（例: `content='https://example.com/about/'`）  | `content=Builder.url.href`                                                                                                 |
 | `src/` 画像の生パス直書き（例: `img(src='/assets/img/hero.jpg')`） | ``imageInfo(`${Builder.dir}assets/img/hero.jpg`)`` + `src=info.src srcset=info.srcset width=info.width height=info.height` |
-| 同じ画像を解像度ごとに用意する                                    | 最大解像度を1枚置く。縮小版はビルドが生成する                   |
-| `imageInfo()` にルート相対パスを渡す                              | ``imageInfo(`${Builder.dir}assets/img/hero.jpg`)`` の相対パスで渡す |
-| CSS の `url()` で `src/` の画像を元の拡張子のまま参照            | 変換後の拡張子で書くか、背景画像を `public/` に置く             |
-| `src/` に `.webp` / `.avif` を置く（出力されず警告になる）        | 元形式（JPEG / PNG）を置いて `build.image.format` で変換する    |
-| React/Vue などランタイムフレームワークの導入                      | Pug mixin + 素の TS/JS                                          |
-| `outDir`（`dist/`）内のファイルを直接編集                         | `src/` 配下のソースを編集して再ビルド                           |
-| `.htaccess` などを `outDir` に直接置く（build のたびに消える）    | `public/` に置く                                                |
-| `_` なしでパーシャルを作成                                        | `src/_includes/_partial.pug`                                    |
-| インライン SVG アイコン・`img` タグでのアイコン参照               | スプライト: ``use(href=`${Builder.dir}assets/icons.svg#name`)`` |
+| 同じ画像を解像度ごとに用意する                                     | 最大解像度を1枚置く。縮小版はビルドが生成する                                                                              |
+| `imageInfo()` にルート相対パスを渡す                               | ``imageInfo(`${Builder.dir}assets/img/hero.jpg`)`` の相対パスで渡す                                                        |
+| CSS の `url()` で `src/` の画像を元の拡張子のまま参照              | 変換後の拡張子で書くか、背景画像を `public/` に置く                                                                        |
+| `src/` に `.webp` / `.avif` を置く（出力されず警告になる）         | 元形式（JPEG / PNG）を置いて `build.image.format` で変換する                                                               |
+| React/Vue などランタイムフレームワークの導入                       | Pug mixin + 素の TS/JS                                                                                                     |
+| `outDir`（`dist/`）内のファイルを直接編集                          | `src/` 配下のソースを編集して再ビルド                                                                                      |
+| `.htaccess` などを `outDir` に直接置く（build のたびに消える）     | `public/` に置く                                                                                                           |
+| `_` なしでパーシャルを作成                                         | `src/_includes/_partial.pug`                                                                                               |
+| インライン SVG アイコン・`img` タグでのアイコン参照                | スプライト: ``use(href=`${Builder.dir}assets/icons.svg#name`)``                                                            |
 
 ## リファレンス
 
 以下のユースケースを実装する前に、対応するリファレンスを読むこと。各リファレンスは自己完結した実装パターンになっている。
 
-| ユースケース                                 | リファレンス                                                       |
-| -------------------------------------------- | ------------------------------------------------------------------ |
-| 新規 pugkit プロジェクトのセットアップ       | [references/project-setup.md](references/project-setup.md)   |
-| 画像を出す（戻り値・密度記述子 / 幅記述子）  | [references/images.md](references/images.md)                 |
-| アートディレクション（`picture` / `source`） | [references/art-direction.md](references/art-direction.md)   |
-| `public/` 配下の画像・アセット               | [references/public-images.md](references/public-images.md)   |
-| 設定オプションの変更                         | [references/config.md](references/config.md)                 |
-| SVG アイコン（スプライト）                   | [references/svg-icons.md](references/svg-icons.md)           |
+| ユースケース                                 | リファレンス                                                   |
+| -------------------------------------------- | -------------------------------------------------------------- |
+| 新規 pugkit プロジェクトのセットアップ       | [references/project-setup.md](references/project-setup.md)     |
+| 画像を出す（戻り値・密度記述子 / 幅記述子）  | [references/images.md](references/images.md)                   |
+| アートディレクション（`picture` / `source`） | [references/art-direction.md](references/art-direction.md)     |
+| `public/` 配下の画像・アセット               | [references/public-images.md](references/public-images.md)     |
+| 設定オプションの変更                         | [references/config.md](references/config.md)                   |
+| SVG アイコン（スプライト）                   | [references/svg-icons.md](references/svg-icons.md)             |
 | Sass / TypeScript                            | [references/sass-typescript.md](references/sass-typescript.md) |
-| コマンド・オプション・出力の検査             | [references/commands.md](references/commands.md)             |
-| エラー・警告の読み方                         | [references/errors.md](references/errors.md)                 |
+| コマンド・オプション・出力の検査             | [references/commands.md](references/commands.md)               |
+| エラー・警告の読み方                         | [references/errors.md](references/errors.md)                   |
 
 ## レシピ
 
 プロジェクトに同等のものがあればそれを使う。無い場合に参考にする実装例。
 
-| レシピ           | ファイル                                             |
-| ---------------- | ---------------------------------------------------- |
-| 画像 mixin       | [recipes/image-mixin.md](recipes/image-mixin.md)     |
-| アイコン mixin   | [recipes/icon-mixin.md](recipes/icon-mixin.md)       |
-| head メタ mixin  | [recipes/meta-mixin.md](recipes/meta-mixin.md)       |
+| レシピ          | ファイル                                         |
+| --------------- | ------------------------------------------------ |
+| 画像 mixin      | [recipes/image-mixin.md](recipes/image-mixin.md) |
+| アイコン mixin  | [recipes/icon-mixin.md](recipes/icon-mixin.md)   |
+| head メタ mixin | [recipes/meta-mixin.md](recipes/meta-mixin.md)   |
