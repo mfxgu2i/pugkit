@@ -1,9 +1,10 @@
 # SVG アイコン（スプライト）
 
-`src/` 配下の `icons/` ディレクトリに置いた SVG は、ディレクトリ単位で1つのスプライトにまとめられる。
+`src/` 配下の `icons/` ディレクトリに置いた SVG は、ディレクトリ単位で1つのスプライトにまとめられる。サブディレクトリに分けて置いても、同じ1つのスプライトに入る。
 
 ```
-src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow
+src/assets/icons/arrow.svg     →  <outDir>/assets/icons.svg#arrow
+src/assets/icons/social/x.svg  →  <outDir>/assets/icons.svg#social/x
 ```
 
 ```pug
@@ -11,8 +12,10 @@ svg(width='24' height='24' aria-hidden='true')
   use(href=`${Builder.dir}assets/icons.svg#arrow`)
 ```
 
-- ファイル名がそのまま `symbol` の id になる。
+- `icons/` からの相対パスから拡張子を除いたものが `symbol` の id になる。直下に置いた SVG はファイル名がそのまま id になる。
 - `fill` / `stroke` は `currentColor` に変換されるため、色は CSS の `color` で指定する。
+- `symbol` は id の昇順に並ぶ。同じ入力なら環境が変わっても同じ内容が出るので、`dist` を版管理に入れていても差分が揺れない。
+- `icons.svg` はスプライトの出力に使う名前なので、`src/` と `public/` に置かない。同名のファイルがあると build が中止する。
 - インライン SVG の直書きや `img` タグでのアイコン参照より、スプライトを優先する。
 - スプライトは build と開発サーバーの両方で自動生成され、`icons/` の変更時も自動で再生成される。手動で生成するときは `pugkit sprite`。
 
