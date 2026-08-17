@@ -448,7 +448,8 @@ src/assets/icons/social/x.svg  →  <outDir>/assets/icons.svg#social/x
 ```
 
 - `icons/`からの相対パスから拡張子を除いたものが `<symbol id>` になります。直下に置いたSVGはファイル名がそのまま id です
-- `fill` / `stroke` は自動的に `currentColor` に変換されます
+- スプライトのアイコンは単色として扱います。`fill` / `stroke` は `currentColor` に変換されるので、色はCSSから当ててください。元のSVGが持っていた色は残りません
+- グラデーションのように複数の色を使うSVGは、色が保てないのでスプライトに向きません。`icons/`の外に置いて、個別のSVGとして出力してください
 - `<symbol>` は id の昇順で並びます。同じ入力なら環境が変わっても同じ内容が出ます
 - `icons.svg` はスプライトの出力に使う名前です。`src/` と `public/` に同じ名前のファイルがあると `build` を中止します
 
