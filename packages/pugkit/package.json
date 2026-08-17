@@ -1,6 +1,6 @@
 {
   "name": "pugkit",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A build tool for Pug-based projects",
   "type": "module",
   "license": "MIT",
