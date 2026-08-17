@@ -1,10 +1,10 @@
 import chokidar from 'chokidar'
 import { rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { relative, basename, dirname, sep } from 'node:path'
+import { relative, basename, resolve, sep } from 'node:path'
 import { logger } from '../utils/logger.mjs'
 import { isConvertibleImage, isMeasurableImage } from '../utils/image-formats.mjs'
-import { spriteOutputPath } from '../tasks/svg-sprite.mjs'
+import { iconDirOf, spriteOutputPath } from '../tasks/svg-sprite.mjs'
 import { svgOutputPath } from '../tasks/svg.mjs'
 import { existingWidthOutputs, imageOutputPaths } from '../tasks/image.mjs'
 import { sassOutputPath } from '../tasks/sass.mjs'
@@ -298,14 +298,17 @@ export class FileWatcher {
   /**
    * icons ディレクトリごと消えたときのスプライトの後始末。
    * ディレクトリが残っていればタスクの再生成が処理するが、消えていると
-   * glob から見えないので、消えたアイコンのパスから出力先を辿る
+   * glob から見えないので、消えたアイコンのパスから出力先を辿る。
+   *
+   * 見るのは icons ディレクトリの有無であって、消えたファイルの親ではない。
+   * サブディレクトリごと消えただけなら icons は残っていて、再生成で追随できる
    */
   async removeOrphanedSprite(iconFile) {
     const { paths } = this.context
-    const iconDir = dirname(iconFile)
-    if (existsSync(iconDir)) return
+    const iconDir = iconDirOf(relative(paths.src, iconFile))
+    if (!iconDir || existsSync(resolve(paths.src, iconDir))) return
 
-    await rm(spriteOutputPath(relative(paths.src, iconDir), paths), { force: true })
+    await rm(spriteOutputPath(iconDir, paths), { force: true })
   }
 
   async onSvgUnlink(filePath) {
