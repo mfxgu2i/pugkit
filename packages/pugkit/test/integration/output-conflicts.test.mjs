@@ -91,6 +91,25 @@ describe('assertUniqueOutputs', () => {
 
       await expect(assertUniqueOutputs(context)).rejects.toThrow(/icons\.svg/)
     })
+
+    // src 直下の icons/ は dist/icons.svg に出る。出力先の導出が生成側とずれると
+    // 衝突を取りこぼす
+    it('src 直下の icons ディレクトリでも出力先が衝突したら中止する', async () => {
+      await mkdir(project.path('src/icons'), { recursive: true })
+      await writeFile(project.path('src/icons/arrow.svg'), svg)
+      await writeFile(project.path('public/icons.svg'), svg)
+
+      await expect(assertUniqueOutputs(context)).rejects.toThrow(/icons\.svg/)
+    })
+
+    it('サブディレクトリのアイコンだけでもスプライトの出力先を見る', async () => {
+      await mkdir(project.path('src/assets/icons/social'), { recursive: true })
+      await writeFile(project.path('src/assets/icons/social/x.svg'), svg)
+      await mkdir(project.path('public/assets'), { recursive: true })
+      await writeFile(project.path('public/assets/icons.svg'), svg)
+
+      await expect(assertUniqueOutputs(context)).rejects.toThrow(/icons\.svg/)
+    })
   })
 
   it('衝突の相手が両方分かるメッセージを出す', async () => {
@@ -144,6 +163,44 @@ describe('予約された名前', () => {
     await writeFile(project.path('public/report@400w.pdf'), 'x')
 
     await expect(assertUniqueOutputs(context)).resolves.toBeUndefined()
+  })
+
+  /**
+   * icons.svg はスプライトの出力名。icons ディレクトリが後から増えると衝突するので、
+   * ディレクトリの有無に関わらず置かせない
+   */
+  describe('icons.svg', () => {
+    it('src に置いたら中止する', async () => {
+      await mkdir(project.path('src/assets'), { recursive: true })
+      await writeFile(project.path('src/assets/icons.svg'), svg)
+
+      await expect(assertUniqueOutputs(context)).rejects.toThrow(/別の名前にしてください/)
+    })
+
+    it('public に置いたら中止する', async () => {
+      await writeFile(project.path('public/icons.svg'), svg)
+
+      await expect(assertUniqueOutputs(context)).rejects.toThrow(/public\/icons\.svg/)
+    })
+
+    it('icons ディレクトリが無くても中止する', async () => {
+      await writeFile(project.path('src/icons.svg'), svg)
+
+      await expect(assertUniqueOutputs(context)).rejects.toThrow(/src\/icons\.svg/)
+    })
+
+    it('icons ディレクトリの中の icons.svg は対象外（スプライトの材料であって出力ではない）', async () => {
+      await mkdir(project.path('src/assets/icons'), { recursive: true })
+      await writeFile(project.path('src/assets/icons/icons.svg'), svg)
+
+      await expect(assertUniqueOutputs(context)).resolves.toBeUndefined()
+    })
+
+    it('名前が違えば中止しない', async () => {
+      await writeFile(project.path('src/my-icons.svg'), svg)
+
+      await expect(assertUniqueOutputs(context)).resolves.toBeUndefined()
+    })
   })
 
   it('衝突と同じ例外にまとめる（片方を直してまた止まらないように）', async () => {

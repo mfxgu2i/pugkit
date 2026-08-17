@@ -1,6 +1,6 @@
 {
   "name": "pugkit",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "A build tool for Pug-based projects",
   "type": "module",
   "license": "MIT",
@@ -13,7 +13,7 @@
   "bugs": "https://github.com/mfxgu2i/pugkit/issues",
   "homepage": "https://github.com/mfxgu2i/pugkit#readme",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.22.2"
   },
   "publishConfig": {
     "access": "public"
@@ -58,13 +58,13 @@
     "glob": "^13.0.6",
     "htmlparser2": "^12.0.0",
     "idiomorph": "^0.7.4",
-    "image-size": "^2.0.2",
+    "image-dimensions": "^2.5.1",
     "js-beautify": "^2.0.3",
     "lightningcss": "^1.33.0",
     "picocolors": "^1.1.1",
     "pug": "^3.0.3",
     "sass-embedded": "^1.100.0",
-    "sharp": "^0.34.2",
+    "sharp": "^0.35.0",
     "sirv": "^3.0.2",
     "svgo": "^4.0.0"
   }

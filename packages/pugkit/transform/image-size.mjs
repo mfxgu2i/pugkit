@@ -1,6 +1,6 @@
-import { readFileSync, existsSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { resolve, relative, dirname, extname } from 'node:path'
-import sizeOf from 'image-size'
+import { imageSizeOf } from '../utils/image-dimensions.mjs'
 import {
   densityOutputs,
   hasScaledVariant,
@@ -25,8 +25,7 @@ function readImageSize(filePath, cache) {
   const cached = cache.getImageSize(filePath)
   if (cached) return cached
 
-  const { width, height, type } = sizeOf(readFileSync(filePath))
-  const size = { width, height, type }
+  const size = imageSizeOf(filePath)
   cache.setImageSize(filePath, size)
   return size
 }
@@ -106,7 +105,7 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
    * 幅記述子の srcset を組み立てる。
    *
    * 剪定はここでしかしない。生成側が sharp の metadata で独立に剪定すると、
-   * image-size と 1px でも食い違ったときに「srcset に載っているのにファイルが無い」か
+   * 参照側の寸法と 1px でも食い違ったときに「srcset に載っているのにファイルが無い」か
    * 「誰も参照しない孤児」が出る（docs/adr/0011）。
    *
    * src と width/height は原寸。表示幅は sizes が決めるので、ここに表示サイズを焼くと

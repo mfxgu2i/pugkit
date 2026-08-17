@@ -2,7 +2,7 @@ import { glob } from 'glob'
 import { relative } from 'node:path'
 import { imageOutputPaths } from '../tasks/image.mjs'
 import { svgOutputPath, SVG_GLOB, SVG_IGNORE } from '../tasks/svg.mjs'
-import { spriteOutputPath } from '../tasks/svg-sprite.mjs'
+import { iconDirOf, isReservedSpriteName, spriteOutputPath, SPRITE_FILENAME } from '../tasks/svg-sprite.mjs'
 import { publicOutputPath } from '../tasks/copy.mjs'
 import { IMAGE_GLOB, IMAGE_IGNORE } from '../tasks/image.mjs'
 import { isReservedImageName } from '../utils/image-density.mjs'
@@ -32,7 +32,8 @@ async function collectOwners(context) {
   const { paths, config } = context
   const owners = new Map()
   const conflicts = []
-  const reserved = []
+  const reservedImages = []
+  const reservedSprites = []
 
   // 突き合わせの鍵は「出力ルートからの相対パス」。絶対パスの導出は各タスクの
   // *OutputPath に任せ、ここはそれを共通の形に直すだけにする
@@ -50,17 +51,19 @@ async function collectOwners(context) {
   ])
 
   for (const rel of images) {
-    if (isReservedImageName(rel)) reserved.push(`src/${normalize(rel)}`)
+    if (isReservedImageName(rel)) reservedImages.push(`src/${normalize(rel)}`)
     for (const out of imageOutputPaths(rel, config, paths)) claim(out.absolute, `src/${normalize(rel)}`)
   }
 
-  for (const rel of svgs) claim(svgOutputPath(rel, paths), `src/${normalize(rel)}`)
+  for (const rel of svgs) {
+    if (isReservedSpriteName(rel)) reservedSprites.push(`src/${normalize(rel)}`)
+    claim(svgOutputPath(rel, paths), `src/${normalize(rel)}`)
+  }
 
-  // スプライトは icons ディレクトリごとに 1 ファイルを生成する
+  // スプライトは icons ディレクトリごとに 1 ファイルを生成する。
+  // どのアイコンがどのスプライトに属するかは生成側の iconDirOf に合わせる
   const iconDirs = new Set(
-    (await glob('**/icons/**/*.svg', { cwd: paths.src, ignore: ['**/_*/**'] })).map(rel =>
-      normalize(rel).replace(/\/icons\/.*$/, '/icons')
-    )
+    (await glob('**/icons/**/*.svg', { cwd: paths.src, ignore: ['**/_*/**'] })).map(iconDirOf).filter(Boolean)
   )
   for (const dir of iconDirs) claim(spriteOutputPath(dir, paths), `sprite(${dir})`)
 
@@ -68,11 +71,12 @@ async function collectOwners(context) {
   // public は画像以外も含むので、予約名の検査は画像として出力されうる拡張子に絞る。
   // 絞らないと report@400w.pdf のような無関係なファイルまで中止させる
   for (const rel of publicFiles) {
-    if (OUTPUT_EXT_RE.test(rel) && isReservedImageName(rel)) reserved.push(`public/${normalize(rel)}`)
+    if (OUTPUT_EXT_RE.test(rel) && isReservedImageName(rel)) reservedImages.push(`public/${normalize(rel)}`)
+    if (isReservedSpriteName(rel)) reservedSprites.push(`public/${normalize(rel)}`)
     claim(publicOutputPath(rel, paths), `public/${normalize(rel)}`)
   }
 
-  return { conflicts, reserved }
+  return { conflicts, reservedImages, reservedSprites }
 }
 
 /**
@@ -83,8 +87,8 @@ async function collectOwners(context) {
  * また止まることになり「全件まとめて報告する」という約束が崩れる
  */
 export async function assertUniqueOutputs(context) {
-  const { conflicts, reserved } = await collectOwners(context)
-  if (conflicts.length === 0 && reserved.length === 0) return
+  const { conflicts, reservedImages, reservedSprites } = await collectOwners(context)
+  if (conflicts.length === 0 && reservedImages.length === 0 && reservedSprites.length === 0) return
 
   const sections = []
 
@@ -93,11 +97,19 @@ export async function assertUniqueOutputs(context) {
     sections.push(`出力先が衝突しています。どちらが残るかが決まらないため中止しました。\n${lines.join('\n')}`)
   }
 
-  if (reserved.length > 0) {
-    const lines = reserved.sort().map(name => `  ${name}`)
+  if (reservedImages.length > 0) {
+    const lines = reservedImages.sort().map(name => `  ${name}`)
     sections.push(
       `ビルドが作る名前と同じ形の画像があります。別の名前にしてください。\n` +
         `「@half」と「@<数字>w」は縮小版と幅違いの出力に使います。\n${lines.join('\n')}`
+    )
+  }
+
+  if (reservedSprites.length > 0) {
+    const lines = reservedSprites.sort().map(name => `  ${name}`)
+    sections.push(
+      `ビルドが作る名前と同じファイルがあります。別の名前にしてください。\n` +
+        `「${SPRITE_FILENAME}」は icons ディレクトリから作るスプライトの出力に使います。\n${lines.join('\n')}`
     )
   }
 

@@ -84,8 +84,8 @@ npx pugkit --port 5810      # dev も起動して配信を確認
 空のディレクトリではなくテンプレートを使う。以下の確認項目は画像・`.browserslistrc`・
 `imageInfo()` を前提にしているので、`npm init -y` だけのディレクトリでは 1 つも実行できない。
 
-テンプレートは markuplint を同梱しているので、`check` は markup まで走る。
-未導入のときに飛ばす挙動を見たい場合は、`node_modules/markuplint` を退避して確かめる。
+テンプレートは markuplint を同梱していないので、`check` は markup を飛ばして知らせる。
+markup まで走らせて確かめたい場合は `npm i -D markuplint` を足す。
 
 ### build で確認すること
 

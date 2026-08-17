@@ -11,7 +11,7 @@
 
 ## How To Use
 
-Node.js 22 以上が必要です。
+Node.js 22.22.2 以上が必要です。
 
 ```sh
 $ npm install --save-dev pugkit
@@ -432,22 +432,26 @@ build: {
 
 ### SVG Optimization
 
-`icons/`以外に配置した SVG ファイルはSVGOで自動最適化されて出力されます。
+`icons/`配下以外に配置した SVG ファイルはSVGOで自動最適化されて出力されます。
 
 ### SVG Sprite
 
-`src/`配下の`icons/`ディレクトリに配置したSVGを1つのスプライトファイルにまとめます。
+`src/`配下の`icons/`ディレクトリに配置したSVGを1つのスプライトファイルにまとめます。サブディレクトリに分けて置いても、同じ1つのスプライトにまとまります。
 
 ```
-src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow
+src/assets/icons/arrow.svg     →  <outDir>/assets/icons.svg#arrow
+src/assets/icons/social/x.svg  →  <outDir>/assets/icons.svg#social/x
 ```
 
 ```html
-<svg><use href="assets/icons.svg#arrow"></use></svg>
+<svg><use href="assets/icons.svg#arrow"></use></svg> <svg><use href="assets/icons.svg#social/x"></use></svg>
 ```
 
-- SVG ファイル名がそのまま `<symbol id>` になります
-- `fill` / `stroke` は自動的に `currentColor` に変換されます
+- `icons/`からの相対パスから拡張子を除いたものが `<symbol id>` になります。直下に置いたSVGはファイル名がそのまま id です
+- スプライトのアイコンは単色として扱います。`fill` / `stroke` は `currentColor` に変換されるので、色はCSSから当ててください。元のSVGが持っていた色は残りません
+- グラデーションのように複数の色を使うSVGは、色が保てないのでスプライトに向きません。`icons/`の外に置いて、個別のSVGとして出力してください
+- `<symbol>` は id の昇順で並びます。同じ入力なら環境が変わっても同じ内容が出ます
+- `icons.svg` はスプライトの出力に使う名前です。`src/` と `public/` に同じ名前のファイルがあると `build` を中止します
 
 ### Public Directory
 
@@ -456,6 +460,8 @@ src/assets/icons/arrow.svg  →  <outDir>/assets/icons.svg#arrow
 - `src/` と `public/` で同じ出力先になるファイルがあった場合は、どちらが残るかが決まらないため `build` を中止します。どちらか一方を削除してください。`dev` は起動時に検査してログに出しますが、起動は続けます。
 
 - `@half` と `@<数字>w` で終わる画像も同じ扱いで中止します。これはビルドが縮小版と幅違いに使う名前で、幅違いの出力先は事前に列挙できないため、名前を予約することで衝突を防いでいます。
+
+- `icons.svg` も同じ扱いで中止します。スプライトの出力に使う名前で、`icons/` ディレクトリを後から足したときに黙って取り合わないよう、ディレクトリの有無に関わらず予約しています。
 
 ### Dev / Build の出力の違い
 
@@ -492,6 +498,12 @@ pugkit check references          # 参照の実在だけ
 
 違反が 1 件でもあれば終了コード `1` を返します。markuplint が `warning` や `info` に落としたルールも同じ扱いです。重さは表示の色で分けますが、終了コードは変えません。落としたいルールは markuplint の設定で切ってください。
 
+`markup` は markuplint に依存します。入っていなければ検査せずに知らせるので、使う場合は入れてください。
+
+```sh
+$ npm install --save-dev markuplint
+```
+
 ### エラー表示
 
 CLI が異常終了したときは、原因のメッセージだけを表示して終了コード `1` を返します。設定ミスや出力先の衝突など、ソースを直せば済むエラーがスタックトレースに埋もれないようにするためです。
@@ -514,19 +526,19 @@ $ npx skills add mfxgu2i/pugkit
 
 ## Tech Stack
 
-| ライブラリ                                                 | 役割                                 |
-| ---------------------------------------------------------- | ------------------------------------ |
-| [Pug](https://pugjs.org/)                                  | HTMLテンプレートエンジン             |
-| [Sass](https://sass-lang.com/)                             | CSSプリプロセッサー                  |
-| [esbuild](https://esbuild.github.io/)                      | TypeScript/JavaScriptバンドラー      |
-| [Lightning CSS](https://lightningcss.dev/)                 | CSS後処理（プレフィックス・圧縮）    |
-| [Sharp](https://sharp.pixelplumbing.com/)                  | 画像最適化                           |
-| [SVGO](https://svgo.dev/)                                  | SVG最適化                            |
-| [js-beautify](https://github.com/beautify-web/js-beautify) | HTML整形                             |
-| [Chokidar](https://github.com/paulmillr/chokidar)          | ファイル監視                         |
-| [sirv](https://github.com/lukeed/sirv)                     | 静的配信（開発サーバー、SSE と併用） |
-| [image-size](https://github.com/image-size/image-size)     | 画像の寸法の読み取り                 |
-| [idiomorph](https://github.com/bigskysoftware/idiomorph)   | ライブリロードの DOM 差分適用        |
-| [htmlparser2](https://github.com/fb55/htmlparser2)         | 出力 HTML からの参照の収集           |
+| ライブラリ                                                           | 役割                                 |
+| -------------------------------------------------------------------- | ------------------------------------ |
+| [Pug](https://pugjs.org/)                                            | HTMLテンプレートエンジン             |
+| [Sass](https://sass-lang.com/)                                       | CSSプリプロセッサー                  |
+| [esbuild](https://esbuild.github.io/)                                | TypeScript/JavaScriptバンドラー      |
+| [Lightning CSS](https://lightningcss.dev/)                           | CSS後処理（プレフィックス・圧縮）    |
+| [Sharp](https://sharp.pixelplumbing.com/)                            | 画像最適化                           |
+| [SVGO](https://svgo.dev/)                                            | SVG最適化                            |
+| [js-beautify](https://github.com/beautify-web/js-beautify)           | HTML整形                             |
+| [Chokidar](https://github.com/paulmillr/chokidar)                    | ファイル監視                         |
+| [sirv](https://github.com/lukeed/sirv)                               | 静的配信（開発サーバー、SSE と併用） |
+| [image-dimensions](https://github.com/sindresorhus/image-dimensions) | 画像の寸法の読み取り                 |
+| [idiomorph](https://github.com/bigskysoftware/idiomorph)             | ライブリロードの DOM 差分適用        |
+| [htmlparser2](https://github.com/fb55/htmlparser2)                   | 出力 HTML からの参照の収集           |
 
-[markuplint](https://markuplint.dev/) は optional peer dependency です。`pugkit check markup` を使う場合はプロジェクトに入れてください。
+[markuplint](https://markuplint.dev/) は optional peer dependency です。`pugkit check markup` を使う場合だけプロジェクトに入れてください。使わないプロジェクトに `@markuplint/*` と HTML 仕様データを持ち込まないよう、pugkit の依存には含めていません。

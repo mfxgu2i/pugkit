@@ -51,6 +51,120 @@ describe('symbol の id', () => {
   )
 })
 
+describe('サブディレクトリ', () => {
+  /**
+   * icons 配下は svg タスクが丸ごと対象外にしているので、スプライトが直下しか
+   * 拾わないと、サブディレクトリに置いた SVG はどちらにも入らないまま無警告で消える
+   */
+  it('サブディレクトリの SVG もスプライトに入る', async () => {
+    await project.write({
+      'src/assets/icons/arrow.svg': icon(),
+      'src/assets/icons/social/x.svg': icon()
+    })
+
+    await spriteTask(createContext())
+
+    const sprite = await project.read('dist/assets/icons.svg')
+    expect(sprite).toContain('id="arrow"')
+    expect(sprite).toContain('id="social/x"')
+  })
+
+  it('id は icons ディレクトリからの相対パスになる（同名でも衝突しない）', async () => {
+    await project.write({
+      'src/assets/icons/social/x.svg': icon(),
+      'src/assets/icons/brand/x.svg': icon()
+    })
+
+    await spriteTask(createContext())
+
+    const sprite = await project.read('dist/assets/icons.svg')
+    expect(sprite).toContain('id="social/x"')
+    expect(sprite).toContain('id="brand/x"')
+  })
+
+  it('サブディレクトリを分けてもスプライトは1つのまま', async () => {
+    await project.write({
+      'src/assets/icons/arrow.svg': icon(),
+      'src/assets/icons/social/x.svg': icon()
+    })
+
+    await spriteTask(createContext())
+
+    expect(await listFiles(project.path('dist'))).toEqual(['assets/icons.svg'])
+  })
+
+  // 別のスプライトにすると同じアイコンが2つのスプライトに入って出力が二重になる
+  it('icons の中の icons は外側のスプライトに入る', async () => {
+    await project.write({ 'src/assets/icons/icons/x.svg': icon() })
+
+    await spriteTask(createContext())
+
+    expect(await listFiles(project.path('dist'))).toEqual(['assets/icons.svg'])
+    expect(await project.read('dist/assets/icons.svg')).toContain('id="icons/x"')
+  })
+
+  it('「_」始まりのサブディレクトリは対象外', async () => {
+    await project.write({
+      'src/assets/icons/arrow.svg': icon(),
+      'src/assets/icons/_draft/wip.svg': icon()
+    })
+
+    await spriteTask(createContext())
+
+    const sprite = await project.read('dist/assets/icons.svg')
+    expect(sprite).toContain('id="arrow"')
+    expect(sprite).not.toContain('id="_draft/wip"')
+  })
+})
+
+describe('symbol の並び順', () => {
+  /**
+   * glob は readdir の順をそのまま返すので、並べ替えないと順序がファイルシステム
+   * 任せになる。中身が同じでも環境が変わると差分が出て、原因が追いにくい
+   */
+  const idsOf = sprite => [...sprite.matchAll(/id="([^"]+)"/g)].map(m => m[1])
+
+  it('id の昇順で並べる', async () => {
+    await project.write({
+      'src/assets/icons/user.svg': icon(),
+      'src/assets/icons/arrow.svg': icon(),
+      'src/assets/icons/menu.svg': icon()
+    })
+
+    await spriteTask(createContext())
+
+    expect(idsOf(await project.read('dist/assets/icons.svg'))).toEqual(['arrow', 'menu', 'user'])
+  })
+
+  it('サブディレクトリを含めても並び順が決まる', async () => {
+    await project.write({
+      'src/assets/icons/user.svg': icon(),
+      'src/assets/icons/social/x.svg': icon(),
+      'src/assets/icons/brand/logo.svg': icon()
+    })
+
+    await spriteTask(createContext())
+
+    expect(idsOf(await project.read('dist/assets/icons.svg'))).toEqual(['brand/logo', 'social/x', 'user'])
+  })
+
+  it('アイコンを足して消すと元のバイト列に戻る', async () => {
+    await project.write({
+      'src/assets/icons/arrow.svg': icon(),
+      'src/assets/icons/user.svg': icon()
+    })
+    await spriteTask(createContext())
+    const before = await project.read('dist/assets/icons.svg')
+
+    await project.write({ 'src/assets/icons/menu.svg': icon() })
+    await spriteTask(createContext())
+    await rm(project.path('src/assets/icons/menu.svg'))
+    await spriteTask(createContext())
+
+    expect(await project.read('dist/assets/icons.svg')).toBe(before)
+  })
+})
+
 describe('fill / stroke の変換', () => {
   it('色指定を currentColor にする', async () => {
     await project.write({ 'src/assets/icons/a.svg': icon('fill="#ff0000" stroke="#00ff00"') })
@@ -179,6 +293,23 @@ describe('アイコンが無くなったとき', () => {
     await watcher.onSpriteChange(project.path('src/assets/icons/star.svg'), 'unlink')
 
     expect(await listFiles(project.path('dist'))).not.toContain('assets/icons.svg')
+  })
+
+  // 消えたファイルの親を見ると、サブディレクトリが消えただけでスプライトを消してしまう
+  it('サブディレクトリだけ消えても、残ったアイコンのスプライトは消さない', async () => {
+    await project.write({
+      'src/assets/icons/arrow.svg': icon(),
+      'src/assets/icons/social/x.svg': icon()
+    })
+    const context = createContext()
+    await spriteTask(context)
+
+    const watcher = new FileWatcher(context, () => spriteTask(context))
+    await rm(project.path('src/assets/icons/social'), { recursive: true })
+    await watcher.onSpriteChange(project.path('src/assets/icons/social/x.svg'), 'unlink')
+
+    expect(await listFiles(project.path('dist'))).toContain('assets/icons.svg')
+    expect(await project.read('dist/assets/icons.svg')).not.toContain('id="social/x"')
   })
 
   it('他のディレクトリのスプライトには触れない', async () => {

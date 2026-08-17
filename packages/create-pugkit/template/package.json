@@ -10,7 +10,9 @@
     "sprite": "pugkit sprite"
   },
   "devDependencies": {
-    "markuplint": "^4.18.3",
     "pugkit": "^2.0.0"
+  },
+  "allowScripts": {
+    "esbuild": true
   }
 }

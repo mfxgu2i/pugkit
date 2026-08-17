@@ -23,6 +23,24 @@ async function createJpeg(filePath, width = 200, height = 150) {
     .toFile(filePath)
 }
 
+/**
+ * 決定的な擬似ノイズを敷いた JPEG。
+ *
+ * 単色の画像では AVIF の quality を変えても出力がほぼ最小サイズのまま並び、
+ * 上書きが効いているかをサイズで見分けられない。ノイズなら quality 差がそのまま出る
+ */
+async function createNoisyJpeg(filePath, width = 200, height = 150) {
+  const pixels = Buffer.alloc(width * height * 3)
+  let seed = 1
+
+  for (let i = 0; i < pixels.length; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff
+    pixels[i] = seed % 256
+  }
+
+  await sharp(pixels, { raw: { width, height, channels: 3 } }).jpeg({ quality: 100 }).toFile(filePath)
+}
+
 function makeContext({
   overrides = {},
   format = 'webp',
@@ -88,6 +106,9 @@ describe('build.image.overrides', () => {
   })
 
   it('avif モードでも overrides が効く', async () => {
+    await createNoisyJpeg(resolve(srcDir, 'normal.jpg'))
+    await createNoisyJpeg(resolve(srcDir, 'mv.jpg'))
+
     await imageTask(
       makeContext({
         overrides: { 'mv.jpg': { quality: 100 } },
