@@ -1,5 +1,5 @@
 header.c-header
-  #{Builder.url.pathname === '/' ? 'h1' : 'div'}.c-header__logo
+  #{Builder.url.pathname === `${Builder.subdir}/` ? 'h1' : 'div'}.c-header__logo
     a.c-header__logo-link(href=Builder.dir)= metaData.siteTitle
   nav.c-header__nav
     ul.c-header__nav-list
