@@ -32,7 +32,7 @@
 
 ## 実装
 
-`assets/js/_smoothScroll.js` に置き、`main.js` から `initialize()` を呼ぶ。根になる要素を持たないので `data-module` には載せない。理由は [modules.md](modules.md) にある。ここでは短さのためにJSDocを省いている。実ファイルには他のモジュールと揃えて付ける。
+`assets/js/_smoothScroll.js` に置き、`main.js` から `initialize()` を呼ぶ。ルートになる要素を持たないので `data-module` には載せない。理由は [modules.md](modules.md) にある。ここでは短さのためにJSDocを省いている。実ファイルには他のモジュールと揃えて付ける。
 
 ```js
 // scrollend が無いブラウザで、スクロールが止まったとみなすまでの間隔

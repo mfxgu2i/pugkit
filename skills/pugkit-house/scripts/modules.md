@@ -6,7 +6,7 @@
 
 `assets/js/_名前.js` に置き、`initialize()` を公開する。5つを超えたら `assets/js/modules/` にまとめる。移しても `_` は外さない。`_` で始まらないファイルはビルドが独立したエントリーとして扱うので、モジュール単体が1本のバンドルになる。TypeScriptの案件も同じで、拡張子だけが変わる。
 
-`initialize()` にはJSDocを付ける。受け取る根の要素と、根の中で当てにしているクラス名を書く。
+`initialize()` にはJSDocを付ける。受け取るルート要素と、ルートの中で当てにしているクラス名を書く。
 
 1ファイルが受け持つのは1つの機能になる。分けるかどうかは、片方だけを別のページに置きたくなるかで決める。ヘッダーの開閉と追従は同じ要素に付くが、追従だけを使うページがあるなら別のファイルにする。
 
@@ -27,7 +27,7 @@ import * as tabs from './_tabs'
 import * as pageTop from './_pageTop'
 import * as smoothScroll from './_smoothScroll'
 
-// 根を持つ機能。マークアップが data-module で名乗る
+// ルートを持つ機能。マークアップが data-module で名乗る
 // プロトタイプを持たせない。registry['constructor'] が関数を返すのを防ぐ
 const registry = Object.assign(Object.create(null), {
   carousel,
@@ -35,7 +35,7 @@ const registry = Object.assign(Object.create(null), {
   'page-top': pageTop
 })
 
-// 根を持たない機能。名前で引けるようにしておく
+// ルートを持たない機能。名前で引けるようにしておく
 const globals = { smoothScroll }
 
 const run = (name, module, element) => {
@@ -94,7 +94,7 @@ if (document.readyState === 'loading') {
 
 ## 設定値は別の属性で渡す
 
-機能名に値を混ぜない。`data-module="carousel-3"` と書くと、対応表のキーが値の数だけ増える。値は別の `data-*` に持たせ、モジュールが根から読む。
+機能名に値を混ぜない。`data-module="carousel-3"` と書くと、対応表のキーが値の数だけ増える。値は別の `data-*` に持たせ、モジュールがルートから読む。
 
 ```pug
 .c-carousel(data-module='carousel' data-slides-per-view='3')
@@ -110,9 +110,9 @@ if (document.readyState === 'loading') {
 
 どのマークアップに寄りかかっているかがマークアップ側に出るので、`document` を無条件に検索するのとは別扱いにする。
 
-## モジュールは自分の根を受け取る
+## モジュールは自分のルートを受け取る
 
-`initialize(root)` は根の要素を引数で受け取る。
+`initialize(root)` はルート要素を引数で受け取る。
 
 ```js
 export const initialize = root => {
@@ -123,34 +123,34 @@ export const initialize = root => {
 }
 ```
 
-根は、そのモジュールが触る要素をすべて含む一番内側の要素に取る。`root.closest()` で上に登りたくなったら、登った先が本当の根になる。`data-module` をそちらに移す。
+ルートは、そのモジュールが触る要素をすべて含む一番内側の要素に取る。`root.closest()` で上に登りたくなったら、登った先が本当のルートになる。`data-module` をそちらに移す。
 
-根の中を探すときも `document` を使わない。id で結ばれた要素も `root.querySelector('#' + id)` で引ける。
+ルートの中を探すときも `document` を使わない。id で結ばれた要素も `root.querySelector('#' + id)` で引ける。
 
-`aria-controls` や `commandfor` のように、id で根の外の相手を指す属性は例外にする。この2つはHTMLが結び先を宣言しているので、`document.getElementById()` で引いてよい。引いてよいのは属性値が指す1つだけで、そこから `document` を再検索しない。
+`aria-controls` や `commandfor` のように、id でルートの外の相手を指す属性は例外にする。この2つはHTMLが結び先を宣言しているので、`document.getElementById()` で引いてよい。引いてよいのは属性値が指す1つだけで、そこから `document` を再検索しない。
 
 状態は `initialize()` の中に置く。ファイルの先頭に `let` で要素やタイマーやオブザーバーを持たせない。要素ごとに `initialize()` が走るので、モジュールレベルに置くと後から初期化した要素で上書きされる。同じ機能を2箇所に置いたとき、最後の1つしか動かなくなる。
 
-根を受け取ることで3つ変わる。
+ルートを受け取ることで3つ変わる。
 
 | 変わること | 理由 |
 |---|---|
-| 根の有無を確かめる定型が消える | 見つかった要素だけを渡すので、無いときは呼ばれない |
+| ルートの有無を確かめる定型が消える | 見つかった要素だけを渡すので、無いときは呼ばれない |
 | 同じ機能を1ページに複数置ける | 要素ごとに `initialize()` が走る |
 | どのマークアップに依存しているかが引数に出る | `document.querySelector` を追わなくても読める |
 
-根の中の要素を確かめる分岐は残る。消えるのは根そのものを探す部分だけになる。
+ルートの中の要素を確かめる分岐は残る。消えるのはルートそのものを探す部分だけになる。
 
 ## ページ全体に効くものは名乗らせない
 
-根になる要素を持たない機能がある。アンカーリンクのスクロールのように `document` に委譲を張るもの、ヘッダーとメインビジュアルのように離れた2要素を突き合わせるもの、ページ内の全画像を差し替えるものが該当する。実装は [smooth-scroll.md](smooth-scroll.md) にある。
+ルートになる要素を持たない機能がある。アンカーリンクのスクロールのように `document` に委譲を張るもの、ヘッダーとメインビジュアルのように離れた2要素を突き合わせるもの、ページ内の全画像を差し替えるものが該当する。実装は [smooth-scroll.md](smooth-scroll.md) にある。
 
-| 根になる要素 | 呼び方 |
+| ルートになる要素 | 呼び方 |
 |---|---|
 | ある | `data-module` で名乗らせる |
 | 無い | `globals` に載せる |
 
-根を持つかどうかで分ける。委譲を張るかどうかでは分けない。無理に根をこじつけて `body` に `data-module` を付けない。
+ルートを持つかどうかで分ける。委譲を張るかどうかでは分けない。無理にルートをこじつけて `body` に `data-module` を付けない。
 
 ## 失敗を1つの要素に閉じる
 
