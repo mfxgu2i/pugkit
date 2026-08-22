@@ -48,3 +48,7 @@ esbuild でバンドルする。TypeScript はトランスパイルのみで型�
   "build": "tsc --noEmit && pugkit build"
 }
 ```
+
+## 本番ビルドで消えるもの
+
+`pugkit build` は `console` と `debugger` を削除する。`pugkit dev` では残る。デバッグ出力が開発中は出て本番で消えるため、`console.log` に依存した動作確認は build 後の出力で取り直す。
