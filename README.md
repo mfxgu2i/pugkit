@@ -44,17 +44,34 @@ npm create pugkit@latest
 
 ## AI Agent Skill
 
-pugkitの規約をAIコーディングエージェントに伝える公式の[Agent Skill](https://github.com/agentskills/agentskills)を提供しています。`Builder`によるパスの組み立て、`imageInfo()`を通した画像の出力、`_`によるビルド対象の除外といった、知らないと壊れる仕様をエージェントに守らせます。実体は [`skills/pugkit`](./skills/pugkit) にあります。
+AIコーディングエージェント向けの公式の[Agent Skill](https://github.com/agentskills/agentskills)を2つ提供しています。
 
-`npm create pugkit@latest` で作成したプロジェクトには、次の場所へ同梱されます。
+| スキル                                | 中身                                                                                                                   | 同梱   |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------ |
+| [pugkit](./skills/pugkit)             | ビルド仕様とAPI。`Builder`によるパスの組み立て、`imageInfo()`を通した画像の出力、`_`によるビルド対象の除外を守らせます | する   |
+| [pugkit-house](./skills/pugkit-house) | pugkitの上に載る設計の型。FLOCSSの層とトークン、レイアウトのblock構成、mixinのレシピを持ちます                         | しない |
+
+`npm create pugkit@latest` で作成したプロジェクトには、pugkitが次の場所へ同梱されます。
 
 | ディレクトリ             | 対応するエージェント |
 | ------------------------ | -------------------- |
 | `.claude/skills/pugkit/` | Claude Code          |
 | `.github/skills/pugkit/` | GitHub Copilot       |
 
-既存のプロジェクトに追加する場合は、Agent Skills対応のエージェンティックコーディングツールから次のコマンドで導入します。
+既存のプロジェクトに追加する場合は、Agent Skills対応のエージェンティックコーディングツールから次のコマンドで導入します。どちらを入れるかは対話で選べます。
 
 ```bash
 npx skills add mfxgu2i/pugkit
+```
+
+### pugkit-house
+
+pugkitの上に、繰り返し使う設計と実装の型を足すスキルです。SCSSをFLOCSSの層に分け、値をトークンで持ち、`+Wrapper`でセクションを積み上げる前提で書かれています。
+
+最新のpugkitを前提にします。古い版のプロジェクトでは、`Builder` と `imageInfo()` を使う記述が実際の挙動と合いません。
+
+スキャフォールドしたプロジェクトには同梱しません。テンプレートはこの型に沿っていないため、入れると存在しない層とmixinを前提にした指示になります。この型で組むときだけ足してください。
+
+```bash
+npx skills add mfxgu2i/pugkit --skill pugkit-house
 ```

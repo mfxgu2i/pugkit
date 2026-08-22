@@ -534,6 +534,12 @@ pugkitの規約をAIコーディングエージェントに伝える公式の[Ag
 $ npx skills add mfxgu2i/pugkit
 ```
 
+FLOCSSの層とトークン、`+Wrapper`によるセクションの積み上げまで型を揃える場合は、上に載せる `pugkit-house` を別途足せます。同梱はしません。詳細は[リポジトリのREADME](https://github.com/mfxgu2i/pugkit#pugkit-house)を参照してください。
+
+```sh
+$ npx skills add mfxgu2i/pugkit --skill pugkit-house
+```
+
 ## Tech Stack
 
 | ライブラリ                                                           | 役割                                 |
