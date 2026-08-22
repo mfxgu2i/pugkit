@@ -45,7 +45,7 @@ beforeEach(async () => {
   const project = await createTempProject({ 'images/.keep': '', 'index.pug': 'p x' })
   testDataDir = project.root
   imagesDir = project.path('images')
-  // 「/」始まりの参照は paths.src からの絶対解決になる
+  // 「/」始まりの参照はサイトルート起点の URL。subdir 無しでは src 直下と一致する
   mockPugFile = project.path('index.pug')
   paths = { src: testDataDir, public: project.path('public') }
   cache = new CacheManager('development')
@@ -136,6 +136,80 @@ describe('createImageInfoHelper', () => {
       expect(result).toMatchObject({ width: 240, height: 80 })
       // 候補が 1 つなので srcset は書かない
       expect(result.srcset).toBeUndefined()
+    })
+  })
+
+  /**
+   * ルート相対パスはサイトルート起点の URL として解く。
+   * subdir 付きの案件では出力も URL も subdir 配下に入るので、src 直下として解くと
+   * 実ファイルは見つかるのに本番で 404 になる URL を書くことになる（docs/adr/0015）。
+   * リンクの `${Builder.subdir}/about/` と同じ書き方でそろえる
+   */
+  describe('subdir 付きのルート相対パス', () => {
+    const subdirConfig = { ...config('webp', 2), subdir: 'sub' }
+
+    it('subdir を前置きしたパスを解決し、src にも subdir が残る', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, subdirConfig)
+      const result = imageInfo('/sub/images/hero.jpg')
+
+      expect(result).toMatchObject({ width: 400, height: 300, format: 'jpg' })
+      expect(result.src).toBe('/sub/images/hero@half.webp')
+      expect(result.srcset).toBe('/sub/images/hero@half.webp 1x, /sub/images/hero.webp 2x')
+    })
+
+    it('subdir の表記ゆれを吸収する', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, { ...config('webp', 2), subdir: '/sub/' })
+      expect(imageInfo('/sub/images/hero.jpg').width).toBe(400)
+    })
+
+    it('subdir が無いルート相対パスは解決しない', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, subdirConfig)
+      const result = imageInfo('/images/hero.jpg')
+
+      // 出力に存在しない URL なので、実ファイルがあっても寸法を返さない
+      expect(result.src).toBe('/images/hero.jpg')
+      expect(result.width).toBeUndefined()
+    })
+
+    it('subdir と同じ綴りで始まるだけのパスは解決しない', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, subdirConfig)
+      expect(imageInfo('/subsite/images/hero.jpg').width).toBeUndefined()
+    })
+
+    it('src/ 側に subdir と同名のディレクトリがあっても取り違えない', async () => {
+      await mkdir(resolve(testDataDir, 'sub/images'), { recursive: true })
+      await createJpeg(resolve(testDataDir, 'sub/images/hero.jpg'), 200, 100)
+
+      const imageInfo = createImageInfoHelper(mockPugFile, subdirConfig)
+
+      // /sub/... は URL の前置きなので src/images/hero.jpg を指す
+      expect(imageInfo('/sub/images/hero.jpg')).toMatchObject({ width: 400, height: 300 })
+      // src/sub/images/hero.jpg の URL は /sub/sub/images/hero.jpg
+      expect(imageInfo('/sub/sub/images/hero.jpg')).toMatchObject({ width: 100, height: 50 })
+    })
+
+    it('アートディレクション画像も subdir 込みで返す', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, subdirConfig)
+      const { variant } = imageInfo('/sub/images/responsive.jpg')
+
+      expect(variant.src).toBe('/sub/images/responsive_sp@half.webp')
+    })
+
+    it('public 配下も同じ URL 空間で探す', async () => {
+      await mkdir(resolve(paths.public, 'images'), { recursive: true })
+      await createJpeg(resolve(paths.public, 'images/logo.jpg'), 240, 80)
+
+      const imageInfo = createImageInfoHelper(mockPugFile, subdirConfig)
+      const result = imageInfo('/sub/images/logo.jpg')
+
+      // public は変換も縮小もされないので拡張子はそのまま
+      expect(result.src).toBe('/sub/images/logo.jpg')
+      expect(result).toMatchObject({ width: 240, height: 80 })
+    })
+
+    it('相対パスは subdir の影響を受けない', () => {
+      const imageInfo = createImageInfoHelper(mockPugFile, subdirConfig)
+      expect(imageInfo('./images/hero.jpg').src).toBe('./images/hero@half.webp')
     })
   })
 

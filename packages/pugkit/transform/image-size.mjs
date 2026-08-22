@@ -13,6 +13,7 @@ import {
   widthOutputs
 } from '../utils/image-density.mjs'
 import { logger as defaultLogger } from '../utils/logger.mjs'
+import { stripSubdir, subdirPrefix } from '../utils/subdir.mjs'
 
 /**
  * 画像の実寸を読む。同じ画像は複数ページから参照されるので、
@@ -41,21 +42,40 @@ function encodeSrcsetUrl(url) {
 
 /**
  * Pug から参照された画像パスを実ファイルへ解決する。
- * 「/」始まりは src からの絶対参照、それ以外はページからの相対参照。
+ * 「/」始まりはサイトルート起点の URL、それ以外はページからの相対参照。
  * src に無ければ public も見る（public に置いた画像も HTML から参照されるため）。
+ *
+ * ルート相対を src 起点ではなく URL として解くのは、渡されたパスがそのまま
+ * HTML の src になるため。subdir 付きの案件では出力も URL も subdir 配下に入るので、
+ * src 起点で解くと本番で 404 になる URL を書くことになる（docs/adr/0015）。
+ * リンクの `${Builder.subdir}/about/` と同じ書き方で揃う。
  *
  * public 由来かどうかを返すのは、public は copy されるだけで変換も縮小もされないため。
  * 見分けずに変換後の拡張子を返すと、存在しないファイルを src に書いて 404 になる
+ *
+ * subdir の付け忘れは missingSubdir で返す。実物はあるので、
+ * 「見つからない」とだけ伝えると原因に辿り着けない
  */
-function createImageResolver(filePath, paths) {
+function createImageResolver(filePath, paths, subdir) {
   const pageDir = dirname(filePath)
 
-  return src => {
-    const resolved = src.startsWith('/') ? resolve(paths.src, src.slice(1)) : resolve(pageDir, src)
+  const findFile = resolved => {
     if (existsSync(resolved)) return { path: resolved, fromPublic: false }
 
     const inPublic = resolve(paths.public, relative(paths.src, resolved))
     return existsSync(inPublic) ? { path: inPublic, fromPublic: true } : null
+  }
+
+  /** URL パスと src 配下の並びは 1 対 1。subdir を外したあとの形で突き合わせる */
+  const fromSrcRoot = urlPath => findFile(resolve(paths.src, `.${urlPath}`))
+
+  return src => {
+    if (!src.startsWith('/')) return { found: findFile(resolve(pageDir, src)) }
+
+    const urlPath = stripSubdir(src, subdir)
+    if (urlPath !== null) return { found: fromSrcRoot(urlPath) }
+
+    return { found: null, missingSubdir: fromSrcRoot(src) !== null }
   }
 }
 
@@ -79,7 +99,7 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
   const format = config?.build?.image?.format
   const sourceDensity = sourceDensityOf(config)
   const artDirectionSuffix = config?.build?.image?.artDirectionSuffix ?? '_sp'
-  const findImageFile = createImageResolver(filePath, paths)
+  const findImageFile = createImageResolver(filePath, paths, subdirPrefix(config?.subdir))
 
   /**
    * 幅モードに入れる参照か。
@@ -206,10 +226,19 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
     }
 
     try {
-      const found = findImageFile(src)
+      const { found, missingSubdir } = findImageFile(src)
 
       if (!found) {
-        logger?.warn('pug', `Image not found "${src}" in ${relative(paths.src, filePath)}`)
+        const where = `"${src}" in ${relative(paths.src, filePath)}`
+
+        // 実物はあるのに解決できないのは、ルート相対に subdir が付いていないときだけ。
+        // 「見つからない」で終えると、置いてある画像を探し回ることになる
+        logger?.warn(
+          'pug',
+          missingSubdir
+            ? `Image not found ${where}。ルート相対パスはサイトルート起点で解決します。\`\${Builder.subdir}\` を前置きしてください`
+            : `Image not found ${where}`
+        )
         return fallback
       }
 
@@ -224,7 +253,7 @@ export function createImageInfoHelper(filePath, context, { onAccess, logger = de
         if (isSvg) return null
 
         const variantSrc = `${base}${artDirectionSuffix}${ext}`
-        const variantFound = findImageFile(variantSrc)
+        const { found: variantFound } = findImageFile(variantSrc)
         if (!variantFound) return null
 
         onAccess?.(variantFound.path)
