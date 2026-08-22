@@ -198,7 +198,7 @@ meta(property='og:url', content=Builder.url.href)
 | `Builder.subdir`       | サブディレクトリのパス             | `/subdirectory`                           |
 | `Builder.url.origin`   | サイトのオリジン                   | `https://example.com`                     |
 | `Builder.url.base`     | サイトのベースURL                  | `https://example.com/subdirectory`        |
-| `Builder.url.pathname` | 現在のページのパス                 | `/about/`                                 |
+| `Builder.url.pathname` | 現在のページのパス（`subdir` を含む） | `/subdirectory/about/`                 |
 | `Builder.url.href`     | 完全なURL                          | `https://example.com/subdirectory/about/` |
 
 `origin` / `base` / `href` は `siteUrl` から組み立てます。`siteUrl` が空のままこれらを参照すると、`/about/` のような相対パスが返ります。OGP や canonical に入れても例外にならないため、参照されたときに知らせます。
@@ -216,6 +216,16 @@ meta(property='og:url', content=Builder.url.href)
 ```pug
 - const info = imageInfo('/assets/img/hero.jpg')
 img(src=info.src srcset=info.srcset width=info.width height=info.height alt='')
+```
+
+渡すパスは、ページからの相対パスか「/」始まりのルート相対パスのどちらかです。ルート相対はサイトルート起点の URL として解決します。`subdir` を設定している場合は出力も URL も `subdir` 配下に入るため、`Builder.subdir` を前置きしてください。前置きの無い `/assets/...` は本番に存在しない URL なので解決せず、警告が出ます。
+
+```pug
+//- 相対パス
+- const info = imageInfo(`${Builder.dir}assets/img/hero.jpg`)
+
+//- ルート相対パス。subdir が空なら Builder.subdir も空文字になります
+- const info = imageInfo(`${Builder.subdir}/assets/img/hero.jpg`)
 ```
 
 第2引数で幅を指定できます。指定しなければ `build.image.sourceDensity` に応じた密度記述子になります。
