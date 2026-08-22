@@ -1,6 +1,6 @@
 ---
 name: pugkit-house
-description: pugkit で作る静的サイトの設計と実装の型。CSS設計(FLOCSSの層・トークン・ブレークポイント)、コンポーネント設計(寸法の責務・BEMの入れ子)、状態(aria/dataの属性・:has()での分岐)、プロパティの書き方(論理プロパティ・トランジション)、レイアウト設計(pugの継承・block構成と派生レイアウト)、画像・アイコン・head メタ・セクション・パンくず・ホバーのmixin実装を持つ。SCSSを書く、Pugのマークアップを書く、レイアウトやコンポーネントやmixinを作るときに使う。pugkit skill の上に載る層で、Builder や imageInfo のAPIそのものはそちらが持つ。次の3つには使用しないこと。pugkit.config.mjs が無いプロジェクトのHTML/CSS作業。pugkit のコマンド・設定・ビルドの挙動(pugkit skill が持つ)。ダイアログ・スクロール・フォーム・パフォーマンスなど一般的なWeb実装のパターン。
+description: pugkit で作る静的サイトの設計と実装の型。CSS設計(FLOCSSの層・トークン・ブレークポイント)、コンポーネント設計(寸法の責務・BEMの入れ子)、状態(aria/dataの属性・:has()での分岐)、プロパティの書き方(論理プロパティ・トランジション)、レイアウト設計(pugの継承・block構成と派生レイアウト)、画像・アイコン・head メタ・セクション・パンくず・ホバーのmixin実装、JSのモジュール分割とスムーススクロールの実装を持つ。SCSSを書く、Pugのマークアップを書く、レイアウトやコンポーネントやmixinを作る、JSを機能ごとに分ける、アンカーリンクのスクロールを実装するときに使う。pugkit skill の上に載る層で、Builder や imageInfo のAPIそのものはそちらが持つ。次の3つには使用しないこと。pugkit.config.mjs が無いプロジェクトのHTML/CSS作業。pugkit のコマンド・設定・ビルドの挙動(pugkit skill が持つ)。ダイアログ・フォーム・パフォーマンスなど一般的なWeb実装のパターン。
 ---
 
 # pugkit-house
@@ -38,6 +38,15 @@ description: pugkit で作る静的サイトの設計と実装の型。CSS設計
 | SVGアイコンを出力する | [mixins/icon.md](mixins/icon.md) |
 | head のメタ情報を出力する | [mixins/meta.md](mixins/meta.md) |
 | パンくずリストと構造化データを出す | [mixins/breadcrumb.md](mixins/breadcrumb.md) |
+
+## スクリプト
+
+ファイルの分け方と、写して使う実装。写して使う実装は mixin と同じく、ゼロから作るときの型になる。まず既存の実装を見て、あるものを使う。分け方のほうは既存の実装を測る規則なので、合っていなければ既存側を直す。
+
+| やること | 読むファイル |
+|---|---|
+| ファイルを分ける、main.js に組み込む、機能をマークアップに結びつける、遅延読み込みやバンドル分割を検討する | [scripts/modules.md](scripts/modules.md) |
+| アンカーリンクでスクロールさせる、ページ先頭へ戻す | [scripts/smooth-scroll.md](scripts/smooth-scroll.md) |
 
 ## 扱わない範囲
 
