@@ -46,17 +46,23 @@ npm create pugkit@latest
 
 AIコーディングエージェント向けの公式の[Agent Skill](https://github.com/agentskills/agentskills)を2つ提供しています。
 
-| スキル                                | 中身                                                                                                                   | 同梱   |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------ |
-| [pugkit](./skills/pugkit)             | ビルド仕様とAPI。`Builder`によるパスの組み立て、`imageInfo()`を通した画像の出力、`_`によるビルド対象の除外を守らせます | する   |
-| [pugkit-house](./skills/pugkit-house) | pugkitの上に載る設計の型。FLOCSSの層とトークン、レイアウトのblock構成、mixinのレシピを持ちます                         | しない |
+| スキル                                | 中身                                                                                                                   | 既定 |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---- |
+| [pugkit](./skills/pugkit)             | ビルド仕様とAPI。`Builder`によるパスの組み立て、`imageInfo()`を通した画像の出力、`_`によるビルド対象の除外を守らせます | 入る |
+| [pugkit-house](./skills/pugkit-house) | pugkitの上に載る設計の型。FLOCSSの層とトークン、レイアウトのblock構成、mixinの実装を持ちます                           | 選ぶ |
 
-`npm create pugkit@latest` で作成したプロジェクトには、pugkitが次の場所へ同梱されます。
+`npm create pugkit@latest` は、どのスキルを入れるかを対話で聞きます。既定では pugkit だけが選ばれています。選んだスキルは次の場所へ置かれます。
 
-| ディレクトリ             | 対応するエージェント |
-| ------------------------ | -------------------- |
-| `.claude/skills/pugkit/` | Claude Code          |
-| `.github/skills/pugkit/` | GitHub Copilot       |
+| ディレクトリ      | 対応するエージェント |
+| ----------------- | -------------------- |
+| `.claude/skills/` | Claude Code          |
+| `.github/skills/` | GitHub Copilot       |
+
+対話できない環境では聞かずに既定で進みます。あらかじめ決めておく場合は名前を渡します。
+
+```bash
+npm create pugkit@latest my-site -- --skills pugkit,pugkit-house
+```
 
 既存のプロジェクトに追加する場合は、Agent Skills対応のエージェンティックコーディングツールから次のコマンドで導入します。どちらを入れるかは対話で選べます。
 
@@ -66,11 +72,8 @@ npx skills add mfxgu2i/pugkit
 
 ### pugkit-house
 
-pugkitの上に、繰り返し使う設計と実装の型を足すスキルです。SCSSをFLOCSSの層に分け、値をトークンで持ち、`+Wrapper`でセクションを積み上げる前提で書かれています。
-
-最新のpugkitを前提にします。古い版のプロジェクトでは、`Builder` と `imageInfo()` を使う記述が実際の挙動と合いません。
-
-スキャフォールドしたプロジェクトには同梱しません。テンプレートはこの型に沿っていないため、入れると存在しない層とmixinを前提にした指示になります。この型で組むときだけ足してください。
+pugkitの上に、繰り返し使う設計と実装の型を足すスキルです。
+SCSS設計、PUGのコンポーネント・レイアウト設計が追加されていています。
 
 ```bash
 npx skills add mfxgu2i/pugkit --skill pugkit-house
