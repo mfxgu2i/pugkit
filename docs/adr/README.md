@@ -47,17 +47,19 @@ pugkit がある形になっている理由を、決定ごとに 1 ファイル�
 
 ## 一覧
 
-| 番号                                            | 題名                                            |
-| ----------------------------------------------- | ----------------------------------------------- |
-| [0001](0001-build-is-always-full.md)            | build は毎回フルビルドする                      |
-| [0002](0002-dev-html-lazy-build.md)             | dev の HTML はリクエスト時に作る                |
-| [0003](0003-outdir-is-build-only.md)            | outDir は build 専用にする                      |
-| [0004](0004-cachedir-is-not-persisted.md)       | dev のキャッシュは永続化しない                  |
-| [0005](0005-abort-on-output-conflict.md)        | 出力先が衝突したら中止する                      |
-| [0006](0006-single-source-image-density.md)     | 画像は 1 ソースから密度別に生成する             |
-| [0007](0007-resources-live-in-context.md)       | 常駐リソースは BuildContext が持つ              |
-| [0010](0010-css-postprocess-is-lightningcss.md) | CSS の後処理を Lightning CSS に一本化する       |
-| [0011](0011-image-widths-are-caller-driven.md)  | 画像の幅は呼び出し側が決める                    |
-| [0012](0012-single-candidate-drops-srcset.md)   | 候補が 1 つなら img の srcset を出さない        |
-| [0013](0013-check-is-a-separate-command.md)     | 出力の検査は build と分けたコマンドにする       |
-| [0014](0014-icons-are-collected-recursively.md) | icons 配下は再帰的に 1 つのスプライトにまとめる |
+| 番号                                                     | 題名                                            |
+| -------------------------------------------------------- | ----------------------------------------------- |
+| [0001](0001-build-is-always-full.md)                     | build は毎回フルビルドする                      |
+| [0002](0002-dev-html-lazy-build.md)                      | dev の HTML はリクエスト時に作る                |
+| [0003](0003-outdir-is-build-only.md)                     | outDir は build 専用にする                      |
+| [0004](0004-cachedir-is-not-persisted.md)                | dev のキャッシュは永続化しない                  |
+| [0005](0005-abort-on-output-conflict.md)                 | 出力先が衝突したら中止する                      |
+| [0006](0006-single-source-image-density.md)              | 画像は 1 ソースから密度別に生成する             |
+| [0007](0007-resources-live-in-context.md)                | 常駐リソースは BuildContext が持つ              |
+| [0010](0010-css-postprocess-is-lightningcss.md)          | CSS の後処理を Lightning CSS に一本化する       |
+| [0011](0011-image-widths-are-caller-driven.md)           | 画像の幅は呼び出し側が決める                    |
+| [0012](0012-single-candidate-drops-srcset.md)            | 候補が 1 つなら img の srcset を出さない        |
+| [0013](0013-check-is-a-separate-command.md)              | 出力の検査は build と分けたコマンドにする       |
+| [0014](0014-icons-are-collected-recursively.md)          | icons 配下は再帰的に 1 つのスプライトにまとめる |
+| [0015](0015-image-root-relative-paths-are-url-rooted.md) | 画像のルート相対パスはサイトルート起点で解く    |
+| [0016](0016-pathname-includes-subdir.md)                 | Builder.url.pathname は subdir を含む           |

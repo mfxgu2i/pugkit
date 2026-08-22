@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { resolvePageFile } from '../../utils/page-candidates.mjs'
+import { stripSubdir } from '../../utils/subdir.mjs'
 
 /**
  * リクエストURLを src 内の Pug ソースに解決する。
@@ -19,19 +20,4 @@ export function resolvePugSource(urlPath, paths, subdir = '') {
         .split(path.sep)
         .some(segment => segment.startsWith('_'))
   })
-}
-
-/**
- * subdir の前置きを外す。境界チェック付きで、/sub と /sub/... のみ対象
- * （/subfoo は不一致）。一致しなければ null。
- *
- * 幅違いのリクエスト時生成も同じ規則で解く必要があるので export している。
- * 書き写すと境界の判定が二重定義になる
- */
-export function stripSubdir(urlPath, subdir) {
-  if (!subdir) return urlPath
-  if (urlPath === subdir) return '/'
-  if (urlPath.startsWith(`${subdir}/`)) return urlPath.slice(subdir.length)
-
-  return null
 }

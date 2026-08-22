@@ -11,7 +11,7 @@ mixin Meta(meta = {})
       type: meta.pageType || 'article'
     }
 
-    const title = Builder.url.pathname === '/' || !page.title ? site.title : `${page.title}｜${site.title}`
+    const title = Builder.url.pathname === `${Builder.subdir}/` || !page.title ? site.title : `${page.title}｜${site.title}`
     const description = page.description || site.description
     const ogImage = `${Builder.url.base}/assets/img/common/ogp.jpg`
 

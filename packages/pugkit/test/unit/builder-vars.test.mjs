@@ -63,6 +63,7 @@ describe('createBuilderVars', () => {
 
     expect(result.subdir).toBe('/myapp')
     expect(result.url.base).toBe('https://example.com/myapp')
+    expect(result.url.pathname).toBe('/myapp/')
     expect(result.url.href).toBe('https://example.com/myapp/')
   })
 
@@ -103,6 +104,54 @@ describe('createBuilderVars', () => {
     expect(result.url.base).toBe('')
     expect(result.url.pathname).toBe('/')
     expect(result.url.href).toBe('/')
+  })
+})
+
+/**
+ * pathname は URL としてそのまま使える値にする。src 配下の並びではなく、
+ * 配信されるパスを返す（ADR 0016）。ここがずれると、リンクや imageInfo に
+ * 渡す `${Builder.subdir}/...` と突き合わせたときに一致しない
+ */
+describe('pathname は subdir を含む', () => {
+  const paths = { src: '/project/src' }
+
+  it.each([
+    ['/project/src/index.pug', 'myapp', '/myapp/'],
+    ['/project/src/about/index.pug', 'myapp', '/myapp/about/'],
+    ['/project/src/page.pug', 'myapp', '/myapp/page.html'],
+    ['/project/src/blog/2024/index.pug', 'a/b', '/a/b/blog/2024/'],
+    ['/project/src/about/index.pug', '', '/about/']
+  ])('%s（subdir %s） -> %s', (filePath, subdir, expected) => {
+    const result = createBuilderVars(filePath, paths, { siteUrl: 'https://example.com', subdir })
+
+    expect(result.url.pathname).toBe(expected)
+  })
+
+  it('href は origin と pathname の連結になる', () => {
+    const result = createBuilderVars('/project/src/about/index.pug', paths, {
+      siteUrl: 'https://example.com',
+      subdir: 'myapp'
+    })
+
+    expect(result.url.href).toBe(result.url.origin + result.url.pathname)
+    expect(result.url.href).toBe('https://example.com/myapp/about/')
+  })
+
+  it('base と pathname を連結しない（subdir が二重になる）', () => {
+    const result = createBuilderVars('/project/src/about/index.pug', paths, {
+      siteUrl: 'https://example.com',
+      subdir: 'myapp'
+    })
+
+    expect(result.url.base + result.url.pathname).toBe('https://example.com/myapp/myapp/about/')
+  })
+
+  it('トップページの判定は subdir 付きの形と突き合わせる', () => {
+    const top = createBuilderVars('/project/src/index.pug', paths, { subdir: 'myapp' })
+    const lower = createBuilderVars('/project/src/about/index.pug', paths, { subdir: 'myapp' })
+
+    expect(top.url.pathname === `${top.subdir}/`).toBe(true)
+    expect(lower.url.pathname === `${lower.subdir}/`).toBe(false)
   })
 })
 

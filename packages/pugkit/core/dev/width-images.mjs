@@ -6,7 +6,7 @@ import { convertExtension, parseWidthName, supportsWidthVariants } from '../../u
 import { CONVERTIBLE_EXTENSIONS } from '../../utils/image-formats.mjs'
 import { writeWidthVariant } from '../../tasks/image.mjs'
 import { contains } from '../../utils/safe-dir.mjs'
-import { stripSubdir } from './page-source.mjs'
+import { stripSubdir } from '../../utils/subdir.mjs'
 
 /**
  * dev で幅違いをリクエスト時に生成する。

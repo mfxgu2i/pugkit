@@ -1,8 +1,21 @@
 # 画像の出し方（imageInfo）
 
-`imageInfo(path, options)` は画像のパスと寸法を返す。渡すパスは `${Builder.dir}` の相対パスで組み立てる。返る `src` は渡したパスの形式を保つため、ページの階層が変わっても正しい相対パスになる。画像は `src/` から探し、見つからなければ `public/` も探す。
+`imageInfo(path, options)` は画像のパスと寸法を返す。渡すパスは `${Builder.dir}` の相対パスか、`${Builder.subdir}` を前置きしたルート相対パスで組み立てる。返る `src` は渡したパスの形式を保つため、ページの階層が変わっても正しいパスになる。画像は `src/` から探し、見つからなければ `public/` も探す。
 
-ルート相対パス（`${Builder.subdir}/...`）は渡せない。`/` 始まりは `src/` 直下からの参照として解決され `subdir` が考慮されないため、`subdir` を設定していると画像が見つからず、`width` / `height` / `srcset` が付かないまま出力される。
+## パスの書き方
+
+| 書き方         | 例                                                     | 返る `src`                          |
+| -------------- | ------------------------------------------------------ | ----------------------------------- |
+| 相対パス       | ``imageInfo(`${Builder.dir}assets/img/hero.jpg`)``     | `../assets/img/hero@half.webp`      |
+| ルート相対パス | ``imageInfo(`${Builder.subdir}/assets/img/hero.jpg`)`` | `/subdir/assets/img/hero@half.webp` |
+
+`/` 始まりはサイトルート起点の URL として解決する。`subdir` を設定している場合、出力も URL も `subdir` 配下に入るため、`${Builder.subdir}` の前置きが要る。前置きの無い `/assets/...` は本番に存在しない URL なので解決せず、警告が出る。
+
+```
+⚠ pug Image not found "/assets/img/hero.jpg" in index.pug。ルート相対パスはサイトルート起点で解決します。`${Builder.subdir}` を前置きしてください
+```
+
+`subdir` が空のプロジェクトでは `${Builder.subdir}` が空文字になるため、`/assets/...` がそのまま書ける。設定を後から足しても壊れないよう、ルート相対で書くときは常に `${Builder.subdir}` を前置きする。
 
 `src/` には最大解像度の画像を1枚だけ置く。縮小版はビルドが生成するため、同じ画像を解像度ごとに用意しない。
 
@@ -23,8 +36,8 @@
 
 ## オプション
 
-| オプション | 型         | 内容                                                                        |
-| ---------- | ---------- | --------------------------------------------------------------------------- |
+| オプション | 型         | 内容                                                                         |
+| ---------- | ---------- | ---------------------------------------------------------------------------- |
 | `widths`   | `number[]` | 生成する幅の一覧。渡すと `srcset` が幅記述子になる。原寸以上の幅は作られない |
 | `sizes`    | `string`   | 表示幅の指定。そのまま返るので `sizes` 属性に渡す。`widths` と組で使う       |
 
@@ -47,9 +60,13 @@ img(src=info.src srcset=info.srcset width=info.width height=info.height alt='ヒ
 1600×1200 の `hero.jpg` を置いた場合の出力:
 
 ```html
-<img src="assets/img/hero@half.webp"
-     srcset="assets/img/hero@half.webp 1x, assets/img/hero.webp 2x"
-     width="800" height="600" alt="ヒーロー画像">
+<img
+  src="assets/img/hero@half.webp"
+  srcset="assets/img/hero@half.webp 1x, assets/img/hero.webp 2x"
+  width="800"
+  height="600"
+  alt="ヒーロー画像"
+/>
 ```
 
 `src` と `width` / `height` は表示サイズ（`@half`）になる。`sourceDensity: 1` の場合は原寸1枚だけになり `srcset` は返らない。
@@ -85,7 +102,7 @@ CSS で幅を決めるときは `height: auto` を添え、`width` / `height` �
 
 ## mixin にまとめる
 
-同じ呼び出しを繰り返す場合は mixin に包む。プロジェクトに既存の画像 mixin があればそれを使う。無ければ [../recipes/image-mixin.md](../recipes/image-mixin.md) の実装例を参考にする。
+同じ呼び出しを繰り返す場合は mixin に包む。どう包むかはプロジェクトの流儀に合わせる。
 
 ## 画像が見つからないとき
 
