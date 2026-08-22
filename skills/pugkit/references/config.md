@@ -47,13 +47,7 @@ build: {
 
 ## 実行時の上書き
 
-その実行の間だけ設定を上書きできる。
-
-| オプション         | 対象コマンド   | 上書きする設定 |
-| ------------------ | -------------- | -------------- |
-| `--port <port>`    | `pugkit`       | `server.port`  |
-| `--host <host>`    | `pugkit`       | `server.host`  |
-| `--site-url <url>` | `pugkit build` | `siteUrl`      |
+その実行の間だけ設定を上書きするオプションがある。一覧は [commands.md](commands.md) を参照。
 
 ## 設定ミスの扱い
 

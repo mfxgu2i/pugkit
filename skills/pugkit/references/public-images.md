@@ -21,5 +21,6 @@ img(src=info.src width=info.width height=info.height alt='ロゴ')
 
 ## 注意点
 
-- `src/` と `public/` で出力先が同じになるファイルがあると build が中止する。どちらか一方を削除する。
-- `@half` と `@<数字>w` で終わる画像名はビルドの予約名。`public/` に置いても build が中止する。
+- `src/` の画像・SVG と `public/` で出力先が同じになると build が中止する。どちらか一方を削除する。
+- HTML は中止しない。`public/` に置いた HTML は警告のうえ Pug の出力を上書きする。copy が pug のあとに走るため。
+- `@half` と `@<数字>w` で終わる画像名は `public/` でも予約名。詳細は [errors.md](errors.md)。

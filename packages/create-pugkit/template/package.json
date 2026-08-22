@@ -10,7 +10,7 @@
     "sprite": "pugkit sprite"
   },
   "devDependencies": {
-    "pugkit": "^2.0.0"
+    "pugkit": "^2.2.0"
   },
   "allowScripts": {
     "esbuild": true

@@ -33,6 +33,11 @@ function notifyOnAbsoluteUrl(url, notify) {
 }
 
 /**
+ * pathname は subdir を含む。URL としてそのまま使える値にするため（docs/adr/0016）。
+ * href との関係も URL 標準と同じ origin + pathname になる。
+ * src 配下の並びが欲しい場合は subdir の前置きを外す。pugkit 内部なら stripSubdir()、
+ * テンプレート側には渡していないので Builder.url.pathname.slice(Builder.subdir.length) になる。
+ *
  * @param options.onMissingSiteUrl siteUrl が空のまま絶対URLが参照されたときに呼ばれる
  */
 export function createBuilderVars(filePath, paths, config, { onMissingSiteUrl } = {}) {
@@ -53,8 +58,9 @@ export function createBuilderVars(filePath, paths, config, { onMissingSiteUrl } 
   const subdir = subdirPrefix(config.subdir)
   const origin = siteUrl.replace(/\/$/, '')
   const base = origin + subdir
-  const pathname = autoPageUrl ? (autoPageUrl.startsWith('/') ? autoPageUrl : '/' + autoPageUrl) : '/'
-  const href = base + pathname
+  const pagePath = autoPageUrl ? (autoPageUrl.startsWith('/') ? autoPageUrl : '/' + autoPageUrl) : '/'
+  const pathname = subdir + pagePath
+  const href = origin + pathname
 
   const url = { origin, base, pathname, href }
 

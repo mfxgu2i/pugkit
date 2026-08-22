@@ -68,6 +68,8 @@
 - SVG・スプライトに出力先の衝突検知が無い → 検査を `core/output-conflicts.mjs` に集約し、image / svg / sprite / public を横断して見るよう修正
 - `imageOptimization` に未知の値を渡すと警告なく扱われる → 値を検証して警告し `webp` に倒すよう修正
 - `src` と `public` で出力先が衝突すると勝敗が非決定的 → 検知してビルドを中止するよう修正（dev は起動時に一度だけ検査してログに出す）
+- `imageInfo()` のルート相対パスが `subdir` を考慮せず、`subdir` 付きの案件では書き方を問わず壊れていた → サイトルート起点の URL として解くよう修正（[ADR 0015](adr/0015-image-root-relative-paths-are-url-rooted.md)）
+- `Builder.url.pathname` が `subdir` を含まず、`new URL(href).pathname` と意味が食い違っていた → 配信されるパスを返すよう修正（[ADR 0016](adr/0016-pathname-includes-subdir.md)）
 - `imageInfo()` が `public/` 由来の画像の拡張子を読み替え、存在しないパスを返していた → 読み替えないよう修正
 - `srcset` の URL に空白・カンマが入ると候補が壊れる → エスケープするよう修正
 - CLI のエラー表示がコマンドごとにバラバラ（build/sprite だけスタックトレース）→ 3 コマンドで統一し、スタックは `PUGKIT_DEBUG=1` のときだけ出すよう修正
