@@ -7,10 +7,8 @@
 開閉やカレントのような状態は、`is-open` のようなクラスではなく `aria-expanded` や `aria-current` で持つ。
 
 ```scss
-.c-accordion__button[aria-expanded='true'] {
-  .c-accordion__icon {
-    rotate: 45deg;
-  }
+.l-header:has(.l-header__toggle[aria-expanded='true']) .l-header__nav {
+  visibility: visible;
 }
 ```
 
@@ -23,6 +21,10 @@
   --_gap: 0;
 }
 ```
+
+JS は属性だけを書き換える。クラスもスタイルも触らない。CSS は属性を `:has()` 越しに読んで見た目を決める。状態の出どころが1つになるので、片方だけ直す事故が起きない。
+
+`details` の `open` や `dialog` の `open` のように、ブラウザが状態を持つものもある。部品ごとにどの属性を使うかは `ui/` の各ファイルが持つ。
 
 ## 中身の有無で分岐する
 

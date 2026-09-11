@@ -2,7 +2,7 @@
 
 SCSS 側のメディアクエリの型。
 
-Pug 側にも `_templates/_constants.pug` の `BREAK_POINTS` があるが、あれは画像のアートディレクション用で別物になる。両者の境界は必ず揃える。ずれると、`source` が切り替わる幅と CSS のレイアウトが切り替わる幅が食い違う。
+Pug 側にも `_templates/_constants.pug` の `BREAK_POINTS` があり、そちらはメディアクエリの文字列を持つ。画像のアートディレクションと、JS へ渡す `matchMedia` の条件がそこから出る。両者の境界は必ず揃える。ずれると、`source` が切り替わる幅、CSS のレイアウトが切り替わる幅、JS が開閉をやめる幅が食い違う。
 
 ## 定義
 
