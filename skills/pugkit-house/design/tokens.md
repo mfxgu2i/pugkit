@@ -33,16 +33,18 @@ foundation/
 
 | カテゴリ | 例 |
 |---|---|
-| 色 | `--color-text` `--color-text-muted` `--color-primary` |
+| 色 | `--color-text` `--color-text-muted` `--color-primary` `--color-bg` `--color-border` `--color-backdrop` |
 | 書体 | `--font-family-base` `--font-size-md` `--line-height-base` |
 | コンテンツ幅 | `--contents-default` `--contents-narrow` |
 | 余白 | `--container-padding` `--container-padding-sp` `--section-gap` |
+| 動き | `--duration-fast` `--duration-normal` `--easing-base` |
+| 重なり順 | `--z-header` |
 
 SP だけ値が違うものは `-sp` を足して2つ持つ。メディアクエリの中でトークンを再宣言すると、DevTools でどちらが効いているか追いにくい。
 
 ## _tokens.scss は :root ひとつ
 
-CSSカスタムプロパティの宣言は `_tokens.scss` の `:root` にまとめる。他のファイルで `:root` を書かない。書くと、値の出どころを探すのにファイル全体を検索することになる。
+CSSカスタムプロパティの宣言は `_tokens.scss` の `:root` にまとめる。他のファイルの `:root` で宣言しない。書くと、値の出どころを探すのにファイル全体を検索することになる。宣言を伴わない `:root` は対象外で、reset で `scrollbar-gutter` を置くような使い方は妨げない。
 
 ## 単位はトークンで決める
 
@@ -64,6 +66,11 @@ CSSカスタムプロパティの宣言は `_tokens.scss` の `:root` にまと�
   // 色と行間は換算しない
   --color-primary: #005bac;
   --line-height-base: 1.7;
+
+  // 動きと重なり順。単位まで含めて持つ
+  --duration-normal: 0.3s;
+  --easing-base: ease;
+  --z-header: 10;
 }
 ```
 

@@ -6,7 +6,7 @@
 
 `assets/js/_名前.js` に置き、`initialize()` を公開する。5つを超えたら `assets/js/modules/` にまとめる。移しても `_` は外さない。`_` で始まらないファイルはビルドが独立したエントリーとして扱うので、モジュール単体が1本のバンドルになる。TypeScriptの案件も同じで、拡張子だけが変わる。
 
-`initialize()` にはJSDocを付ける。受け取るルート要素と、ルートの中で当てにしているクラス名を書く。
+`initialize()` にはJSDocを付ける。受け取るルート要素と、ルートの中で当てにしているクラス名や属性を書く。
 
 1ファイルが受け持つのは1つの機能になる。分けるかどうかは、片方だけを別のページに置きたくなるかで決める。ヘッダーの開閉と追従は同じ要素に付くが、追従だけを使うページがあるなら別のファイルにする。
 
@@ -92,6 +92,8 @@ if (document.readyState === 'loading') {
 .c-floating-navigation(data-module='floating-navigation-offset floating-navigation-visibility')
 ```
 
+開閉や切り替えのある UI をどのモジュールに分けるかは、`ui/` の各ファイルが持つ。`details` で組むアコーディオンのように、JS を持たず `data-module` にも載らないものがある。
+
 ## 設定値は別の属性で渡す
 
 機能名に値を混ぜない。`data-module="carousel-3"` と書くと、対応表のキーが値の数だけ増える。値は別の `data-*` に持たせ、モジュールがルートから読む。
@@ -128,6 +130,8 @@ export const initialize = root => {
 ルートの中を探すときも `document` を使わない。id で結ばれた要素も `root.querySelector('#' + id)` で引ける。
 
 `aria-controls` や `commandfor` のように、id でルートの外の相手を指す属性は例外にする。この2つはHTMLが結び先を宣言しているので、`document.getElementById()` で引いてよい。引いてよいのは属性値が指す1つだけで、そこから `document` を再検索しない。
+
+前の節で渡した `data-*` のセレクタも同じ扱いになる。`document.querySelectorAll()` で引いてよい。どちらも、どこを見ているかがマークアップに出ていることが条件になる。書いていないセレクタで `document` を探さない。
 
 状態は `initialize()` の中に置く。ファイルの先頭に `let` で要素やタイマーやオブザーバーを持たせない。要素ごとに `initialize()` が走るので、モジュールレベルに置くと後から初期化した要素で上書きされる。同じ機能を2箇所に置いたとき、最後の1つしか動かなくなる。
 
