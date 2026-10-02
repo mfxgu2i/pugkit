@@ -27,21 +27,6 @@ foundation/
 
 そのコンポーネントの中だけで使うローカル変数は `_tokens.scss` に入れない。`--_` で始めておくと、トークンと見分けが付き、外から触るものではないと分かる。
 
-## 命名
-
-用途で名前を付ける。カテゴリを先頭に置き、修飾子を後ろに足す。
-
-| カテゴリ | 例 |
-|---|---|
-| 色 | `--color-text` `--color-text-muted` `--color-primary` `--color-bg` `--color-border` `--color-backdrop` |
-| 書体 | `--font-family-base` `--font-size-md` `--line-height-base` |
-| コンテンツ幅 | `--contents-default` `--contents-narrow` |
-| 余白 | `--container-padding` `--container-padding-sp` `--section-gap` |
-| 動き | `--duration-fast` `--duration-normal` `--easing-base` |
-| 重なり順 | `--z-header` |
-
-SP だけ値が違うものは `-sp` を足して2つ持つ。メディアクエリの中でトークンを再宣言すると、DevTools でどちらが効いているか追いにくい。
-
 ## _tokens.scss は :root ひとつ
 
 CSSカスタムプロパティの宣言は `_tokens.scss` の `:root` にまとめる。他のファイルの `:root` で宣言しない。書くと、値の出どころを探すのにファイル全体を検索することになる。宣言を伴わない `:root` は対象外で、reset で `scrollbar-gutter` を置くような使い方は妨げない。
@@ -129,5 +114,3 @@ CSSカスタムプロパティの値の中では Sass の関数呼び出しが�
 ## やってはいけないこと
 
 コンポーネントに生の値を書かない。`color: #1a1a1a` や `max-width: 1200px` が出てきたら、サイト全体で使い回すのかを判断する。使い回すならトークン、1か所だけならローカル変数にする。
-
-トークンに見た目の名前を付けない。`--color-blue` ではなく `--color-primary` にする。ブランドカラーが変わったとき、名前と中身が食い違う。
