@@ -7,7 +7,7 @@ description: pugkit のビルド仕様とAPI。Builder・imageInfo・SVGスプ�
 
 ## 新規プロジェクトの開始
 
-`npm create pugkit@latest` でスキャフォールドする。`pugkit.config.mjs` の値は推測で埋めず、ページ制作を始める前にユーザーに確認する（[references/project-setup.md](references/project-setup.md)）。
+`npm create pugkit-house@latest` でスキャフォールドする。`pugkit.config.mjs` の値は推測で埋めず、ページ制作を始める前にユーザーに確認する（[references/project-setup.md](references/project-setup.md)）。
 
 ## ファイル命名規則
 

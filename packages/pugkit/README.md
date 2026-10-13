@@ -528,13 +528,13 @@ PUGKIT_DEBUG=1 npx pugkit build
 
 pugkitの規約をAIコーディングエージェントに伝える公式の[Agent Skill](https://github.com/agentskills/agentskills)を提供しています。`Builder`によるパスの組み立て、`imageInfo()`を通した画像の出力、`_`によるビルド対象の除外といった、知らないと壊れる仕様をエージェントに守らせます。
 
-`npm create pugkit@latest` で作成したプロジェクトには `.claude/skills/pugkit/`（Claude Code）と `.github/skills/pugkit/`（GitHub Copilot）へ同梱されます。既存のプロジェクトに追加する場合は次のコマンドを使います。
+`npm create pugkit-house@latest` で作成したプロジェクトには `.claude/skills/pugkit/`（Claude Code）と `.github/skills/pugkit/`（GitHub Copilot）へ同梱されます。既存のプロジェクトに追加する場合は次のコマンドを使います。
 
 ```sh
 $ npx skills add mfxgu2i/pugkit
 ```
 
-FLOCSSの層とトークン、`+Wrapper`によるセクションの積み上げまで型を揃える場合は、上に載せる `pugkit-house` を別途足せます。同梱はしません。詳細は[リポジトリのREADME](https://github.com/mfxgu2i/pugkit#pugkit-house)を参照してください。
+FLOCSSの層とトークン、レイアウトとセクションの積み上げまで方針を揃える場合は、上に載せる `pugkit-house` を足せます。`npm create pugkit-house@latest` では既定で入ります。詳細は[リポジトリのREADME](https://github.com/mfxgu2i/pugkit#pugkit-house)を参照してください。
 
 ```sh
 $ npx skills add mfxgu2i/pugkit --skill pugkit-house
