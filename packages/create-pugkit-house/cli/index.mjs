@@ -15,11 +15,11 @@ const __dirname = path.dirname(__filename)
 const REPO = 'mfxgu2i/pugkit/packages/create-pugkit-house/template'
 const SKILL_SOURCE = 'mfxgu2i/pugkit/skills'
 
-// 選べるスキル。pugkit はビルド仕様、pugkit-house はその上に載る設計の型。
-// テンプレートは pugkit-house の型に沿っていないので、既定では pugkit だけを入れる
+// テンプレートは pugkit-house の型で組んであるので、既定で両方を入れる。
+// pugkit-house が無いと、エージェントがその型を知らずに崩していく
 const AVAILABLE_SKILLS = [
   { name: 'pugkit', description: 'ビルド仕様とAPI', selected: true },
-  { name: 'pugkit-house', description: '設計と実装の型（FLOCSS・トークン・mixin）', selected: false }
+  { name: 'pugkit-house', description: '設計と実装の方針（FLOCSS・トークン・状態・UI部品）', selected: true }
 ]
 
 // スキルの実体はリポジトリの skills/ だけに置き、ここへ配る。
@@ -214,7 +214,7 @@ async function main(root, options) {
 const cli = cac('create-pugkit-house')
 
 cli
-  .command('[root]', 'Scaffolding for pugkit projects')
+  .command('[root]', 'Scaffolding for pugkit projects with the pugkit-house structure')
   .option('--skills <skills>', 'Agent skills to add, comma separated (pugkit, pugkit-house)')
   .action(async (root, options) => {
     try {

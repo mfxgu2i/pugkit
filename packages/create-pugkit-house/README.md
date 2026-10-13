@@ -1,24 +1,26 @@
-# create-pugkit
+# create-pugkit-house
 
 <p>
-  <a aria-label="NPM version" href="https://www.npmjs.com/package/create-pugkit">
-    <img alt="" src="https://img.shields.io/npm/v/create-pugkit.svg?style=for-the-badge&labelColor=212121">
+  <a aria-label="NPM version" href="https://www.npmjs.com/package/create-pugkit-house">
+    <img alt="" src="https://img.shields.io/npm/v/create-pugkit-house.svg?style=for-the-badge&labelColor=212121">
   </a>
   <a aria-label="License" href="https://github.com/mfxgu2i/pugkit/blob/main/LICENSE">
-    <img alt="" src="https://img.shields.io/npm/l/create-pugkit.svg?style=for-the-badge&labelColor=212121">
+    <img alt="" src="https://img.shields.io/npm/l/create-pugkit-house.svg?style=for-the-badge&labelColor=212121">
   </a>
 </p>
 
 ## About
 
-[pugkit](https://github.com/mfxgu2i/pugkit)の静的サイト制作環境をセットアップします。
+[pugkit](https://github.com/mfxgu2i/pugkit)の静的サイト制作環境をセットアップします。SCSSはFLOCSSの層とトークンで、PugはレイアウトとMixinで組んだ状態から始まります。設計の方針はAgent Skillの pugkit-house が持ちます。
+
+以前の `create-pugkit` は廃止しました。テンプレートの取得元が無くなったため動きません。
 
 ## How To Use
 
 ### Interactive
 
 ```sh
-npm create pugkit@latest
+npm create pugkit-house@latest
 ```
 
 ### With project name
@@ -26,7 +28,7 @@ npm create pugkit@latest
 プロジェクト名を指定して作成します。
 
 ```sh
-npm create pugkit@latest my-pugkit-project
+npm create pugkit-house@latest my-pugkit-project
 ```
 
 ### Current directory
@@ -34,7 +36,7 @@ npm create pugkit@latest my-pugkit-project
 カレントディレクトリに作成します。
 
 ```sh
-npm create pugkit@latest .
+npm create pugkit-house@latest .
 ```
 
 ## Next Steps
@@ -61,11 +63,24 @@ npm install --save-dev markuplint
 
 ## Agent Skill
 
-pugkit の規約を AI コーディングエージェントに伝える公式の [Agent Skill](https://github.com/agentskills/agentskills) を同梱します。作成したプロジェクトには次の場所へ配置されます。
+AI コーディングエージェント向けの公式の [Agent Skill](https://github.com/agentskills/agentskills) を2つ入れます。作成時の対話で外せます。
 
-| ディレクトリ                  | 対応するエージェント |
-| ----------------------------- | -------------------- |
-| `.claude/skills/pugkit/`      | Claude Code          |
-| `.github/skills/pugkit/`      | GitHub Copilot       |
+| スキル         | 中身                              |
+| -------------- | --------------------------------- |
+| `pugkit`       | ビルド仕様とAPI                   |
+| `pugkit-house` | pugkit の上に載る設計と実装の方針 |
+
+作成したプロジェクトには次の場所へ配置されます。
+
+| ディレクトリ      | 対応するエージェント |
+| ----------------- | -------------------- |
+| `.claude/skills/` | Claude Code          |
+| `.github/skills/` | GitHub Copilot       |
+
+対話できない環境では、聞かずに両方を入れます。片方だけにする場合は名前を渡します。
+
+```sh
+npm create pugkit-house@latest my-site -- --skills pugkit
+```
 
 不要な場合はディレクトリごと削除してください。既存のプロジェクトに追加する場合は `npx skills add mfxgu2i/pugkit` を使います。
