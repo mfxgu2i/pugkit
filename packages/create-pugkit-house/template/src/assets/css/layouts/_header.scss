@@ -1,0 +1,47 @@
+@use '../foundation' as f;
+
+.l-header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--z-header);
+  block-size: var(--header-block-size);
+  background-color: var(--color-bg);
+  border-block-end: 1px solid var(--color-border);
+
+  &__inner {
+    display: flex;
+    gap: var(--space-md);
+    align-items: center;
+    justify-content: space-between;
+    block-size: 100%;
+  }
+
+  &__logo {
+    font-size: var(--font-size-xl);
+    line-height: var(--line-height-tight);
+  }
+
+  &__logo-link {
+    font-weight: 700;
+    color: var(--color-text);
+  }
+
+  &__nav-list {
+    display: flex;
+    gap: var(--space-lg);
+
+    @include f.media-breakpoint-down(md) {
+      gap: var(--space-md);
+    }
+  }
+
+  &__nav-link {
+    font-weight: 500;
+    color: var(--color-text);
+    transition: color var(--duration-normal) var(--easing-base);
+
+    @include f.hover {
+      color: var(--color-primary);
+    }
+  }
+}

@@ -16,9 +16,9 @@
 //-   path  {string}  img/配下の画像パス
 //-   args  {object}  オプション
 //-     alt           {string}  代替テキスト（デフォルト: ''）
-//-     media         {string}  SP 用ブレークポイントキー 'sm' | 'md' | 'lg'（デフォルト: 'md'）
+//-     media         {string}  SP 用ブレークポイントキー 'sm' | 'md' | 'lg' | 'xl' | 'xxl'（デフォルト: 'md'）
 //-     lazy          {boolean} 遅延読み込み（デフォルト: true）
-//-     class         {string}  img / picture 要素のクラス
+//-     class         {string}  picture 要素のクラス
 //-     widths        {number[]} 生成する幅の一覧。原寸以上は作られません
 //-     sizes         {string}  表示幅の指定。widths とセットで使います
 //-
@@ -28,7 +28,7 @@
 //-     alt: '',
 //-     lazy: false,
 //-     widths: [640, 960, 1280],
-//-     sizes: '(max-width: 767px) 100vw, 1280px'
+//-     sizes: '(width < 768px) 100vw, 1280px'
 //-   })
 
 mixin Image(path, args = {})

@@ -1,0 +1,16 @@
+extends /_templates/_layout
+
+include /_templates/mixins/_Breadcrumb
+
+block append vars
+  -
+    const breadcrumb = {
+      middlePages: [],
+      pageTitle: ''
+    }
+
+block contents
+  .u-container
+    +Breadcrumb(breadcrumb)
+
+  block pageContents

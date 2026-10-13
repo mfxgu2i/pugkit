@@ -1,9 +1,10 @@
-header.c-header
-  #{Builder.url.pathname === `${Builder.subdir}/` ? 'h1' : 'div'}.c-header__logo
-    a.c-header__logo-link(href=Builder.dir)= metaData.siteTitle
-  nav.c-header__nav
-    ul.c-header__nav-list
-      li.c-header__nav-item
-        a.c-header__nav-link(href=Builder.dir) Home
-      li.c-header__nav-item
-        a.c-header__nav-link(href=`${Builder.dir}about/`) About
+header.l-header(data-fixed-header)
+  .l-header__inner.u-container
+    #{Builder.url.pathname === `${Builder.subdir}/` ? 'h1' : 'div'}.l-header__logo
+      a.l-header__logo-link(href=Builder.dir)= metaData.siteTitle
+    nav.l-header__nav(aria-label='グローバルナビゲーション')
+      ul.l-header__nav-list
+        li
+          a.l-header__nav-link(href=Builder.dir) ホーム
+        li
+          a.l-header__nav-link(href=`${Builder.dir}about/`) 下層ページ

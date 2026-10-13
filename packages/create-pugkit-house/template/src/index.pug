@@ -1,30 +1,24 @@
-
 extends /_templates/_layout
 
 block append vars
-  - 
+  -
     metaData.pageTitle = ''
-    metaData.pageDescription = '静的サイト制作に特化したビルドツール。納品向きの綺麗なHTMLと、ファイル構成に制約のないアセットファイルを出力可能です。'
-    metaData.pageType = 'website'
+    metaData.pageDescription = ''
 
 block contents
-  section.hero
-    .hero__inner
-      p.hero__text 静的サイト制作に特化したビルドツール。
-        br
-        | 納品向きの綺麗なHTMLと、ファイル構成に制約のないアセットファイルを出力可能です。
-      a.hero__button(href=`${Builder.dir}about/`) 詳細を見る
+  section.p-top-hero
+    .u-container
+      p.p-top-hero__title __キャッチコピー__
+      p.p-top-hero__text __リード文__
+      a.c-button(href='#features' data-variant='inverse')
+        | __ボタン__
+        +Icon('arrow', { class: 'c-button__icon' })
 
-  section.features
-    .features__inner
-      h2.features__title Features
-      .features__list
-        .features__item
-          h3.features__item-title 綺麗なHTML出力
-          p.features__item-text 納品・保守に適した、サーバーに依存しないクリーンなコードを出力します。
-        .features__item
-          h3.features__item-title 制約のないアセット出力
-          p.features__item-text CSS・JS・画像のディレクトリ構成やファイル数に制約なし。要件に合わせて自由に組み立てられます。
-        .features__item
-          h3.features__item-title 柔軟な設定
-          p.features__item-text pugkit.config.mjsで開発サーバーのポートやサブディレクトリ、画像最適化の方式などを制御できます。
+  section#features.p-top-features(aria-labelledby='features-title')
+    .u-container
+      h2#features-title.p-top-features__title __見出し__
+      ul.p-top-features__list
+        each index in [1, 2, 3]
+          li.p-top-features__item
+            h3.p-top-features__item-title __項目の見出し__
+            p.p-top-features__item-text __項目の本文__

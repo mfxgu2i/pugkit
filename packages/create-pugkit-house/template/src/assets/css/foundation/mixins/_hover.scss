@@ -1,0 +1,19 @@
+@mixin hover {
+  @media (any-hover: hover) {
+    &:where(:any-link, :enabled, summary):hover {
+      @content;
+    }
+  }
+}
+
+@mixin child-hover {
+  @media (any-hover: hover) {
+    &:has(:where(a, button):where(:any-link, :enabled):hover) {
+      @content;
+    }
+  }
+
+  &:has(:where(a, button):focus-visible) {
+    @content;
+  }
+}

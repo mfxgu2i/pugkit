@@ -1,12 +1,13 @@
 include /_templates/_constants
-include  /_templates/mixins/_Meta
-include  /_templates/mixins/_Image
+include /_templates/mixins/_Meta
+include /_templates/mixins/_Image
+include /_templates/mixins/_Icon
 
 block vars
   - const metaData = META_DATA
 
 doctype html
-html(lang='ja')
+html(lang=metaData.lang)
   head
     +Meta(metaData)
 

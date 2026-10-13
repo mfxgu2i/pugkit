@@ -1,20 +1,16 @@
 // 機能を足すときは、import と対応表に1行ずつ追加する
-// import * as carousel from './_carousel'
+import * as smoothScroll from './_smoothScroll'
 
 /**
  * ルートを持つ機能。マークアップが data-module で名乗る
  * プロトタイプを持たせない。registry['constructor'] が関数を返すのを防ぐ
  */
-const registry = Object.assign(Object.create(null), {
-  // carousel
-})
+const registry = Object.assign(Object.create(null), {})
 
 /**
  * ルートを持たない機能。ページ全体に効くものを載せる
  */
-const globals = {
-  // smoothScroll
-}
+const globals = { smoothScroll }
 
 /**
  * モジュールを1つ初期化する。失敗はここで閉じる

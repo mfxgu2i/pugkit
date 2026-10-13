@@ -1,26 +1,22 @@
-
-extends /_templates/_layout
+extends /_templates/_pageLayout
 
 block append vars
-  - 
-    metaData.pageTitle = 'About'
+  -
+    metaData.pageTitle = '下層ページ'
     metaData.pageDescription = ''
-    metaData.pageType = 'article'
 
-block contents
-  section.page
-    .page__inner
-      h1.page__title About
-      .page__content
-        p.page__text pugkitは静的サイト制作に特化したビルドツールです。PugテンプレートとSassを中心としたシンプルな構成で、納品向きの綺麗なHTMLと、ファイル構成に制約のないアセットファイルを出力可能です。
-        h2.page__heading Tech Stack
-        ul.page__list
-          li.page__list-item Pug — HTMLテンプレートエンジン
-          li.page__list-item Sass — CSSプリプロセッサー
-          li.page__list-item esbuild — TypeScript / JavaScriptバンドラー
-          li.page__list-item Sharp — 画像最適化（WebP変換）
-        h2.page__heading Quick Start
-        pre.page__code.
-          npm create pugkit@latest
-        .page__buttons
-          a.page__button(href=Builder.dir) トップに戻る
+block pageContents
+  section.p-about(aria-labelledby='about-title')
+    .u-container
+      .p-about__body
+        h1#about-title.p-about__title 下層ページ
+        p __本文__
+        h2.p-about__heading __見出し__
+        ul.p-about__list
+          li __項目__
+          li __項目__
+          li __項目__
+        .p-about__action
+          a.c-button(href=Builder.dir)
+            | トップに戻る
+            +Icon('arrow', { class: 'c-button__icon' })

@@ -1,38 +1,56 @@
+//- ============================================================
+//- Meta mixin
+//- ============================================================
+//- title と description、canonical、OGP、favicon を出力します。
+//- ベースレイアウトの head 先頭で1回だけ呼びます。
+//- トップページはサイト名だけ、下層は「ページ名｜サイト名」になります。
+//-
+//- 引数
+//-   meta  {object}  _constants.pug の META_DATA を元にした値
+//-     locale           {string}  og:locale の値
+//-     siteTitle        {string}  サイト名
+//-     siteDescription  {string}  pageDescription が空のときの代替
+//-     pageTitle        {string}  ページ名。空だとサイト名だけになります
+//-     pageDescription  {string}  ページの説明
+//-     pageType         {string}  og:type の値（デフォルト: 'website'）。記事ページは 'article'
+//-
+//- 使用例
+//-   +Meta(metaData)
+
 mixin Meta(meta = {})
   -
     const site = {
-      title: meta.siteTitle || '__サイトタイトル__',
-      description: meta.siteDescription || '__サイト説明文__',
+      title: meta.siteTitle || '',
+      description: meta.siteDescription || '',
     }
 
     const page = {
       title: meta.pageTitle || '',
       description: meta.pageDescription || '',
-      type: meta.pageType || 'article'
+      type: meta.pageType || 'website'
     }
 
-    const title = Builder.url.pathname === `${Builder.subdir}/` || !page.title ? site.title : `${page.title}｜${site.title}`
+    const isTop = Builder.url.pathname === `${Builder.subdir}/`
+    const title = isTop || !page.title ? site.title : `${page.title}｜${site.title}`
     const description = page.description || site.description
     const ogImage = `${Builder.url.base}/assets/img/common/ogp.jpg`
 
-  //- 基本メタ情報
   meta(charset='UTF-8')
-  meta(name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover')
-  meta(name='format-detection' content='telephone=no')
-  meta(name='mobile-web-app-capable' content='yes')
+  meta(name='viewport' content='width=device-width,initial-scale=1')
 
-  //- アイコン
   link(rel='icon' href=`${Builder.dir}favicon.ico`)
 
-  //- タイトルと説明
-  title !{title}
+  title= title
   meta(name='description' content=description)
 
-  //- OGP
-  meta(property='og:title' content!=title)
+  link(rel='canonical' href=Builder.url.href)
+
+  meta(property='og:title' content=title)
   meta(property='og:url' content=Builder.url.href)
   meta(property='og:description' content=description)
   meta(property='og:type' content=page.type)
   meta(property='og:image' content=ogImage)
   meta(property='og:site_name' content=site.title)
+  if meta.locale
+    meta(property='og:locale' content=meta.locale)
   meta(name='twitter:card' content='summary_large_image')

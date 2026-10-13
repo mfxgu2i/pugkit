@@ -1,0 +1,23 @@
+//- ============================================================
+//- Icon mixin
+//- ============================================================
+//- src/ 配下の icons/ から生成される SVG スプライトを参照します。
+//- 寸法は 1em です。変えるときは使う側のクラスで指定してください。
+//- 単色前提です。多色アイコンとロゴは icons/ に置かないでください。
+//-
+//- 引数
+//-   id    {string}  スプライト内の symbol id。元 SVG のファイル名
+//-   args  {object}  オプション
+//-     label  {string}  読み上げる名前。省略すると aria-hidden になります
+//-     class  {string}  svg 要素に付けるクラス
+//-
+//- 使用例
+//-   +Icon('arrow')
+//-   +Icon('phone', { class: 'p-contact__icon', label: '電話をかける' })
+
+mixin Icon(id, args = {})
+  -
+    const ariaHidden = args.label ? undefined : 'true'
+    const ariaLabel = args.label || undefined
+  svg.c-icon(aria-hidden=ariaHidden aria-label=ariaLabel class=args.class role='img')
+    use(href=`${Builder.dir}assets/icons.svg#${id}`)

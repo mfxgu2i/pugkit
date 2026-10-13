@@ -1,0 +1,30 @@
+@use '../foundation' as f;
+
+.p-top-hero {
+  padding-block: var(--section-padding-block);
+  color: var(--color-bg);
+  text-align: center;
+  background-color: var(--color-primary);
+
+  @include f.media-breakpoint-down(md) {
+    padding-block: var(--section-padding-block-sp);
+  }
+
+  &__title {
+    font-size: var(--font-size-4xl);
+    line-height: var(--line-height-tight);
+
+    @include f.media-breakpoint-down(md) {
+      font-size: var(--font-size-2xl);
+    }
+  }
+
+  &__text {
+    margin-block: var(--space-md) var(--space-lg);
+    font-size: var(--font-size-lg);
+
+    @include f.media-breakpoint-down(md) {
+      font-size: var(--font-size-md);
+    }
+  }
+}

@@ -1,14 +1,18 @@
 -
   const META_DATA = {
-    siteTitle: 'pugkit',
+    lang: 'ja',
+    locale: 'ja_JP',
+    siteTitle: '__サイト名__',
     siteDescription: '__サイトの説明__',
-    pageTitle: '__ページタイトル__',
-    pageDescription: '__ページの説明__',
-    pageType: 'article'
+    pageTitle: '',
+    pageDescription: '',
+    pageType: 'website'
   }
 
   const BREAK_POINTS = {
-    sm: '(max-width: 575px)',
-    md: '(max-width: 767.98px)',
-    lg: '(max-width: 889.98px)',
+    sm: '(width < 576px)',
+    md: '(width < 768px)',
+    lg: '(width < 992px)',
+    xl: '(width < 1200px)',
+    xxl: '(width < 1400px)',
   }
