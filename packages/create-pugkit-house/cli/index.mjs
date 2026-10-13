@@ -12,7 +12,7 @@ import degit from 'degit'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const REPO = 'mfxgu2i/pugkit/packages/create-pugkit/template'
+const REPO = 'mfxgu2i/pugkit/packages/create-pugkit-house/template'
 const SKILL_SOURCE = 'mfxgu2i/pugkit/skills'
 
 // 選べるスキル。pugkit はビルド仕様、pugkit-house はその上に載る設計の型。
@@ -36,7 +36,7 @@ function pkgVersion() {
 }
 
 function log(message) {
-  console.log(`${pc.cyan(pc.bold('CREATE-PUGKIT'))} ${pc.dim(`v${pkgVersion()}`)} ${message}`)
+  console.log(`${pc.cyan(pc.bold('CREATE-PUGKIT-HOUSE'))} ${pc.dim(`v${pkgVersion()}`)} ${message}`)
 }
 
 function mkdirp(dir) {
@@ -195,7 +195,7 @@ async function main(root, options) {
 
     await copySkills(cwd, skills)
   } catch (err) {
-    console.error(`${pc.cyan(pc.bold('CREATE-PUGKIT'))} ${pc.dim(`v${pkgVersion()}`)} ${pc.red(err.message)}`)
+    console.error(`${pc.cyan(pc.bold('CREATE-PUGKIT-HOUSE'))} ${pc.dim(`v${pkgVersion()}`)} ${pc.red(err.message)}`)
     process.exit(1)
   }
 
@@ -211,7 +211,7 @@ async function main(root, options) {
   console.log(`\nTo close the dev server, hit ${pc.bold(pc.cyan('Ctrl + C'))}`)
 }
 
-const cli = cac('create-pugkit')
+const cli = cac('create-pugkit-house')
 
 cli
   .command('[root]', 'Scaffolding for pugkit projects')

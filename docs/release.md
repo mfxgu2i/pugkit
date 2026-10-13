@@ -28,12 +28,12 @@ git log --oneline main..develop | grep '!:'
 
 手順を間違えやすいので先に書く。
 
-`create-pugkit` の npm パッケージにはテンプレートが入っていない（`files` は `cli` だけ）。
-`create-pugkit` は実行時に degit で GitHub から取ってくる。
+`create-pugkit-house` の npm パッケージにはテンプレートが入っていない（`files` は `cli` だけ）。
+`create-pugkit-house` は実行時に degit で GitHub から取ってくる。
 
 ```js
-// packages/create-pugkit/cli/index.mjs
-const REPO = 'mfxgu2i/pugkit/packages/create-pugkit/template'
+// packages/create-pugkit-house/cli/index.mjs
+const REPO = 'mfxgu2i/pugkit/packages/create-pugkit-house/template'
 ```
 
 ref を指定していないので、取得元はリポジトリのデフォルトブランチ（`main`）になる。
@@ -41,10 +41,10 @@ ref を指定していないので、取得元はリポジトリのデフォル�
 ここから 3 つのことが決まる。
 
 テンプレートを配るのは publish ではなく `main` へのマージ。
-`npm run publish:create-pugkit` はテンプレートの中身に影響しない。
+`npm run publish:create-pugkit-house` はテンプレートの中身に影響しない。
 
-`main` にマージした瞬間から、既存の `create-pugkit` 利用者全員に新しいテンプレートが渡る。
-古いバージョンの `create-pugkit` を使っていても同じ。
+`main` にマージした瞬間から、既存の `create-pugkit-house` 利用者全員に新しいテンプレートが渡る。
+古いバージョンの `create-pugkit-house` を使っていても同じ。
 
 したがって pugkit の公開より先に `main` へマージすると、
 まだ npm に無いバージョンを要求するテンプレートが配られる。
@@ -52,15 +52,15 @@ ref を指定していないので、取得元はリポジトリのデフォル�
 
 ## バージョンを上げるとき
 
-`packages/pugkit` と `create-pugkit/template` は必ず同時に上げる。
+`packages/pugkit` と `create-pugkit-house/template` は必ず同時に上げる。
 
 | ファイル                                       | 内容                              |
 | ---------------------------------------------- | --------------------------------- |
 | `packages/pugkit/package.json`                 | `version`                         |
-| `packages/create-pugkit/template/package.json` | `devDependencies.pugkit` の範囲   |
-| `packages/create-pugkit/package.json`          | `version`（cli を変えたときだけ） |
+| `packages/create-pugkit-house/template/package.json` | `devDependencies.pugkit` の範囲   |
+| `packages/create-pugkit-house/package.json`          | `version`（cli を変えたときだけ） |
 
-テンプレートの範囲指定を忘れると、`create-pugkit` で作った新規プロジェクトが古い pugkit を掴む。
+テンプレートの範囲指定を忘れると、`create-pugkit-house` で作った新規プロジェクトが古い pugkit を掴む。
 major を上げたときは `^1.6.0` のままだと新版が入らない。
 
 ## リリース前の確認
@@ -74,7 +74,7 @@ npm test
 cd packages/pugkit && npm pack
 
 # 2. テンプレートを複製して、CLI から叩く
-cp -R packages/create-pugkit/template /tmp/pk-check && cd /tmp/pk-check
+cp -R packages/create-pugkit-house/template /tmp/pk-check && cd /tmp/pk-check
 npm install /path/to/pugkit-X.Y.Z.tgz
 npx pugkit build            # コマンドは cwd を見る。引数は無視される
 npx pugkit check            # 0 件で通ること
@@ -158,8 +158,8 @@ pugkit を npm に上げる前にマージすると、存在しないバージ�
 # 1. pugkit を公開する
 npm run publish:pugkit
 
-# 2. cli を変えたときだけ create-pugkit も公開する
-npm run publish:create-pugkit
+# 2. cli を変えたときだけ create-pugkit-house も公開する
+npm run publish:create-pugkit-house
 
 # 3. 公開を確認してから main へマージする
 npm view pugkit version
