@@ -18,7 +18,7 @@
 
 ## preventDefault しない理由
 
-`preventDefault()` して自前でスクロールすると、ブラウザが持っていた処理を全部やり直すことになる。やり直しは漏れる。
+`preventDefault()` して自前でスクロールすると、ブラウザが持っていた処理を全部やり直すことになる。やり直すと、どこかで漏れが出る。
 
 | 標準が持っていたもの | 止めると失うもの |
 |---|---|
@@ -28,107 +28,46 @@
 | `hidden="until-found"` と `<details>` の自動展開 | 閉じた中のidに飛べなくなる |
 | `:target` と `hashchange` | `pushState` に置き換えると両方とも動かなくなる |
 
-順次フォーカス始点は、ブラウザがフラグメント遷移のときにTabの再開位置を移動先へ動かす仕組みになる。標準に任せれば `tabindex="-1"` も `focus()` も要らない。`preventDefault()` した場合だけ、`focus()` で自前に補う必要が出る。補い忘れると、移動先に飛んだつもりでフォーカスだけが手前に取り残される。
+順次フォーカス始点は、ブラウザがフラグメント遷移のときにTabの再開位置を移動先へ動かす仕組みになる。標準に任せれば `tabindex="-1"` も `focus()` も要らない。`preventDefault()` した場合だけ、`focus()` で自前で補う必要が出る。補い忘れると、移動先に飛んだつもりでフォーカスだけが手前に取り残される。
 
-## 実装
+## 組み方
 
-`assets/js/_smoothScroll.js` に置き、`main.js` から `initialize()` を呼ぶ。ルートになる要素を持たないので `data-module` には載せない。理由は [modules.md](modules.md) にある。ここでは短さのためにJSDocを省いている。実ファイルには他のモジュールと揃えて付ける。
+`assets/js/_smoothScroll.js` に置き、`initialize()` を公開して `main.js` の `globals` に載せる。ルートになる要素を持たないので `data-module` には載せない。理由は [modules.md](modules.md) にある。
 
-```js
-// scrollend が無いブラウザで、スクロールが止まったとみなすまでの間隔
-const SCROLL_END_DELAY = 100
+### 初期化
 
-// スクロールが一度も起きなかったときに scroll-behavior を戻すまでの上限時間
-const FALLBACK_DURATION = 5000
+`initialize()` では3つのことをする。
 
-const supportsScrollEnd = 'onscrollend' in window
+1. ヘッダーの高さを測って `scroll-padding` に入れる
+2. `window` の `resize` で、同じ測り直しを呼ぶ
+3. `document` に `click` を `capture: true` で1つだけ張る
 
-let cleanup = null
+### ヘッダーの高さを測る
 
-const getHeaderBlockSize = () => {
-  const header = document.querySelector('[data-fixed-header]')
+`[data-fixed-header]` を付けた要素をヘッダーとして探す。`getComputedStyle()` の `position` が `fixed` か `sticky` なら、算出値の `blockSize` を高さとして返す。それ以外か、ヘッダーが無いときは `'0'` を返す。返した値を `document.documentElement.style.scrollPaddingBlockStart` に入れる。
 
-  if (!header) return '0'
+### クリックを受けたとき
 
-  const { position, blockSize } = window.getComputedStyle(header)
-  const isFixed = position === 'fixed' || position === 'sticky'
+1. `event.target` が `Element` かを確かめ、`closest('a[href*="#"]')` でアンカーまで遡る。見つからなければ何もしない
+2. アンカーに `data-smooth-scroll="disabled"` があれば何もしない
+3. ヘッダーの高さを測り直す
+4. `prefers-reduced-motion: reduce` に当たれば、ここで抜ける。移動は即時のまま起きる
+5. 次のスクロールだけを滑らかにする窓を開ける
 
-  // 追従しないヘッダーは要素と一緒に流れるのでずらさない
-  return isFixed ? blockSize : '0'
-}
+`preventDefault()` はどの段階でも呼ばない。
 
-const updateScrollPadding = () => {
-  document.documentElement.style.scrollPaddingBlockStart = getHeaderBlockSize()
-}
+### 窓を開けて閉じる
 
-const restoreScrollBehavior = () => {
-  if (!cleanup) return
+窓は同時に1つしか持たない。開く前に、前の窓が残っていれば閉じる。閉じる処理は1つの関数にまとめ、モジュールの先頭の変数に持たせる。`globals` に載せるので、[modules.md](modules.md) の「状態は `initialize()` の中に置く」の例外に当たる。
 
-  const run = cleanup
-  cleanup = null
-  run()
-}
+1. `documentElement.style.scrollBehavior` に `smooth` を書く
+2. 保険のタイマーを5秒で掛ける。満了したら窓を閉じる
+3. `window` の `scroll` を `passive` で受ける。最初の1回で保険のタイマーを外す
+4. `scrollend` があるブラウザでは、`scrollend` を受けたら窓を閉じる
+5. `scrollend` が無いブラウザでは、`scroll` を受けるたびに100msのタイマーを掛け直し、満了したら窓を閉じる
+6. 窓を閉じるときは、2つのタイマーを止め、`scroll` と `scrollend` の受け取りを外し、`scrollBehavior` を空文字に戻す
 
-// 次に起きるスクロールだけを滑らかにする
-const enableSmoothOnce = () => {
-  restoreScrollBehavior()
-
-  const html = document.documentElement
-  html.style.scrollBehavior = 'smooth'
-
-  // 他のハンドラに止められてスクロールが一度も起きないと、閉じる手がかりが無くなる
-  let backstop = setTimeout(restoreScrollBehavior, FALLBACK_DURATION)
-  let debounce = null
-
-  // スクロールが始まれば、終わりは scrollend か途切れで判断できる
-  const handleScroll = () => {
-    clearTimeout(backstop)
-
-    if (supportsScrollEnd) return
-
-    clearTimeout(debounce)
-    debounce = setTimeout(restoreScrollBehavior, SCROLL_END_DELAY)
-  }
-
-  window.addEventListener('scroll', handleScroll, { passive: true })
-
-  if (supportsScrollEnd) {
-    window.addEventListener('scrollend', restoreScrollBehavior, { passive: true })
-  }
-
-  cleanup = () => {
-    clearTimeout(backstop)
-    clearTimeout(debounce)
-    window.removeEventListener('scroll', handleScroll)
-    window.removeEventListener('scrollend', restoreScrollBehavior)
-    html.style.scrollBehavior = ''
-  }
-}
-
-// 遷移そのものはブラウザに任せ、滑らかにするかどうかだけを決める
-const handleClick = event => {
-  const link = event.target instanceof Element ? event.target.closest('a[href*="#"]') : null
-
-  if (!link || link.getAttribute('data-smooth-scroll') === 'disabled') return
-
-  // ドロワーの開閉やWebフォントの差し替えで高さが変わっているので、直前に測り直す
-  updateScrollPadding()
-
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-
-  enableSmoothOnce()
-}
-
-export const initialize = () => {
-  // ハッシュ付きで開いたときの着地に間に合わせる
-  updateScrollPadding()
-
-  // ブレークポイントをまたぐとヘッダーの追従や高さが変わる
-  window.addEventListener('resize', updateScrollPadding)
-
-  document.addEventListener('click', handleClick, { capture: true })
-}
-```
+`scrollend` の有無は `'onscrollend' in window` で見る。
 
 ## 使っている仕組み
 
@@ -154,9 +93,9 @@ export const initialize = () => {
 |---|---|
 | `initialize()` | ハッシュ付きURLで開いたときの着地 |
 | `resize` | ブレークポイントをまたいでヘッダーの高さや追従の有無が変わったとき |
-| `handleClick()` | 画面幅が変わらずに高さだけ変わったとき |
+| クリックを受けたとき | 画面幅が変わらずに高さだけ変わったとき |
 
-`initialize()` は `DOMContentLoaded` で走るので、ハッシュ付きで開いた最初の着地には間に合わないことがある。ブラウザは移動先の要素を読んだ時点でスクロールを試みる。CSSに既定値を持たせ、JSは実測値で上書きする形にすると取りこぼさない。
+`initialize()` は `DOMContentLoaded` で走るので、ハッシュ付きで開いた最初の着地には間に合わないことがある。ブラウザは移動先の要素を読んだ時点でスクロールを試みる。CSSに既定値を持たせ、JSは実測値で上書きする形にすると取りこぼさない。既定値にはヘッダーの高さのトークンを使う。無ければ `_tokens.scss` に足す。下のトークン名は一例になる。
 
 ```scss
 :root {
@@ -172,10 +111,10 @@ export const initialize = () => {
 
 | 環境 | 終わりとみなすもの |
 |---|---|
-| `scrollend` がある | イベントが飛んだ瞬間 |
+| `scrollend` がある | イベントが飛んだ時点 |
 | `scrollend` が無い | `scroll` が100ms途切れた時点 |
 
-固定の時間で打ち切ってはいけない。アニメーションの最中に `scroll-behavior` を戻すと、スクロールがその場で止まる。実測では2425pxの移動に781msから866msかかっていて、移動距離とページの状態で変わるので、あらかじめ決め打ちできない。`scroll` の途切れを見れば、どれだけ長引いても終わってから戻せる。
+固定の時間で打ち切ってはいけない。アニメーションの最中に `scroll-behavior` を戻すと、スクロールがその場で止まる。かかる時間は移動距離とページの状態で数百msの幅で変わるので、あらかじめ決め打ちできない。`scroll` の途切れを見れば、どれだけ長引いても終わってから戻せる。
 
 これとは別に、上限時間の保険を置く。タブやアコーディオンのように別のハンドラが `preventDefault()` してスクロールが一度も起きなかった場合、`scrollend` も `scroll` も飛ばないので、閉じる手がかりが無くなる。5秒で打ち切る。
 

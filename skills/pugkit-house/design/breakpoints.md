@@ -6,104 +6,43 @@ Pug 側にも `_templates/_constants.pug` の `BREAK_POINTS` があり、そち�
 
 ## 定義
 
-`foundation/_variables.scss` にマップで持つ。
+`foundation/_variables.scss` に `$grid-breakpoints` のマップで持ち、`!default` を付ける。
 
-```scss
-$grid-breakpoints: (
-  xs: 0,
-  sm: 575.98px,
-  md: 767.98px,
-  lg: 889.98px,
-  xl: 1229.98px,
-  xxl: 1399.98px
-) !default;
-```
+| キー | 値の例 |
+|---|---|
+| `xs` | `0` |
+| `sm` | `576px` |
+| `md` | `768px` |
+| `lg` | `992px` |
+| `xl` | `1200px` |
+| `xxl` | `1400px` |
 
-型として決まっているのはキー名と、値が SP 側の上限であることの2つ。数値そのものは要件に合わせて差し替える。
+型として決まっているのはキー名と、値がそのキーから上の幅の始まりであることの2つ。数値そのものは要件に合わせて差し替える。`md` が SP と PC の主境界になる。
 
-値がすべて `.98` の端数なのは、`max-width` と `min-width` の境界を重ねないため。`down` はマップの値をそのまま `max-width` に使い、`up` は `+0.02` して `min-width` に使う。こうすると 767.98px と 768px で隙間なく、かつ二重に当たらずに切り替わる。`max-width: 768px` と `min-width: 768px` を並べると 768px でどちらも当たる。
+メディアクエリは範囲構文で書く。`down` は `(width < 値)`、`up` は `(width >= 値)` になり、同じ値を境に未満と以上で分かれる。ビューポートの幅は、拡大率や高 DPI の端末で 767.5px のような小数になる。`max-width: 767px` と `min-width: 768px` の組では、その幅がどちらにも当たらずにスタイルが抜ける。範囲構文なら、小数の幅でも必ずどちらか一方に当たる。
+
+範囲構文は CSS ではそのまま書いてよい。古いブラウザに向けた出力が要るときも、pugkit が Lightning CSS を通して `(width < 768px)` を `not (min-width: 768px)` に書き換えて出す。値はずらさないので隙間はできない。
+
+`BREAK_POINTS` の文字列は書き換えられず、`source` の `media` と `sizes`、`matchMedia()` にそのまま渡る。範囲構文は Baseline の Widely available なので、こちらも範囲構文で書く。
 
 ## mixin
 
-| mixin | 展開されるもの |
-|---|---|
-| `media-breakpoint-up($name)` | `@media (min-width: 値 + 0.02)` |
-| `media-breakpoint-down($name)` | `@media (max-width: 値)` |
-| `media-breakpoint-between($lower, $upper)` | `min-width` と `max-width` の両方で挟む |
-| `media-breakpoint-only($name)` | そのキーの範囲だけで挟む |
-| `media-breakpoint-range($max)` | `@media (max-width: $max)`。マップを通さず任意の値で切る |
-| `media-ratio($ratio)` | 高解像度ディスプレイ向け。既定は2倍 |
-
 `foundation/mixins/_breakpoints.scss` に置く。
 
-```scss
-@use 'sass:map';
-@use 'sass:list';
-@use '../variables' as v;
+| mixin | 展開されるもの |
+|---|---|
+| `media-breakpoint-up($name)` | `@media (width >= 値)`。値が `0` のキーはメディアクエリで包まずに中身をそのまま出す |
+| `media-breakpoint-down($name)` | `@media (width < 値)` |
+| `media-breakpoint-between($lower, $upper)` | `@media ($lower の値 <= width < $upper の値)`。`$lower` の値が `0` なら `$upper` の `down` だけを出す |
+| `media-breakpoint-only($name)` | 1つ手前のキーとの `between`。先頭のキーを渡されたら `@error` で止める |
+| `media-breakpoint-range($max)` | `@media (width < $max)`。マップを通さず任意の値で切る |
+| `media-ratio($ratio)` | `@media (min-resolution: #{$ratio}dppx)`。既定は2倍 |
 
-@function breakpoint-value($name) {
-  @if not map.has-key(v.$grid-breakpoints, $name) {
-    @error '#{$name} は $grid-breakpoints に定義されていません';
-  }
+`between` で値が `0` のキーを `down` に落とすのは、`0 <= width` が常に真で、書いても意味がないため。
 
-  @return map.get(v.$grid-breakpoints, $name);
-}
-
-@mixin media-breakpoint-up($name) {
-  $value: breakpoint-value($name);
-
-  @if $value == 0 {
-    @content;
-  } @else {
-    @media (min-width: $value + 0.02) {
-      @content;
-    }
-  }
-}
-
-@mixin media-breakpoint-down($name) {
-  @media (max-width: breakpoint-value($name)) {
-    @content;
-  }
-}
-
-@mixin media-breakpoint-between($lower, $upper) {
-  @media (min-width: breakpoint-value($lower) + 0.02) and (max-width: breakpoint-value($upper)) {
-    @content;
-  }
-}
-
-@mixin media-breakpoint-only($name) {
-  $keys: map.keys(v.$grid-breakpoints);
-  $index: list.index($keys, $name);
-
-  @if $index == 1 {
-    @include media-breakpoint-down($name) {
-      @content;
-    }
-  } @else {
-    @include media-breakpoint-between(list.nth($keys, $index - 1), $name) {
-      @content;
-    }
-  }
-}
-
-@mixin media-breakpoint-range($max) {
-  @media (max-width: $max) {
-    @content;
-  }
-}
-
-@mixin media-ratio($ratio: 2) {
-  @media (min-resolution: #{$ratio}dppx) {
-    @content;
-  }
-}
-```
+キーから値を引く処理は1つの関数にまとめる。マップに無いキーを渡されたら `@error` で止める。エラーを出さずに通すと、打ち間違えたキーのメディアクエリが空になり、どの幅でも当たらない宣言が残る。
 
 ```scss
-@use '../foundation' as f;
-
 .c-headline {
   font-size: var(--font-size-3xl);
 
@@ -115,6 +54,6 @@ $grid-breakpoints: (
 
 ## やってはいけないこと
 
-`@media` を直接書かない。マップを通さないと境界がファイルごとにずれ、`767px` と `767.98px` と `768px` が混在する。
+幅のメディアクエリを `@media` で直接書かない。マップを通さないと境界がファイルごとにずれ、`767px` と `768px` が混在する。`prefers-reduced-motion` や `any-hover` のように幅以外を見る条件は対象外で、`@media` で書く。
 
-`min-width` と `max-width` を同じ数値で書かない。境界の1pxで両方当たるか、どちらも当たらない隙間ができる。
+`min-width` と `max-width` で書かない。同じ数値なら境界で両方当たり、1px ずらすと小数の幅で隙間ができる。

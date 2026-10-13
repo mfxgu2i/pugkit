@@ -22,7 +22,7 @@
 }
 ```
 
-JS は属性だけを書き換える。クラスもスタイルも触らない。CSS は属性を `:has()` 越しに読んで見た目を決める。状態の出どころが1つになるので、片方だけ直す事故が起きない。
+JS は属性だけを書き換える。クラスもスタイルも触らない。CSS は属性を `:has()` 越しに読んで見た目を決める。状態の出どころが1つになるので、片方だけ直してしまう失敗が起きない。
 
 `details` の `open` や `dialog` の `open` のように、ブラウザが状態を持つものもある。部品ごとにどの属性を使うかは `ui/` の各ファイルが持つ。
 
@@ -31,11 +31,11 @@ JS は属性だけを書き換える。クラスもスタイルも触らない�
 「画像がないとき」のような分岐に修飾子クラスを足さない。`:has()` で中身を見る。
 
 ```scss
-.c-news-article {
-  grid-template: 'date category icon' auto / auto 1fr auto;
+.c-card {
+  grid-template: 'image body' auto / 240px 1fr;
 
-  &:not(:has(.c-news-article__image)) {
-    grid-template: 'date category' auto / auto 1fr;
+  &:not(:has(.c-card__image)) {
+    grid-template: 'body' auto / 1fr;
   }
 }
 ```

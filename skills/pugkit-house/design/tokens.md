@@ -33,54 +33,30 @@ CSSカスタムプロパティの宣言は `_tokens.scss` の `:root` にまと�
 
 ## 単位はトークンで決める
 
-文字サイズは rem、余白と寸法は px で持つ。単位まで含めてトークンに入れるので、呼び出し側は `var()` をそのまま書く。
+文字サイズは rem、余白と寸法は px で持つ。単位まで含めてトークンに入れるので、呼び出し側は `var()` をそのまま書く。色と行間は換算しない。動きと重なり順も、`0.3s` や `10` のように単位まで含めて持つ。
 
 ```scss
-@use 'functions/rem' as fn;
-
 :root {
-  // 文字サイズ。カンプの px を rem に換算して持つ
-  --font-size-2xl: #{fn.rem(24)};
   --font-size-md: #{fn.rem(16)};
-
-  // 余白と寸法。px のまま持つ
-  --contents-default: 1200px;
   --container-padding: 40px;
-  --container-padding-sp: 20px;
-
-  // 色と行間は換算しない
-  --color-primary: #005bac;
-  --line-height-base: 1.7;
-
-  // 動きと重なり順。単位まで含めて持つ
+  --color-primary: #333;
   --duration-normal: 0.3s;
-  --easing-base: ease;
-  --z-header: 10;
 }
 ```
-
-換算の関数は `foundation/functions/_rem.scss` に置く。
-
-```scss
-@use 'sass:math';
-@use '../variables' as v;
-
-@function rem($value) {
-  @return math.div($value, v.$root-font-size) * 1rem;
-}
-```
-
-CSSカスタムプロパティの値の中では Sass の関数呼び出しが評価されないため、`#{}` で展開する。展開した結果は `1.5rem` のような静的な値になるので、実行時に `calc()` は残らない。
 
 文字サイズだけ rem にするのは、ブラウザの文字サイズ設定に文字だけ追従させるため。余白まで rem にすると、文字を大きくしたときに組み全体が広がる。px で持てば、文字が伸びてもレイアウトは動かない。
 
+## rem の換算
+
+換算の関数 `rem()` は `foundation/functions/_rem.scss` に置く。カンプの px を数値で受け取り、`_variables.scss` の `$root-font-size` で割って `1rem` を掛ける。割り算は `sass:math` の `math.div()` を使う。`/` での割り算は Sass で廃止が決まっている。
+
+CSSカスタムプロパティの値の中では Sass の関数呼び出しが評価されないため、`#{}` で展開する。展開した結果は `1.5rem` のような静的な値になるので、実行時に `calc()` は残らない。
+
 ## トークンに無い値
 
-一回限りの文字サイズは `rem()` に数値を渡す。カンプの px をそのまま書けて、出力は `1.125rem` に畳まれる。
+一回限りの文字サイズは `rem()` に数値を渡す。カンプの px をそのまま書けて、出力は `1.125rem` になる。
 
 ```scss
-@use '../foundation' as f;
-
 .p-top-lead__note {
   font-size: f.rem(18);
 }
@@ -92,20 +68,9 @@ CSSカスタムプロパティの値の中では Sass の関数呼び出しが�
 
 ## 参照のしかた
 
-他の層からは `foundation` をまとめて読む。`_variables.scss` や `_tokens.scss` を個別に `@use` しない。
+他の層からは `@use '../foundation' as f;` でまとめて読む。`_variables.scss` や `_tokens.scss` を個別に `@use` しない。
 
-```scss
-@use '../foundation' as f;
-
-.c-button {
-  font-size: var(--font-size-md);
-  padding-inline: var(--container-padding);
-
-  @include f.media-breakpoint-down(md) {
-    font-size: var(--font-size-sm);
-  }
-}
-```
+トークンの名前は案件ごとに違う。他のファイルで「動きのトークン」「重なり順のトークン」と書いているものは、`_tokens.scss` を開いて該当する名前を確かめてから使う。無ければ `:root` に足す。
 
 トークンを参照するだけなら `@use` は要らない。mixin と関数を使うときに読む。
 

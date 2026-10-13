@@ -20,7 +20,7 @@ SCSS は `components/_tabs.scss`、JS は `assets/js/_tabs.js`。
 
 JS が書き換えるのは `aria-selected` と `tabindex` とパネルの `hidden` の3つ。見た目は CSS が `[aria-selected='true']` から引く。初期の選択状態はマークアップが持つ。
 
-パネルに `display` を当てるなら `[hidden] { display: none }` を併記する。`hidden` を状態の担い手にしている以上、`display: grid` などを当てた瞬間に UA スタイルが負けて、隠したはずのパネルが出る。JS もマークアップも正しいまま CSS だけで壊れるので、原因が追いにくい。
+パネルに `display` を当てるなら `[hidden] { display: none }` を併記する。`hidden` で状態を表している以上、`display: grid` などを当てた瞬間に UA スタイルが負けて、隠したはずのパネルが出る。JS もマークアップも正しいまま CSS だけで表示がおかしくなるので、原因が追いにくい。
 
 id は `<識別子>-<役割>-<連番>` で付ける。識別子は英字で始め、1ページに2組置くときは変える。
 
