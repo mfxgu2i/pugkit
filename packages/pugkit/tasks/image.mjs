@@ -18,7 +18,8 @@ import { CONVERTIBLE_GLOB, UNHANDLED_GLOB } from '../utils/image-formats.mjs'
 import { FILE_CONCURRENCY, runWithConcurrency } from '../utils/concurrency.mjs'
 
 // libvips の内部キャッシュを制限してメモリ消費を抑える
-sharp.cache({ memory: 50, files: 20, items: 200 })
+// files を 0 にするのは、開いたままの元画像を Windows が上書きも削除もさせないため
+sharp.cache({ memory: 50, files: 0, items: 200 })
 sharp.concurrency(1)
 
 export const IMAGE_GLOB = CONVERTIBLE_GLOB
