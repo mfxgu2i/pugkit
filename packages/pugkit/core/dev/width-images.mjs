@@ -39,11 +39,12 @@ const CONTENT_TYPES = {
 /**
  * 「_」始まりのセグメントを含むか。build の IMAGE_IGNORE と同じ扱いにする。
  *
- * 判定するのは URL 由来のパスなので、区切りは常に「/」。path.sep で分けると
- * Windows では 1 つのセグメントとして扱われ、dev だけが `_` 配下を配信する
+ * 判定するのは URL 由来のパスなので、区切りは「/」。path.sep で分けると
+ * Windows では 1 つのセグメントとして扱われ、dev だけが `_` 配下を配信する。
+ * ただし Windows は `%5C` から戻した「\」も区切りとして解決するので、それも区切る
  */
 function isHidden(urlRelativePath) {
-  return urlRelativePath.split('/').some(segment => segment.startsWith('_'))
+  return urlRelativePath.split(/[\\/]/).some(segment => segment.startsWith('_'))
 }
 
 /**

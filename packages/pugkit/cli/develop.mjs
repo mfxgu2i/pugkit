@@ -10,7 +10,8 @@ export async function develop(options = {}) {
 
   // Ctrl+C でも公開 API と同じ経路で後始末する。
   // ここを通さないと close() が本番で一度も実行されず、正しさがテストの中だけになる
-  for (const signal of ['SIGINT', 'SIGTERM']) {
+  // Windows には SIGTERM が来ない。ウィンドウを閉じると SIGHUP、Ctrl+Break は SIGBREAK になる
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) {
     process.once(signal, () => {
       builder.close().finally(() => process.exit(0))
     })

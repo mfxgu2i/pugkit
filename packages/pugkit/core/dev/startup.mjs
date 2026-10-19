@@ -47,6 +47,16 @@ export function assertPortAvailable(port, host) {
           )
           return
         }
+        if (error.code === 'EACCES') {
+          reject(
+            new Error(
+              `ポート ${port} を使う権限がありません。--port で別のポートを指定してください。` +
+                'Windows では Hyper-V や WSL が予約した範囲に当たることがあります' +
+                '（netsh interface ipv4 show excludedportrange protocol=tcp で確認できます）'
+            )
+          )
+          return
+        }
         reject(error)
       })
       .once('listening', () => tester.close(() => resolve()))
