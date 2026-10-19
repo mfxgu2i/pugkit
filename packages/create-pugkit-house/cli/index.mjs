@@ -153,7 +153,7 @@ function removeSkillDir(cwd, dir) {
 async function main(root, options) {
   const cwd = path.resolve(process.cwd(), root || '.')
   const current = !root || root === '.'
-  const projectName = current ? path.basename(process.cwd()) : root
+  const projectName = path.basename(cwd)
 
   const questions = {
     overwrite: {
