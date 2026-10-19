@@ -286,7 +286,9 @@ describe('出力先の規則', () => {
     ['webp', 2, 'img/a.gif', ['/proj/dist/img/a.webp']],
     ['compress', 2, 'img/a.gif', ['/proj/dist/img/a.gif']]
   ])('build.image.format: %s / density %i のとき %s -> %j', (format, density, relativePath, expected) => {
-    expect(imageOutputPaths(relativePath, config(format, density), paths).map(out => out.absolute)).toEqual(expected)
+    expect(imageOutputPaths(relativePath, config(format, density), paths).map(out => out.absolute)).toEqual(
+      expected.map(path => resolve(path))
+    )
   })
 
   it('筆頭は必ず原寸（削除側が「このソースの出力」として頼る）', () => {
