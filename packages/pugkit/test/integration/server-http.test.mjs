@@ -319,7 +319,8 @@ describe('配信できないアセット', () => {
    *
    * 読み取り権限を落としたファイルで、消失と同じ「存在するのに読めない」を作る。
    */
-  it('読み出しに失敗してもサーバーは動き続ける', async () => {
+  // Windows の chmod は読み取り専用にするだけで、読めないファイルを作れない
+  it.skipIf(process.platform === 'win32')('読み出しに失敗してもサーバーは動き続ける', async () => {
     const server = await startDevServer()
     const unreadable = `${server.context.paths.outputRoot}/assets/css/style.css`
     await mkdir(dirname(unreadable), { recursive: true })
