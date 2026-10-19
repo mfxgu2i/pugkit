@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { assertSafeToWipe } from '../utils/safe-dir.mjs'
 import { normalizeSubdir } from '../utils/subdir.mjs'
 import { resolveFromRoot } from '../utils/paths.mjs'
@@ -16,7 +17,7 @@ async function loadUserConfig(root) {
   if (!existsSync(configPath)) return {}
 
   try {
-    const module = await import(configPath)
+    const module = await import(pathToFileURL(configPath).href)
     return module.default || {}
   } catch (error) {
     logger.warn('config', `pugkit.config.mjs を読み込めませんでした（既定値で続行します）: ${error.message}`)
