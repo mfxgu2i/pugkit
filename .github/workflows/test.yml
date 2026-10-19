@@ -2,8 +2,9 @@ name: test
 
 on:
   push:
-    branches: [main, develop, 'feature/**']
+    branches: [main, develop]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
