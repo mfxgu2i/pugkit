@@ -2,7 +2,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { assertSafeToWipe } from '../utils/safe-dir.mjs'
 import { normalizeSubdir } from '../utils/subdir.mjs'
-import { resolveFromRoot } from '../utils/paths.mjs'
+import { resolveFromRoot, resolveRoot } from '../utils/paths.mjs'
 import { existsSync } from 'node:fs'
 import { defaultConfig } from './defaults.mjs'
 import { inspectConfigKeys, RENAMED_KEYS } from './schema.mjs'
@@ -167,7 +167,7 @@ export async function loadConfig(root = process.cwd(), inlineConfig = {}) {
   normalizeImageConfig(config.build.image)
   // CLI は `pugkit build .` のように相対パスを渡してくる。
   // 絶対パス前提で使う箇所（esbuild の absWorkingDir など）があるのでここで一度だけ解決する
-  config.root = resolve(root)
+  config.root = resolveRoot(root)
   applyInlineConfig(config, inlineConfig)
   validateConfig(config)
   return config

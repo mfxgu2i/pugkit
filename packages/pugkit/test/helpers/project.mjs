@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs'
 import { mkdtemp, mkdir, writeFile, rm, readdir, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
@@ -31,7 +32,8 @@ export async function createTestBuilder(root, mode = 'development') {
  *   （「.」始まりのディレクトリに置いたプロジェクトの検証に使う）
  */
 export async function createTempProject(files = {}, { prefix = 'pugkit-test-' } = {}) {
-  const root = await mkdtemp(join(tmpdir(), prefix))
+  // Windows の tmpdir は `RUNNER~1` のような短い名前を返すが、pugkit は root を実在の綴りに揃える
+  const root = realpathSync.native(await mkdtemp(join(tmpdir(), prefix)))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
 
   await writeFiles(root, files)
@@ -68,7 +70,7 @@ export async function listFiles(dir, base = dir) {
   for (const entry of entries) {
     const absolutePath = resolve(dir, entry.name)
     if (entry.isDirectory()) files.push(...(await listFiles(absolutePath, base)))
-    else files.push(absolutePath.slice(base.length + 1))
+    else files.push(absolutePath.slice(base.length + 1).replaceAll('\\', '/'))
   }
   return files.sort()
 }
