@@ -20,7 +20,10 @@ export function resolveFromRoot(root, dir) {
  *
  * Windows では、cwd 由来のパスと glob や Sass が返すパスとで、ドライブレターや
  * 大文字小文字の綴りが食い違う（`c:\proj` と `C:\proj`）。依存グラフや画像の幅は
- * パス文字列をキーにしているので、食い違うと再ビルドや幅違い画像の出力が黙って漏れる
+ * パス文字列をキーにしているので、食い違うと再ビルドや幅違い画像の出力が黙って漏れる。
+ *
+ * realpath はシンボリックリンクも解決するので、POSIX では使わない。macOS の /tmp が
+ * /private/tmp に変わるなど、利用者が渡したパスとログやエラーの表示がずれる
  */
 export function resolveRoot(root) {
   const absolute = resolve(root)

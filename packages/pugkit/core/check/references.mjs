@@ -24,9 +24,8 @@ const RULE = 'missing-reference'
 /**
  * 検査対象を集める。
  *
- * glob の大文字小文字の扱いはプラットフォームで変わる（macOS と Windows は区別しない）。
- * 拡張子をパターンに書くと、手元で拾えたファイルが Linux の CI で拾われない。
- * 全件を挙げてから自分で判定する
+ * 拡張子はパターンに書かず、全件を挙げてから自分で判定する。
+ * 出力の `.HTML` のような大文字の拡張子も検査の対象にするため
  */
 async function listTargets(outputRoot) {
   const files = await glob('**/*', { cwd: outputRoot, nodir: true })
