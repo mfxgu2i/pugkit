@@ -1,4 +1,4 @@
-import { glob } from 'glob'
+import { glob } from '../utils/glob.mjs'
 import { copyFile } from 'node:fs/promises'
 import { relative, resolve } from 'node:path'
 import { logger } from '../utils/logger.mjs'

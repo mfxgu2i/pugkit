@@ -1,4 +1,4 @@
-import { glob } from 'glob'
+import { glob } from '../utils/glob.mjs'
 import { writeFile } from 'node:fs/promises'
 import { relative, resolve, basename } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'

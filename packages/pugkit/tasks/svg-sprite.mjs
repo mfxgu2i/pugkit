@@ -1,4 +1,4 @@
-import { glob } from 'glob'
+import { glob } from '../utils/glob.mjs'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { resolve, dirname, relative } from 'node:path'
 import { optimize } from 'svgo'

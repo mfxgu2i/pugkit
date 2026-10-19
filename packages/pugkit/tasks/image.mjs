@@ -1,4 +1,4 @@
-import { glob } from 'glob'
+import { glob } from '../utils/glob.mjs'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, relative, resolve, extname } from 'node:path'
 import sharp from 'sharp'

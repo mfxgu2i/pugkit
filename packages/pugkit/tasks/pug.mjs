@@ -1,4 +1,4 @@
-import { glob } from 'glob'
+import { glob } from '../utils/glob.mjs'
 import { basename, relative } from 'node:path'
 import { compilePugFile } from '../transform/pug.mjs'
 import { formatHtml } from '../transform/html.mjs'

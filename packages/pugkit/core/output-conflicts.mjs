@@ -1,4 +1,4 @@
-import { glob } from 'glob'
+import { glob } from '../utils/glob.mjs'
 import { relative } from 'node:path'
 import { imageOutputPaths } from '../tasks/image.mjs'
 import { svgOutputPath, SVG_GLOB, SVG_IGNORE } from '../tasks/svg.mjs'

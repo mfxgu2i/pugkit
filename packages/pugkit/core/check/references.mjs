@@ -1,4 +1,4 @@
-import { glob } from 'glob'
+import { glob } from '../../utils/glob.mjs'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { collectHtmlReferences } from './html-references.mjs'

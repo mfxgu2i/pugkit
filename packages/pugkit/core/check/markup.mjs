@@ -1,4 +1,4 @@
-import { glob } from 'glob'
+import { glob } from '../../utils/glob.mjs'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
