@@ -1,3 +1,5 @@
+import { extname } from 'node:path'
+
 /**
  * 画像形式の集合。
  *
@@ -49,9 +51,13 @@ export const OUTPUT_EXT_RE = toRe(OUTPUT_EXTENSIONS)
 export const CONVERTIBLE_GLOB = toGlob(CONVERTIBLE_EXTENSIONS)
 export const UNHANDLED_GLOB = toGlob(UNHANDLED_EXTENSIONS)
 
-/** image タスクが変換する形式か（＝ watcher が image として扱う対象） */
+/**
+ * image タスクが変換する形式か（＝ watcher が image として扱う対象）。
+ * build の glob と同じく拡張子の大文字小文字を区別する。区別しないと `hero.JPG` を
+ * dev だけが変換して、build では出力されない
+ */
 export function isConvertibleImage(name) {
-  return CONVERTIBLE_EXT_RE.test(name)
+  return CONVERTIBLE_EXTENSIONS.includes(extname(name).slice(1))
 }
 
 /** imageInfo() が寸法を読みうる形式か */
