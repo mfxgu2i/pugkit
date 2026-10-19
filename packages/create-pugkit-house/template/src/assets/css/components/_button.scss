@@ -1,0 +1,31 @@
+@use '../foundation' as f;
+
+.c-button {
+  display: inline-flex;
+  gap: var(--space-sm);
+  align-items: center;
+  padding-block: 12px;
+  padding-inline: var(--space-lg);
+  font-weight: 600;
+  color: var(--color-bg);
+  background-color: var(--color-primary);
+  border-radius: var(--radius-sm);
+  transition: background-color var(--duration-normal) var(--easing-base);
+
+  @include f.hover {
+    background-color: var(--color-primary-dark);
+  }
+
+  &[data-variant='inverse'] {
+    color: var(--color-primary);
+    background-color: var(--color-bg);
+
+    @include f.hover {
+      background-color: var(--color-bg-muted);
+    }
+  }
+
+  &__icon {
+    flex-shrink: 0;
+  }
+}

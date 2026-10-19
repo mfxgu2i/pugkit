@@ -1,0 +1,52 @@
+*,
+::before,
+::after {
+  box-sizing: border-box;
+}
+
+*,
+::before,
+::after,
+::backdrop {
+  @media (prefers-reduced-motion: reduce) {
+    scroll-behavior: unset !important;
+  }
+}
+
+:root {
+  scroll-padding-block-start: var(--header-block-size);
+  scrollbar-gutter: stable;
+}
+
+:root:has(dialog:modal) {
+  overflow: hidden;
+}
+
+body,
+h1,
+h2,
+h3,
+p,
+ul,
+ol,
+figure,
+pre {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+img,
+picture,
+svg {
+  display: block;
+  max-inline-size: 100%;
+}
+
+img {
+  block-size: auto;
+}

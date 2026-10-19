@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:ui": "vitest --ui",
     "publish:pugkit": "cd packages/pugkit && npm publish",
-    "publish:create-pugkit": "cd packages/create-pugkit && npm publish",
+    "publish:create-pugkit-house": "cd packages/create-pugkit-house && npm publish",
     "test:watch": "vitest --project unit",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",

@@ -1,6 +1,21 @@
 ---
 name: pugkit-house
-description: pugkit で作る静的サイトの設計と実装の型。CSS設計(FLOCSSの層・トークン・ブレークポイント)、コンポーネント設計(寸法の責務・BEMの入れ子)、状態(aria/dataの属性・:has()での分岐)、プロパティの書き方(論理プロパティ・トランジション)、レイアウト設計(pugの継承・block構成と派生レイアウト)、画像・アイコン・head メタ・セクション・パンくず・ホバーのmixin実装、JSのモジュール分割とスムーススクロールの実装、アコーディオン・モーダル・ハンバーガーメニュー・ドロップダウン・タブの組み方の判断と置き場(APGを基本に、dialogとdetailsが使える場面は標準要素)、背後のスクロールを止める型、Popover APIを採らない判断を持つ。SCSSを書く、Pugのマークアップを書く、レイアウトやコンポーネントやmixinを作る、JSを機能ごとに分ける、アンカーリンクのスクロールを実装する、開閉や切り替えのあるUIをアクセシブルに作る、モーダルを開いたときに背景が動くのを止めるときに使う。pugkit skill の上に載る層で、Builder や imageInfo のAPIそのものはそちらが持つ。次の3つには使用しないこと。pugkit.config.mjs が無いプロジェクトのHTML/CSS作業。pugkit のコマンド・設定・ビルドの挙動(pugkit skill が持つ)。フォームのバリデーションやパフォーマンス改善など、UI部品以外の一般的なWeb実装。
+description: |
+  pugkit で作る静的サイトの設計と実装の方針。CSS 設計、レイアウト、mixin、JS のモジュール、UI 部品について、どう組むかと置き場、その理由を持つ。
+
+  次の作業を始める前に読む。
+  - SCSS を書く。FLOCSS の層、トークン、ブレークポイント、論理プロパティ、トランジション、寸法の責務、BEM の入れ子
+  - 開閉やカレントの状態を持たせる。aria と data の属性、:has() での分岐
+  - Pug を書く。レイアウトの継承と block、派生レイアウト、ページ定数、セクションの幅と余白、写真の背景
+  - 画像、SVG アイコン、head のメタ、パンくず、ホバーの mixin を使う、または作る
+  - JS を機能ごとに分ける。data-module での結びつけ、アンカーリンクのスクロール
+  - アコーディオン、モーダル、ハンバーガーメニュー、ドロップダウン、タブを組む。モーダルの背後のスクロールを止める
+  - Popover API などの新しい機能を採るか決める
+
+  次には使わない。
+  - pugkit.config.mjs が無いプロジェクトの HTML や CSS の作業
+  - pugkit のコマンド、設定、ビルドの挙動、Builder と imageInfo の API。pugkit skill が持つ
+  - フォームのバリデーションやパフォーマンス改善など、UI 部品以外の一般的な Web 実装
 ---
 
 # pugkit-house
@@ -8,6 +23,10 @@ description: pugkit で作る静的サイトの設計と実装の型。CSS設計
 ## 前提
 
 このskillは pugkit skill の上に載る層になる。ツールの使い方はそちらが持つので、先に読む。
+
+ここにあるのは、どう実装して欲しいかという方針と手順、その理由になる。実装の全文は持たない。書くときは、各ファイルの手順と制約を満たすコードをその場で書く。理由が添えてある制約は、別の書き方を選ぶときにも守る。
+
+SCSS、Pug、JS を書き始める前に、下の表から作業に当たるファイルを読む。書いてから読むと、一般的な書き方で組んだものを後から直すことになる。
 
 ## 設計
 
@@ -22,18 +41,17 @@ description: pugkit で作る静的サイトの設計と実装の型。CSS設計
 | カンプの比率を画面幅に追従させるか判断する | [design/font-ratio.md](design/font-ratio.md) |
 | 子要素のサイズを決める、BEMの要素を重ねるか判断する | [design/components.md](design/components.md) |
 | 開閉やカレントを持たせる、中身の有無で見た目を変える | [design/state.md](design/state.md) |
-| ページの土台を作る、レイアウトを派生させる、ページ固有の定数を置く | [design/layout.md](design/layout.md) |
+| ページの土台を作る、レイアウトを派生させる、ページ固有の定数を置く、セクションの幅と余白を決める、写真を背景に敷く | [design/layout.md](design/layout.md) |
 
 ## mixin
 
-写して使う実装。Pug の mixin は `_templates/mixins/`、SCSS の mixin は `foundation/mixins/` に置く。ファイルの先頭には引数と使用例をコメントで書く。読む側が実装を追わずに使い方を掴める。
+各 mixin が満たす振る舞いと、呼び出しの形を持つ。Pug の mixin は `_templates/mixins/`、SCSS の mixin は `foundation/mixins/` に置く。ファイルの先頭には引数と使用例をコメントで書く。読む側が実装を追わずに使い方を掴める。
 
-ゼロから作るときの型なので、いまある実装と一致するとは限らない。まず置き場を見て、あるものを使う。挙動が違うときは、どちらが正しいかを確かめてから決める。既存の実装が誤っていることもある。
+まず置き場を見て、あるものを使う。無ければ、ここに書いた振る舞いを満たすように書く。あるものの挙動がここと違うときは、どちらが正しいかを確かめてから決める。既存の実装が誤っていることもある。
 
 | やること | 読むファイル |
 |---|---|
 | ホバーの見た目を書く | [mixins/hover.md](mixins/hover.md) |
-| セクションを積み上げる、外枠と背景を作る | [mixins/wrapper.md](mixins/wrapper.md) |
 | 画像を出力する | [mixins/image.md](mixins/image.md) |
 | SVGアイコンを出力する | [mixins/icon.md](mixins/icon.md) |
 | head のメタ情報を出力する | [mixins/meta.md](mixins/meta.md) |
@@ -41,7 +59,7 @@ description: pugkit で作る静的サイトの設計と実装の型。CSS設計
 
 ## スクリプト
 
-ファイルの分け方と、写して使う実装。写して使う実装は mixin と同じく、ゼロから作るときの型になる。まず既存の実装を見て、あるものを使う。分け方のほうは既存の実装を測る規則なので、合っていなければ既存側を直す。
+ファイルの分け方と、個々の機能の組み方。組み方は mixin と同じく、まず既存の実装を見て、あるものを使う。無ければ手順に沿って書く。分け方のほうは既存の実装が合っているかを判定する基準なので、合っていなければ既存側を直す。
 
 | やること | 読むファイル |
 |---|---|
@@ -61,7 +79,7 @@ UI は APG のパターンに従って組む。ただし `dialog` と `details` 
 
 モーダルとドロワーで共有する背後の扱いは [ui/scroll-lock.md](ui/scroll-lock.md) にある。
 
-実装の全文は持たない。APG の該当する Example への案内と、pugkit での置き場と命名、その UI 固有の判断だけを書く。まず既存の実装を見て、あるものを使う。ただし既存が状態をクラスで持っていたり、要素が持つ属性を手で書いていたりする場合は、踏襲せずに直す。読み上げに関わる分だけ、揃えるより正すほうが先になる。
+実装の全文は持たない。APG の該当する Example への案内と、pugkit での置き場と命名、その UI 固有の判断だけを書く。まず既存の実装を見て、あるものを使う。ただし既存が状態をクラスで持っていたり、要素が持つ属性を手で書いていたりする場合は、踏襲せずに直す。どちらも読み上げに関わるので、既存に揃えるより正すほうを優先する。
 
 ### 標準要素に置き換えてよいか
 
@@ -76,22 +94,34 @@ UI は APG のパターンに従って組む。ただし `dialog` と `details` 
 
 `dialog` は4つとも通る。`details` は構造の露出だけ通らないので、[ui/accordion.md](ui/accordion.md) で条件を分けている。
 
-要素が持っている属性は手で書かない。無害な重複ではなく、ブラウザが持っていた振る舞いのほうが消える。要素ごとの壊れ方は各ファイルにある。
+要素が持っている属性は手で書かない。書くと無害な重複では済まず、ブラウザが持っていた振る舞いのほうが消える。要素ごとの壊れ方は各ファイルにある。
 
-写す側に倒したら、SCSS は `components/`、JS は `assets/js/_名前.js` に置き、`data-module` で名乗らせる。ヘッダーやフッターの骨格に当たるものだけ `layouts/` になる。層の決め方は [design/flocss.md](design/flocss.md) を参照。ファイルの形は既存の4部品に揃える。
+Example を写すと決めたら、SCSS は `components/`、JS は `assets/js/_名前.js` に置き、`data-module` で名乗らせる。ヘッダーやフッターの骨格に当たるものだけ `layouts/` になる。層の決め方は [design/flocss.md](design/flocss.md) を参照。ファイルの形は、案件に既にある UI 部品の JS と SCSS に揃える。
 
-### 使わないもの
+### 新しい機能を採るか
 
-代わりが安く付くものは採らない。
+Baseline の段階で決める。段階は時間とともに進むので、判断のたびに [Web Platform Status](https://webstatus.dev/) か MDN の Baseline の表示で確かめる。覚えている段階で決めない。
 
-| 使わないもの | 理由 |
+| 段階 | 採るか |
 |---|---|
-| Popover API | iOS Safari は 18.3 から。ポリフィルと `:popover-open` の手当てが要る |
-| `command` と `commandfor` | Safari は 26.2 から。JS 無しでモーダルを開けるが、同じ理由で採らない |
-| `interpolate-size` と `calc-size()` | Limited availability。`auto` への遷移を補間できない |
-| `transition-behavior: allow-discrete` | Firefox が `display` の遷移に未対応。ドロワーは `visibility` で代替でき、`dialog` は代替が無いので閉じの演出を諦める |
+| Widely available | 採る |
+| Newly available | 代わりがあれば代わりで組む。代わりが無く、未対応のブラウザでは素の振る舞いに戻るだけで内容に到達できるなら採る |
+| Baseline に入っていない | 採らない |
 
-代わりが無いものは、対応が新しくても採る。`details` の `name` は Firefox 130 から、`scrollbar-gutter` は2024年12月からになる。採るかどうかは、対応していないブラウザで何が起きるかで決める。
+UI 部品で判断が分かれやすいものと、採らないときの代わりは次のとおり。
+
+| 機能 | 採らないときの代わり |
+|---|---|
+| Popover API | `aria-expanded` と `:has()` と `inert` で組む |
+| `command` と `commandfor` | `showModal()` を JS から呼ぶ |
+| `interpolate-size` と `calc-size()` | `auto` への遷移を補間しない |
+| `transition-behavior: allow-discrete` による `display` の遷移 | ドロワーは `visibility` で代える。`dialog` は代わりが無いので閉じるときの演出を諦める |
+
+`details` の `name` と `scrollbar-gutter` は代わりが無く、未対応のブラウザでは素の振る舞いに戻るだけなので採る。
+
+## 書き終えたら
+
+読んだファイルと照らし合わせてから終える。「やってはいけないこと」に当たる書き方と、理由が添えてある制約を外した箇所が無いかを見る。あれば直す。既存のコードに合わせた結果として外れたものも、同じように直す。
 
 ## 扱わない範囲
 
@@ -100,4 +130,4 @@ UI は APG のパターンに従って組む。ただし `dialog` と `details` 
 | `Builder` と `imageInfo()` のAPI、ファイルの解決規則、設定、コマンド | pugkit skill |
 | フォームやパフォーマンスなど、UI部品以外の一般的なWeb実装 | modern-web-guidance skill |
 
-`pugkit.config.mjs` が無いプロジェクトでは使わない。ここにある型は pugkit の出力規則とディレクトリ構成を前提にしている。
+`pugkit.config.mjs` が無いプロジェクトでは使わない。ここにある方針は pugkit の出力規則とディレクトリ構成を前提にしている。

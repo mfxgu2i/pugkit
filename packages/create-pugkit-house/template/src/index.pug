@@ -1,0 +1,24 @@
+extends /_templates/_layout
+
+block append vars
+  -
+    metaData.pageTitle = ''
+    metaData.pageDescription = ''
+
+block contents
+  section.p-top-hero
+    .u-container
+      p.p-top-hero__title __キャッチコピー__
+      p.p-top-hero__text __リード文__
+      a.c-button(href='#features' data-variant='inverse')
+        | __ボタン__
+        +Icon('arrow', { class: 'c-button__icon' })
+
+  section#features.p-top-features(aria-labelledby='features-title')
+    .u-container
+      h2#features-title.p-top-features__title __見出し__
+      ul.p-top-features__list
+        each index in [1, 2, 3]
+          li.p-top-features__item
+            h3.p-top-features__item-title __項目の見出し__
+            p.p-top-features__item-text __項目の本文__

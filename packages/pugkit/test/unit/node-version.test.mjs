@@ -44,7 +44,7 @@ describe('package.json との一致', () => {
     expect(enginesOf('../../package.json')).toBe(`>=${MINIMUM_NODE_VERSION}`)
   })
 
-  it('create-pugkit の engines も揃っている', () => {
-    expect(enginesOf('../../../create-pugkit/package.json')).toBe(`>=${MINIMUM_NODE_VERSION}`)
+  it('create-pugkit-house の engines も揃っている', () => {
+    expect(enginesOf('../../../create-pugkit-house/package.json')).toBe(`>=${MINIMUM_NODE_VERSION}`)
   })
 })

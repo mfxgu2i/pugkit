@@ -1,0 +1,43 @@
+{
+  "name": "create-pugkit-house",
+  "version": "1.0.0",
+  "description": "Scaffolding for pugkit projects with the pugkit-house structure",
+  "type": "module",
+  "license": "MIT",
+  "author": "mfxgu2i <mfxgu2i@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mfxgu2i/pugkit.git",
+    "directory": "packages/create-pugkit-house"
+  },
+  "bugs": "https://github.com/mfxgu2i/pugkit/issues",
+  "homepage": "https://github.com/mfxgu2i/pugkit#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "create-pugkit-house": "cli/index.mjs"
+  },
+  "files": [
+    "cli"
+  ],
+  "keywords": [
+    "pugkit",
+    "pug",
+    "sass",
+    "static-site-generator",
+    "scaffold"
+  ],
+  "dependencies": {
+    "cac": "^6.7.14",
+    "degit": "^2.8.4",
+    "picocolors": "^1.1.1",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/prompts": "^2.4.9"
+  },
+  "engines": {
+    "node": ">=22.22.2"
+  }
+}

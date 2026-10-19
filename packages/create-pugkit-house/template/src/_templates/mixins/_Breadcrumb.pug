@@ -1,0 +1,61 @@
+//- ============================================================
+//- Breadcrumb mixin
+//- ============================================================
+//- パンくずリストと BreadcrumbList の構造化データを同じ値から出力します。
+//- 派生レイアウトから呼びます。トップページからは呼びません。
+//- トップと現在地は mixin が足すので、渡すのは中間の階層だけです。
+//-
+//- 引数
+//-   breadcrumb  {object}
+//-     middlePages  {object[]}  トップと現在地の間のページ。順に並べます
+//-       label  {string}  表示名
+//-       path   {string}  ルートからのパス。先頭と末尾のスラッシュは揃えます
+//-     pageTitle    {string}  現在地の表示名（デフォルト: metaData.pageTitle）
+//-
+//- 使用例
+//-   +Breadcrumb({ middlePages: [{ label: '会社案内', path: 'company/' }] })
+
+mixin Breadcrumb(breadcrumb = {})
+  -
+    const middlePages = breadcrumb.middlePages || []
+    const pageTitle = breadcrumb.pageTitle || metaData.pageTitle
+
+    const normalizePath = (value) => {
+      const trimmed = String(value).replace(/^\/+/, '').replace(/\/+$/, '')
+
+      if (!trimmed) return ''
+
+      return /\.[a-z0-9]+$/i.test(trimmed) ? trimmed : `${trimmed}/`
+    }
+
+    const trail = [{label: 'ホーム', path: ''}].concat(
+      middlePages.map((item) => ({label: item.label, path: normalizePath(item.path)}))
+    )
+
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: trail
+        .map((item, index) => ({
+          '@type': 'ListItem',
+          position: index + 1,
+          name: item.label,
+          item: `${Builder.url.base}/${item.path}`
+        }))
+        .concat([{
+          '@type': 'ListItem',
+          position: trail.length + 1,
+          name: pageTitle,
+          item: Builder.url.href
+        }])
+    }
+
+  nav.c-breadcrumb(aria-label='パンくずリスト')
+    ol.c-breadcrumb__list
+      each item in trail
+        li.c-breadcrumb__item
+          a.c-breadcrumb__link(href=`${Builder.dir}${item.path}`)= item.label
+      li.c-breadcrumb__item(aria-current='page')= pageTitle
+
+  script(type='application/ld+json')
+    != JSON.stringify(jsonLd, null, 2).replace(/</g, '\\u003c')

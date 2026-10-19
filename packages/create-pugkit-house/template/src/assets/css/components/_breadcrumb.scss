@@ -1,0 +1,27 @@
+.c-breadcrumb {
+  padding-block: var(--space-md);
+  font-size: var(--font-size-sm);
+
+  &__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+
+  &__item {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: center;
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+
+    &:not(:first-child)::before {
+      inline-size: 6px;
+      block-size: 6px;
+      content: '';
+      border-block-start: 1px solid currentcolor;
+      border-inline-end: 1px solid currentcolor;
+      rotate: 45deg;
+    }
+  }
+}

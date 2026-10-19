@@ -1,15 +1,15 @@
 # 新規 pugkit プロジェクトの開始
 
-## create-pugkit でスキャフォールド
+## create-pugkit-house でスキャフォールド
 
 Node.js 22.22.2 以上が必要。新規 pugkit プロジェクトは公式スキャフォールダーでセットアップする。
 
 ```sh
-npm create pugkit@latest           # カレントディレクトリに作成
-npm create pugkit@latest my-site   # ./my-site に作成
+npm create pugkit-house@latest           # カレントディレクトリに作成
+npm create pugkit-house@latest my-site   # ./my-site に作成
 ```
 
-テンプレートには共通レイアウト、Meta / Image mixin、Sass エントリ、`pugkit.config.mjs`、markuplint の設定が含まれる。依存は pugkit だけで、markuplint 自体は入らない（`pugkit check markup` を使うなら `npm i -D markuplint` で足す）。スキャフォールド後:
+テンプレートには共通レイアウトと派生レイアウト、Meta / Image / Icon / Breadcrumb mixin、FLOCSS の層に分けた Sass、スムーススクロールを載せた JS、`pugkit.config.mjs`、markuplint の設定が含まれる。依存は pugkit だけで、markuplint 自体は入らない（`pugkit check markup` を使うなら `npm i -D markuplint` で足す）。スキャフォールド後:
 
 ```sh
 npm install
@@ -30,19 +30,31 @@ project-root/
 │   └── assets/img/common/ogp.jpg
 └── src/
     ├── index.pug             # トップページ
-    ├── about/index.pug       # 下層ページの例（extends /_templates/_layout）
+    ├── about/index.pug       # 下層ページの例（extends /_templates/_pageLayout）
     ├── _templates/
     │   ├── _constants.pug    # META_DATA / BREAK_POINTS などの定数
     │   ├── _layout.pug       # 共通レイアウト（head・header・footer を描画）
+    │   ├── _pageLayout.pug   # 下層ページの派生レイアウト（パンくずを出す）
     │   ├── includes/
     │   │   ├── _header.pug
     │   │   └── _footer.pug
     │   └── mixins/
-    │       ├── _Image.pug    # imageInfo() ベースの画像 mixin（+Image）
-    │       └── _Meta.pug     # head メタ / OGP を出力する mixin（+Meta）
+    │       ├── _Breadcrumb.pug  # パンくずと構造化データ（+Breadcrumb）
+    │       ├── _Icon.pug        # SVG スプライトのアイコン（+Icon）
+    │       ├── _Image.pug       # imageInfo() ベースの画像 mixin（+Image）
+    │       └── _Meta.pug        # head メタ / OGP を出力する mixin（+Meta）
     └── assets/               # テンプレートの初期配置（場所は自由に変更可）
-        ├── css/style.scss    # Sass エントリ
-        └── js/main.js        # JS エントリ
+        ├── css/
+        │   ├── style.scss    # Sass エントリ。各層を読む順序だけを持つ
+        │   ├── foundation/   # 変数・トークン・reset・base・関数・mixin
+        │   ├── layouts/
+        │   ├── components/
+        │   ├── projects/
+        │   └── utilities/
+        ├── icons/arrow.svg   # スプライトに入るアイコン
+        └── js/
+            ├── main.js       # JS エントリ。モジュールのローダー
+            └── _smoothScroll.js
 ```
 
 `src/` 配下のファイルはどこに置いてもディレクトリ構成のまま `outDir` に出力される。`assets/` などの配置はこの構成に固定せず、プロジェクトに合わせて自由に変更してよい。

@@ -1,0 +1,36 @@
+@use '../foundation' as f;
+
+.p-top-features {
+  padding-block: var(--section-padding-block);
+
+  @include f.media-breakpoint-down(md) {
+    padding-block: var(--section-padding-block-sp);
+  }
+
+  &__title {
+    margin-block-end: var(--space-xl);
+    font-size: var(--font-size-2xl);
+    text-align: center;
+  }
+
+  &__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+    gap: var(--space-lg);
+  }
+
+  &__item {
+    padding: var(--space-lg);
+    border: 2px solid var(--color-border);
+    border-radius: 8px;
+  }
+
+  &__item-title {
+    margin-block-end: var(--space-md);
+    font-size: var(--font-size-lg);
+  }
+
+  &__item-text {
+    color: var(--color-primary-dark);
+  }
+}

@@ -1,0 +1,43 @@
+include /_templates/_constants
+include /_templates/mixins/_Meta
+include /_templates/mixins/_Image
+include /_templates/mixins/_Icon
+
+block vars
+  - const metaData = META_DATA
+
+doctype html
+html(lang=metaData.lang)
+  head
+    +Meta(metaData)
+
+    //- 計測タグ
+    block analytics
+
+    //- 構造化データ
+    block structuredData
+
+    //- 外部リソース
+    block externalResources
+
+    //- サイトリソース
+    block styles
+      link(rel='stylesheet' href=`${Builder.dir}assets/css/style.css`)
+
+    block scripts
+      script(src=`${Builder.dir}assets/js/main.js` type='module')
+
+  body
+    block bodyAnalytics
+
+    //- ヘッダー
+    block header
+      include /_templates/includes/_header
+
+    //- コンテンツ
+    main
+      block contents
+
+    //- フッター
+    block footer
+      include /_templates/includes/_footer

@@ -1,0 +1,12 @@
+@use '../foundation' as f;
+
+.u-container {
+  box-sizing: content-box;
+  max-inline-size: var(--contents-default);
+  padding-inline: var(--container-padding);
+  margin-inline: auto;
+
+  @include f.media-breakpoint-down(md) {
+    padding-inline: var(--container-padding-sp);
+  }
+}

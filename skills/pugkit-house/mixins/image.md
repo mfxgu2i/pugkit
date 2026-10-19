@@ -1,6 +1,6 @@
 # +Image
 
-用途は `src/assets/img/` 配下の画像を `picture` として出力すること。密度記述子と幅記述子、アートディレクション、遅延読み込みを `imageInfo()` が解決する。
+用途は `src/assets/img/` 配下の画像を `picture` として出力すること。密度記述子と幅記述子、アートディレクションは `imageInfo()` が解決し、遅延読み込みの属性は mixin が付ける。
 
 ## 依存
 
@@ -11,65 +11,7 @@
 
 `public/` 配下の画像には使えない。変換も縮小もされないため、別 mixin を用意する。
 
-## mixin
-
-```pug
-mixin Image(path, args = {})
-  -
-    const info          = imageInfo(`${Builder.dir}assets/img/${path}`, { widths: args.widths, sizes: args.sizes })
-    const alt           = args.alt || ''
-    const media         = BREAK_POINTS[args.media] || BREAK_POINTS.md
-    const loading       = args.lazy !== false ? 'lazy' : undefined
-    const fetchpriority = args.lazy === false ? 'high' : undefined
-
-  picture(class=args.class)
-
-    //- アートディレクション画像が存在する場合のみ出力
-    //- sizes は幅記述子のときだけ返るので、そのまま渡してよい
-    if info.variant
-      source(
-        media=media
-        srcset=info.variant.srcset
-        sizes=info.variant.sizes
-        width=info.variant.width
-        height=info.variant.height
-      )
-    img(
-      src=info.src
-      srcset=info.srcset
-      sizes=info.sizes
-      alt=alt
-      width=info.width
-      height=info.height
-      loading=loading
-      fetchpriority=fetchpriority
-    )
-```
-
-`BREAK_POINTS` は定数ファイルに定義する。
-
-```pug
--
-  const BREAK_POINTS = {
-    sm: '(max-width: 575.98px)',
-    md: '(max-width: 767.98px)',
-    lg: '(max-width: 889.98px)'
-  }
-```
-
-## 引数
-
-| 引数 | 型 | 既定 | 意味 |
-|---|---|---|---|
-| `path` | string | 必須 | `assets/img/` からの相対パス |
-| `args.alt` | string | `''` | 代替テキスト |
-| `args.media` | string | `'md'` | アートディレクションを切り替えるブレークポイントのキー |
-| `args.lazy` | boolean | `true` | `false` にすると `fetchpriority='high'` が付く |
-| `args.class` | string | なし | `picture` 要素に付けるクラス |
-| `args.widths` | number[] | なし | 幅記述子で出すときの幅の一覧 |
-| `args.sizes` | string | なし | 表示幅の指定。`widths` とセットで使う |
-
-## 使用例
+## 呼び出しの形
 
 ```pug
 +Image('logo.png', { alt: 'ロゴ' })
@@ -78,9 +20,38 @@ mixin Image(path, args = {})
   alt: '',
   lazy: false,
   widths: [640, 960, 1280],
-  sizes: '(max-width: 767px) 100vw, 1280px'
+  sizes: '(width < 768px) 100vw, 1280px'
 })
 ```
+
+| 引数 | 型 | 既定 | 意味 |
+|---|---|---|---|
+| `path` | string | 必須 | `assets/img/` からの相対パス |
+| `args.alt` | string | `''` | 代替テキスト |
+| `args.media` | string | `'md'` | アートディレクションを切り替えるブレークポイントのキー |
+| `args.lazy` | boolean | `true` | `false` にすると即時に読み込み、優先度を上げる |
+| `args.class` | string | なし | `picture` 要素に付けるクラス |
+| `args.widths` | number[] | なし | 幅記述子で出すときの幅の一覧 |
+| `args.sizes` | string | なし | 表示幅の指定。`widths` とセットで使う |
+
+## 組み方
+
+`imageInfo()` に `` `${Builder.dir}assets/img/${path}` `` と、`{ widths, sizes }` を渡す。戻り値の属性をそのまま `picture` の中の `source` と `img` に渡す。
+
+| 出力 | 中身 |
+|---|---|
+| `picture` | `class` に `args.class` |
+| `source` | 戻り値に `variant` があるときだけ出す。`media` は `BREAK_POINTS[args.media]`、無ければ `BREAK_POINTS.md`。`srcset` `sizes` `width` `height` は `variant` から取る |
+| `img` | `src` `srcset` `sizes` `width` `height` を戻り値から取る。`alt` は空文字を既定にする |
+
+`lazy` の扱いは2つの属性に分かれる。
+
+| `args.lazy` | `loading` | `fetchpriority` |
+|---|---|---|
+| `false` 以外 | `lazy` | 付けない |
+| `false` | 付けない | `high` |
+
+`sizes` は幅記述子のときだけ返るので、条件を付けずにそのまま渡してよい。
 
 ## SCSS
 

@@ -1,0 +1,37 @@
+@use '../foundation' as f;
+
+.p-about {
+  padding-block: var(--space-lg) var(--section-padding-block);
+
+  @include f.media-breakpoint-down(md) {
+    padding-block-end: var(--section-padding-block-sp);
+  }
+
+  &__body {
+    max-inline-size: var(--contents-narrow);
+  }
+
+  &__title {
+    padding-block-end: var(--space-sm);
+    margin-block-end: var(--space-lg);
+    font-size: var(--font-size-3xl);
+    line-height: var(--line-height-tight);
+  }
+
+  &__heading {
+    margin-block: var(--space-lg) var(--space-md);
+    font-size: var(--font-size-xl);
+    color: var(--color-primary);
+  }
+
+  &__list {
+    padding-inline-start: 24px;
+    list-style: disc;
+  }
+
+
+  &__action {
+    margin-block-start: var(--space-xl);
+    text-align: center;
+  }
+}

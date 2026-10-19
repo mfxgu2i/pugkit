@@ -1,0 +1,22 @@
+extends /_templates/_pageLayout
+
+block append vars
+  -
+    metaData.pageTitle = '下層ページ'
+    metaData.pageDescription = ''
+
+block pageContents
+  section.p-about(aria-labelledby='about-title')
+    .u-container
+      .p-about__body
+        h1#about-title.p-about__title 下層ページ
+        p __本文__
+        h2.p-about__heading __見出し__
+        ul.p-about__list
+          li __項目__
+          li __項目__
+          li __項目__
+        .p-about__action
+          a.c-button(href=Builder.dir)
+            | トップに戻る
+            +Icon('arrow', { class: 'c-button__icon' })

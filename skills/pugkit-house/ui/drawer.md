@@ -2,6 +2,8 @@
 
 APG の [Disclosure Navigation Menu](https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/examples/disclosure-navigation/) を写す。ハンバーガーで開くナビも、PC のドロップダウンとメガメニューも同じパターンになる。開閉する領域を持つ標準要素は無い。`dialog` は閉じている間 `display: none` になり、PC で常時表示するナビと同じマークアップを使えないので採らない。
 
+Popover API で開閉させる形もある。採るかどうかは [../SKILL.md](../SKILL.md) の「新しい機能を採るか」で決める。このファイルは採らないときの組み方を書いている。
+
 `role="menu"` と `role="menuitem"` を付けない。APG の Menu はアプリケーションのコマンドの一覧で、ページへのリンクの一覧はその対象ではない。
 
 ## マークアップと置き場
@@ -35,8 +37,8 @@ JS が書き換えるのは `aria-expanded` と、`data-drawer-inert` が指す�
 
 Escape は `document` に張る。ナビの余白を押すとフォーカスが `body` に落ちるので、ヘッダーに張ると届かない。閉じたらボタンへフォーカスを戻す。
 
-閉じている間は `visibility: hidden` で隠す。`display: none` にすると `opacity` と `translate` の遷移が付かない。時間は `--duration-normal` から取る。
+閉じている間は `visibility: hidden` で隠す。`display: none` にすると `opacity` と `translate` の遷移が付かない。`transition-behavior: allow-discrete` を採れるなら `display: none` でもよい。時間は動きのトークンから取る。
 
-覆うナビには背景色と `overflow-y` を持たせ、トグルボタンをナビより前の重なりに出す。ヘッダー自体の重なりは `--z-header` を使う。無いと背後が透け、項目が画面高を超えると下へ届かず、開いた瞬間にボタンが押せなくなる。
+覆うナビには背景色と `overflow-y` を持たせ、トグルボタンをナビより前の重なりに出す。これらが無いと背後が透け、項目が画面高を超えると下へ届かず、開いた瞬間にボタンが押せなくなる。ヘッダー自体の重なりは重なり順のトークンから取る。
 
 `data-drawer-media` には SP 側のメディアクエリを渡す。`matches` が偽になったら閉じる。閉じないと `inert` が残り、PC 幅でページ全体が操作できなくなる。値は SCSS の `$grid-breakpoints` と境界を揃える。

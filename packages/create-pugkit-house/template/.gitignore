@@ -1,0 +1,31 @@
+# ビルド出力 - 差分抽出・公開・デプロイ要件がある場合は除外
+dist/
+
+# 依存パッケージ
+node_modules/
+
+# OS
+.DS_Store
+._*
+Thumbs.db
+[Dd]esktop.ini
+
+# ログ
+*.log
+npm-debug.log*
+
+# 環境変数（機密情報）
+.env
+.env*.local
+!.env.example
+
+# エディタ
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+
+# ツール・キャッシュ
+mise.local.toml
+.pugkit/

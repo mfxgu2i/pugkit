@@ -1,0 +1,68 @@
+@use 'sass:map';
+@use 'sass:list';
+@use '../variables' as v;
+
+@function breakpoint-value($name) {
+  @if not map.has-key(v.$grid-breakpoints, $name) {
+    @error '#{$name} は $grid-breakpoints に定義されていません';
+  }
+
+  @return map.get(v.$grid-breakpoints, $name);
+}
+
+@mixin media-breakpoint-up($name) {
+  $value: breakpoint-value($name);
+
+  @if $value == 0 {
+    @content;
+  } @else {
+    @media (width >= #{$value}) {
+      @content;
+    }
+  }
+}
+
+@mixin media-breakpoint-down($name) {
+  @media (width < #{breakpoint-value($name)}) {
+    @content;
+  }
+}
+
+@mixin media-breakpoint-between($lower, $upper) {
+  $lower-value: breakpoint-value($lower);
+
+  @if $lower-value == 0 {
+    @include media-breakpoint-down($upper) {
+      @content;
+    }
+  } @else {
+    @media (#{$lower-value} <= width < #{breakpoint-value($upper)}) {
+      @content;
+    }
+  }
+}
+
+@mixin media-breakpoint-only($name) {
+  $keys: map.keys(v.$grid-breakpoints);
+  $index: list.index($keys, $name);
+
+  @if $index == 1 {
+    @error '#{$name} は先頭のキーなので only で切り出せる幅がありません';
+  }
+
+  @include media-breakpoint-between(list.nth($keys, $index - 1), $name) {
+    @content;
+  }
+}
+
+@mixin media-breakpoint-range($max) {
+  @media (width < $max) {
+    @content;
+  }
+}
+
+@mixin media-ratio($ratio: 2) {
+  @media (min-resolution: #{$ratio}dppx) {
+    @content;
+  }
+}

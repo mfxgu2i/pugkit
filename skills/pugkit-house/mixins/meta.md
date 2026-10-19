@@ -6,91 +6,19 @@
 
 | 依存 | 出どころ |
 |---|---|
-| `Builder.dir` `Builder.url` | pugkit が提供するグローバル |
+| `Builder.dir` `Builder.url` `Builder.subdir` | pugkit が提供するグローバル |
 | `META_DATA` | `_templates/_constants.pug` |
 
-## mixin
+## 呼び出しの形
 
-```pug
-mixin Meta(meta = {})
-  -
-    const site = {
-      title: meta.siteTitle || '__サイトタイトル__',
-      description: meta.siteDescription || '__サイト説明文__',
-    }
-
-    const page = {
-      title: meta.pageTitle || '',
-      description: meta.pageDescription || '',
-      type: meta.pageType || 'article'
-    }
-
-    const title = Builder.url.pathname === `${Builder.subdir}/` || !page.title ? site.title : `${page.title}｜${site.title}`
-    const description = page.description || site.description
-    const ogImage = `${Builder.url.base}/assets/img/common/ogp.jpg`
-
-  //- 基本メタ情報
-  meta(charset='UTF-8')
-  meta(name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover')
-  meta(name='format-detection' content='telephone=no')
-  meta(name='mobile-web-app-capable' content='yes')
-
-  //- アイコン
-  link(rel='icon' href=`${Builder.dir}favicon.ico`)
-
-  //- タイトルと説明
-  title !{title}
-  meta(name='description' content=description)
-
-  //- 正規化。全ページに出す
-  link(rel='canonical' href=Builder.url.href)
-
-  //- OGP
-  meta(property='og:title' content!=title)
-  meta(property='og:url' content=Builder.url.href)
-  meta(property='og:description' content=description)
-  meta(property='og:type' content=page.type)
-  meta(property='og:image' content=ogImage)
-  meta(property='og:site_name' content=site.title)
-  meta(property='og:locale' content='ja_JP')
-  meta(name='twitter:card' content='summary_large_image')
-```
-
-## 定数
-
-サイト共通の値は定数ファイルに置く。
-
-```pug
--
-  const META_DATA = {
-    siteTitle: 'サイト名',
-    siteDescription: 'サイトの説明',
-    pageTitle: '',
-    pageDescription: '',
-    pageType: 'article'
-  }
-```
-
-## 引数
-
-| 引数 | 型 | 既定 | 意味 |
-|---|---|---|---|
-| `meta.siteTitle` | string | なし | サイト名。タイトルの後半に入る |
-| `meta.siteDescription` | string | なし | `pageDescription` が空のときの代替 |
-| `meta.pageTitle` | string | `''` | ページ名。空だとサイト名だけになる |
-| `meta.pageDescription` | string | `''` | ページの説明 |
-| `meta.pageType` | string | `'article'` | `og:type` の値。トップは `'website'` |
-
-## 使用例
-
-レイアウトの head で呼び出し、ページ側は変数を上書きする。
+レイアウトの `block vars` で `META_DATA` を `metaData` に受け、head で呼ぶ。ページは `block append vars` で値を上書きする。
 
 ```pug
 //- レイアウト
 block vars
   - const metaData = META_DATA
 
-html(lang='ja')
+html(lang=metaData.lang)
   head
     +Meta(metaData)
 ```
@@ -103,11 +31,44 @@ block append vars
     metaData.pageDescription = '会社概要ページの説明。'
 ```
 
-## タイトルの組み立て
+| 引数 | 型 | 既定 | 意味 |
+|---|---|---|---|
+| `meta.locale` | string | なし | `og:locale` の値。空なら出さない |
+| `meta.siteTitle` | string | なし | サイト名。タイトルの後半に入る |
+| `meta.siteDescription` | string | なし | `pageDescription` が空のときの代替 |
+| `meta.pageTitle` | string | `''` | ページ名。空だとサイト名だけになる |
+| `meta.pageDescription` | string | `''` | ページの説明 |
+| `meta.pageType` | string | `'website'` | `og:type` の値。記事ページは `'article'` |
 
-トップページはサイト名だけ、下層は `ページ名｜サイト名` になる。区切りは全角の縦棒。カテゴリ名を挟む場合は `ページ名｜カテゴリ名｜サイト名` にする。
+## 出力するもの
 
-`pageTitle` が空のときもサイト名だけになるので、下層ページで設定を忘れるとトップと同じタイトルが出る。
+上から順に出す。
+
+| まとまり | 要素 |
+|---|---|
+| 基本 | `charset` は `UTF-8`。`viewport` は `width=device-width,initial-scale=1` |
+| アイコン | `link[rel=icon]` に `` `${Builder.dir}favicon.ico` `` |
+| タイトルと説明 | `title` と `meta[name=description]` |
+| 正規化 | `link[rel=canonical]` に `Builder.url.href`。全ページに出す |
+| OGP | `og:title` `og:url` `og:description` `og:type` `og:image` `og:site_name` `og:locale` と `twitter:card` |
+
+OGP 画像は `public/assets/img/common/ogp.jpg` に置く。`public/` なので変換されず、置いたまま出力される。
+
+`og:url` は `Builder.url.href`、`og:image` は `` `${Builder.url.base}/assets/img/common/ogp.jpg` ``、`og:locale` は `meta.locale`、`twitter:card` は `summary_large_image` にする。`og:title` と `og:site_name` はタイトルとサイト名をそのまま使う。
+
+## タイトルと説明の組み立て
+
+トップページはサイト名だけ、下層は `ページ名｜サイト名` になる。区切りは全角の縦棒。
+
+トップかどうかは `Builder.url.pathname` が `` `${Builder.subdir}/` `` と一致するかで見る。`pathname` は `subdir` を含むので、この形で比べる。`subdir` が空なら `/` になるため、`subdir` があってもなくても、この形のまま効く。
+
+`pageTitle` が空のときもサイト名だけになる。下層ページで設定を忘れるとトップと同じタイトルが出る。
+
+`META_DATA` の `pageTitle` の初期値は空文字にする。仮の文字列を入れておくと、設定を忘れたページにその文字列がそのまま出る。
+
+説明は `pageDescription` を使い、空なら代わりに `siteDescription` を使う。
+
+タイトルは `title= title` と `content=title` のようにエスケープして出す。`!{}` や `content!=` で出すと、ページ名の `&` や `<` がそのまま HTML に入る。
 
 ## やってはいけないこと
 
@@ -115,7 +76,7 @@ block append vars
 
 OGP画像のパスをページごとに変えたくなったら、引数に足して mixin 側で分岐させる。ページ側で `meta[property=og:image]` を二重に出力しない。
 
-トップページの判定に `Builder.pathname` を使わない。存在しないプロパティで、常に `undefined` になる。`Builder.url.pathname` が正しい。`pathname` は `subdir` を含むので、`` `${Builder.subdir}/` `` と突き合わせる。`subdir` が空なら `/` になるため、この形のまま両方に効く。
+トップページの判定に `Builder.pathname` を使わない。存在しないプロパティで、常に `undefined` になる。
 
 `Builder.url` のどのプロパティをどこに使うかは pugkit skill の `pugkit/SKILL.md` にある。
 

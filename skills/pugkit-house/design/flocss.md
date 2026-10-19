@@ -29,7 +29,7 @@ src/assets/css/
 | 層 | プレフィックス | 例 |
 |---|---|---|
 | layouts | `l-` | `.l-header` |
-| components | `c-` | `.c-wrapper` `.c-button` |
+| components | `c-` | `.c-button` `.c-breadcrumb` |
 | projects | `p-` | `.p-top-hero` |
 | utilities | `u-` | `.u-container` |
 

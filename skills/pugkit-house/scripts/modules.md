@@ -21,58 +21,25 @@
   .c-carousel__slide …
 ```
 
+`main.js` はローダーとして、次の順に組む。
+
+1. 各モジュールを静的 import で読む。`import * as carousel from './_carousel'` の形で、モジュールの名前空間ごと受け取る
+2. ルートを持つ機能を対応表 `registry` に、ルートを持たない機能を `globals` に載せる。`registry` は `Object.assign(Object.create(null), { … })` で作る。プロトタイプを持たせると、`data-module="constructor"` のような属性値で `Object` の関数を引いてしまう
+3. 1つのモジュールを初期化する関数 `run(name, module, element)` を作る。`module.initialize(element)` を `try` で囲み、例外は `console.error(name, error)` に流す。戻り値が `Promise` なら、その `catch` でも同じく流す。非同期の `initialize()` は、失敗が `try` の外で起きる
+4. `start()` で、先に `globals` を全部 `run()` し、次に `document.querySelectorAll('[data-module]')` を順に見る。属性値を空白で分け、名前ごとに `registry` から引いて `run()` に要素ごと渡す。引けなかった名前は `console.error` に出して次へ進む
+5. `document.readyState` が `loading` なら `DOMContentLoaded` で `start()` を呼び、そうでなければすぐ呼ぶ。`type="module"` は既定で解析後に走るが、読み込み方を変えた案件では登録より先に解析が終わっていることがある
+
 ```js
 import * as carousel from './_carousel'
-import * as tabs from './_tabs'
 import * as pageTop from './_pageTop'
 import * as smoothScroll from './_smoothScroll'
 
-// ルートを持つ機能。マークアップが data-module で名乗る
-// プロトタイプを持たせない。registry['constructor'] が関数を返すのを防ぐ
 const registry = Object.assign(Object.create(null), {
   carousel,
-  tabs,
   'page-top': pageTop
 })
 
-// ルートを持たない機能。名前で引けるようにしておく
 const globals = { smoothScroll }
-
-const run = (name, module, element) => {
-  try {
-    const result = module.initialize(element)
-    // 非同期の initialize は、返ってきた Promise の失敗も拾う
-    if (result instanceof Promise) result.catch(error => console.error(name, error))
-  } catch (error) {
-    console.error(name, error)
-  }
-}
-
-const start = () => {
-  for (const [name, module] of Object.entries(globals)) {
-    run(name, module)
-  }
-
-  document.querySelectorAll('[data-module]').forEach(element => {
-    for (const name of element.dataset.module.split(/\s+/).filter(Boolean)) {
-      const module = registry[name]
-
-      if (!module) {
-        console.error(`data-module="${name}" に対応するモジュールが無い`)
-        continue
-      }
-
-      run(name, module, element)
-    }
-  })
-}
-
-// スクリプトの読み込み方を変えた案件では、登録より先に解析が終わっていることがある
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', start)
-} else {
-  start()
-}
 ```
 
 名前は4か所に現れる。書き分けを固定する。
@@ -89,10 +56,10 @@ if (document.readyState === 'loading') {
 1つの要素に複数の機能を持たせたいときは、空白で区切って並べる。ローダーは書いた順に呼ぶ。包むだけの要素を足さずに済む。
 
 ```pug
-.c-floating-navigation(data-module='floating-navigation-offset floating-navigation-visibility')
+header.l-header(data-module='drawer sticky-header')
 ```
 
-開閉や切り替えのある UI をどのモジュールに分けるかは、`ui/` の各ファイルが持つ。`details` で組むアコーディオンのように、JS を持たず `data-module` にも載らないものがある。
+開閉や切り替えのある UI をどのモジュールに分けるかは、`ui/` の各ファイルに書いてある。`details` で組むアコーディオンのように、JS を持たず `data-module` にも載らないものがある。
 
 ## 設定値は別の属性で渡す
 
@@ -107,10 +74,10 @@ if (document.readyState === 'loading') {
 比較する相手のセレクタも、この形で渡す。追従ボタンとフッターの重なりを見るような、位置の判定にページの他の場所が要る機能が該当する。
 
 ```pug
-.c-page-top-button(data-module='page-top' data-page-top-boundary='footer.c-wrapper')
+.c-page-top-button(data-module='page-top' data-page-top-boundary='footer.l-footer')
 ```
 
-どのマークアップに寄りかかっているかがマークアップ側に出るので、`document` を無条件に検索するのとは別扱いにする。
+どのマークアップに依存しているかがマークアップ側に出るので、`document` を無条件に検索するのとは別扱いにする。
 
 ## モジュールは自分のルートを受け取る
 
@@ -135,6 +102,8 @@ export const initialize = root => {
 
 状態は `initialize()` の中に置く。ファイルの先頭に `let` で要素やタイマーやオブザーバーを持たせない。要素ごとに `initialize()` が走るので、モジュールレベルに置くと後から初期化した要素で上書きされる。同じ機能を2箇所に置いたとき、最後の1つしか動かなくなる。
 
+`globals` に載せたものはこの規則の例外になる。ページに1回しか `initialize()` が走らないので、上書きされる相手がいない。ページ全体で1つしか持たない状態は、モジュールの先頭に置いてよい。
+
 ルートを受け取ることで3つ変わる。
 
 | 変わること | 理由 |
@@ -147,7 +116,7 @@ export const initialize = root => {
 
 ## ページ全体に効くものは名乗らせない
 
-ルートになる要素を持たない機能がある。アンカーリンクのスクロールのように `document` に委譲を張るもの、ヘッダーとメインビジュアルのように離れた2要素を突き合わせるもの、ページ内の全画像を差し替えるものが該当する。実装は [smooth-scroll.md](smooth-scroll.md) にある。
+ルートになる要素を持たない機能がある。アンカーリンクのスクロールのように `document` に委譲を張るもの、ヘッダーとメインビジュアルのように離れた2要素を突き合わせるもの、ページ内の全画像を差し替えるものが該当する。アンカーリンクのスクロールの組み方は [smooth-scroll.md](smooth-scroll.md) にある。
 
 | ルートになる要素 | 呼び方 |
 |---|---|
@@ -160,13 +129,13 @@ export const initialize = root => {
 
 `try` はモジュールごと、要素ごとに置く。全体を1つの `try` で囲まない。
 
-囲むと、最初に例外を投げたモジュールから先が初期化されない。カルーセルの不具合でヘッダーの開閉が死ぬ、という壊れ方をする。原因のモジュールと壊れた場所が離れるので、調べるのにも時間がかかる。
+囲むと、最初に例外を投げたモジュールから先が初期化されない。たとえばカルーセルの不具合で、ヘッダーの開閉が動かなくなる。原因のモジュールと動かなくなった場所が離れるので、調べるのにも時間がかかる。
 
 `console.error` が残るのは開発ビルドだけになる。本番ビルドは `console` を落とすので、登録漏れも例外も画面には何も出ない。壊れた機能を切り離すのが目的で、本番で知らせるのが目的ではない。本番でも記録が要る案件では、`console.error` を計測側へ送る関数に置き換える。
 
 ## 一度きりで走ることを前提にする
 
-ローダーが走るのは1回だけで、`document.querySelectorAll()` が返すのはその時点の一覧になる。あとから挿した要素は `data-module` を書いても呼ばれない。挿した側が対象のモジュールを import して `initialize()` を呼ぶ。
+ローダーが走るのは1回だけで、`document.querySelectorAll()` が返すのはその時点の一覧になる。あとから差し込んだ要素は `data-module` を書いても呼ばれない。差し込んだ側が対象のモジュールを import して `initialize()` を呼ぶ。
 
 入れ子にした場合は、`querySelectorAll` の順で外側から `initialize()` が走る。内側の初期化が済んでいることを外側が当てにしない。
 
@@ -174,7 +143,7 @@ export const initialize = root => {
 
 `import()` で遅延読み込みしたくなるが、静的 import で書く。
 
-pugkit のビルドは `splitting: false` で動く。esbuild は動的 import を別ファイルに切り出さず、`Promise.resolve()` に書き換えて同じバンドルに畳む。読み込むバイト数は変わらないまま、非同期の扱いと `__esm` のヘルパーだけが増える。分けたつもりで、増えるだけになる。
+pugkit のビルドは `splitting: false` で動く。esbuild は動的 import を別ファイルに切り出さず、`Promise.resolve()` に書き換えて同じバンドルにまとめる。読み込むバイト数は変わらないまま、非同期の扱いと `__esm` のヘルパーだけが増える。分けたつもりで、増えるだけになる。
 
 このルールが成り立つのは `splitting: false` の間だけになる。ビルド設定が変わったらこの節を見直す。
 
