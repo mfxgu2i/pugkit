@@ -1,10 +1,11 @@
-import { glob } from 'glob'
+import { glob } from '../../utils/glob.mjs'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { collectHtmlReferences } from './html-references.mjs'
 import { collectCssReferences } from './css-references.mjs'
 import { referencePath, resolveReference } from './reference-url.mjs'
 import { FILE_CONCURRENCY, runWithConcurrency } from '../../utils/concurrency.mjs'
+import { toPosix } from '../../utils/paths.mjs'
 
 /**
  * 出力に書かれた参照が実在するかを見る。
@@ -17,16 +18,13 @@ import { FILE_CONCURRENCY, runWithConcurrency } from '../../utils/concurrency.mj
  * dist であって、public に手で置いた HTML のリンク切れも同じ壊れ方をする。
  */
 
-const toPosix = p => p.replace(/\\/g, '/')
-
 const RULE = 'missing-reference'
 
 /**
  * 検査対象を集める。
  *
- * glob の大文字小文字の扱いはプラットフォームで変わる（macOS と Windows は区別しない）。
- * 拡張子をパターンに書くと、手元で拾えたファイルが Linux の CI で拾われない。
- * 全件を挙げてから自分で判定する
+ * 拡張子はパターンに書かず、全件を挙げてから自分で判定する。
+ * 出力の `.HTML` のような大文字の拡張子も検査の対象にするため
  */
 async function listTargets(outputRoot) {
   const files = await glob('**/*', { cwd: outputRoot, nodir: true })

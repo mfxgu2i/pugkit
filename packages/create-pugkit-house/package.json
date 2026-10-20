@@ -1,6 +1,6 @@
 {
   "name": "create-pugkit-house",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Scaffolding for pugkit projects with the pugkit-house structure",
   "type": "module",
   "license": "MIT",

@@ -241,6 +241,14 @@ describe('変換対象外の画像', () => {
     expect(logs.join('\n')).not.toMatch(/変換対象外/)
   })
 
+  it('拡張子が大文字の画像も変換する', async () => {
+    await createNoisyJpeg(resolve(srcDir, 'photo.JPG'))
+
+    await imageTask(makeContext({ density: 2 }))
+
+    expect(await listFiles(distDir)).toContain('photo.webp')
+  })
+
   /**
    * 変換対象が 1 枚も無いときこそ警告が要る。src に .webp しか置いていない状況が
    * まさにそれで、「何も出力されないのに無警告」が一番起きやすい。
@@ -286,7 +294,9 @@ describe('出力先の規則', () => {
     ['webp', 2, 'img/a.gif', ['/proj/dist/img/a.webp']],
     ['compress', 2, 'img/a.gif', ['/proj/dist/img/a.gif']]
   ])('build.image.format: %s / density %i のとき %s -> %j', (format, density, relativePath, expected) => {
-    expect(imageOutputPaths(relativePath, config(format, density), paths).map(out => out.absolute)).toEqual(expected)
+    expect(imageOutputPaths(relativePath, config(format, density), paths).map(out => out.absolute)).toEqual(
+      expected.map(path => resolve(path))
+    )
   })
 
   it('筆頭は必ず原寸（削除側が「このソースの出力」として頼る）', () => {

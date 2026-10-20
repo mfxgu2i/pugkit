@@ -11,6 +11,7 @@ import { sassOutputPath } from '../tasks/sass.mjs'
 import { scriptOutputPath } from '../tasks/script.mjs'
 import { publicOutputPath } from '../tasks/copy.mjs'
 import { prepareDevSession } from './dev/startup.mjs'
+import { toPosix } from '../utils/paths.mjs'
 
 /**
  * 自分のハンドラで graph（Pug への焼き込み）を見る種別。二重に無効化しない。
@@ -201,8 +202,7 @@ export class FileWatcher {
   }
 
   isIcons(filePath) {
-    // Windows 対応: セパレータを正規化
-    return filePath.replace(/\\/g, '/').includes('/icons/')
+    return toPosix(filePath).includes('/icons/')
   }
 
   /**

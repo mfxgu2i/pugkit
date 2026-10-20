@@ -2,6 +2,7 @@ import path from 'node:path'
 import { statSync } from 'node:fs'
 import { pageCandidates } from '../../utils/page-candidates.mjs'
 import { contains } from '../../utils/safe-dir.mjs'
+import { toPosix } from '../../utils/paths.mjs'
 
 /**
  * 出力に書かれた URL を、出力ルート配下の実ファイルへ突き合わせるための規則。
@@ -24,8 +25,6 @@ const VIRTUAL_ORIGIN = 'http://pugkit.invalid'
 const TEMPLATE_TAG = /\{\{|\}\}|<\?|\?>|<%|%>|\$\{/
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i
-
-const toPosix = p => p.replace(/\\/g, '/')
 
 /**
  * 参照の生の値を、出力ルート起点の URL パスに直す。対象外なら null。

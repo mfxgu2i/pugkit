@@ -46,6 +46,12 @@ export const DENSITY_EXT_RE = toRe(DENSITY_EXTENSIONS)
 export const MEASURABLE_EXT_RE = toRe(MEASURABLE_EXTENSIONS)
 export const OUTPUT_EXT_RE = toRe(OUTPUT_EXTENSIONS)
 
+/**
+ * 画像の glob に渡す。カメラが書き出す `IMG_0001.JPG` のような大文字の拡張子も対象にする。
+ * ページや SCSS は区別したまま（utils/glob.mjs）
+ */
+export const IMAGE_GLOB_OPTIONS = { nocase: true }
+
 export const CONVERTIBLE_GLOB = toGlob(CONVERTIBLE_EXTENSIONS)
 export const UNHANDLED_GLOB = toGlob(UNHANDLED_EXTENSIONS)
 

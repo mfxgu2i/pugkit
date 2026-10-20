@@ -3,10 +3,11 @@ import { readdir, rename, rm } from 'node:fs/promises'
 import { basename, dirname, extname, relative, resolve } from 'node:path'
 import { imageSizeOf } from '../../utils/image-dimensions.mjs'
 import { convertExtension, parseWidthName, supportsWidthVariants } from '../../utils/image-density.mjs'
-import { CONVERTIBLE_EXTENSIONS } from '../../utils/image-formats.mjs'
+import { isConvertibleImage } from '../../utils/image-formats.mjs'
 import { writeWidthVariant } from '../../tasks/image.mjs'
 import { contains } from '../../utils/safe-dir.mjs'
 import { stripSubdir } from '../../utils/subdir.mjs'
+import { toPosix } from '../../utils/paths.mjs'
 
 /**
  * dev で幅違いをリクエスト時に生成する。
@@ -39,19 +40,17 @@ const CONTENT_TYPES = {
 /**
  * 「_」始まりのセグメントを含むか。build の IMAGE_IGNORE と同じ扱いにする。
  *
- * 判定するのは URL 由来のパスなので、区切りは常に「/」。path.sep で分けると
- * Windows では 1 つのセグメントとして扱われ、dev だけが `_` 配下を配信する
+ * URL 由来のパスでも、Windows は `%5C` から戻した「\」を区切りとして解決する。
+ * 「/」だけで分けると `_` 配下に届いてしまうので、そろえてから分ける
  */
 function isHidden(urlRelativePath) {
-  return urlRelativePath.split('/').some(segment => segment.startsWith('_'))
+  return toPosix(urlRelativePath)
+    .split('/')
+    .some(segment => segment.startsWith('_'))
 }
 
 /**
  * 出力名から元画像を探す。
- *
- * 拡張子は build の glob（CONVERTIBLE_GLOB）と同じ大小区別で見る。existsSync だけに頼ると、
- * 大文字小文字を区別しないファイルシステムで `hero.JPG` が当たってしまい、
- * build では 1 枚も出ないのに dev だけ 200 を返すことになる。
  *
  * 候補が 2 つ以上あるときは作らない。どちらを元にするかを探索順まかせにしない
  */
@@ -63,7 +62,7 @@ async function findSource(outputRelative, ext, format, srcDir) {
   const candidates = entries.filter(entry => {
     const entryExt = extname(entry)
 
-    if (!CONVERTIBLE_EXTENSIONS.includes(entryExt.slice(1))) return false
+    if (!isConvertibleImage(entry)) return false
     if (basename(entry, entryExt) !== stem) return false
 
     // その元画像が実際にこの拡張子の出力を生むか（compress モードは読み替えない）
