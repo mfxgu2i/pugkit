@@ -19,9 +19,10 @@ import { FILE_CONCURRENCY, runWithConcurrency } from '../utils/concurrency.mjs'
 import { toPosix } from '../utils/paths.mjs'
 
 // libvips の内部キャッシュを制限してメモリ消費を抑える
-// 元画像はパスではなく Buffer で渡す。パスで渡すと libvips がファイルを開いたまま持ち、
-// Windows ではそのあいだ元画像を上書きも削除もできない
-sharp.cache({ memory: 50, files: 20, items: 200 })
+// 画像はパスではなく Buffer で渡す。パスで渡すと libvips がファイルを開いたまま持ち、
+// Windows ではそのあいだ上書きも削除もできない。sharp のキャッシュはプロセスで共有なので、
+// 他の箇所がパスで渡しても開いたままにならないよう、ファイルのキャッシュも切っておく
+sharp.cache({ memory: 50, files: 0, items: 200 })
 sharp.concurrency(1)
 
 export const IMAGE_GLOB = CONVERTIBLE_GLOB
