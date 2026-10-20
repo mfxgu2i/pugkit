@@ -24,9 +24,9 @@ description: |
 
 このskillは pugkit skill の上に載る層になる。ツールの使い方はそちらが持つので、先に読む。
 
-ここにあるのは、どう実装して欲しいかという方針と手順、その理由になる。実装の全文は持たない。書くときは、各ファイルの手順と制約を満たすコードをその場で書く。理由が添えてある制約は、別の書き方を選ぶときにも守る。
+ここにあるのは、どう実装して欲しいかという方針と手順、その理由になる。実装の全文は持たない。
 
-SCSS、Pug、JS を書き始める前に、下の表から作業に当たるファイルを読む。書いてから読むと、一般的な書き方で組んだものを後から直すことになる。
+SCSS、Pug、JS を書き始める前に、下の表から作業に当たるファイルを読む。
 
 ## 設計
 
@@ -34,8 +34,8 @@ SCSS、Pug、JS を書き始める前に、下の表から作業に当たるフ�
 
 | やること | 読むファイル |
 |---|---|
-| どの層でも守るプロパティの書き方を確かめる | [design/properties.md](design/properties.md) |
-| ファイルをどの層に置くか決める、クラス名のプレフィックスを決める | [design/flocss.md](design/flocss.md) |
+| CSS プロパティの書き方を確かめる | [design/properties.md](design/properties.md) |
+| CSS ファイルをどの層に置くか決める、クラス名のプレフィックスを決める | [design/flocss.md](design/flocss.md) |
 | 変数を定義する、色や文字サイズを追加する、px と rem を使い分ける | [design/tokens.md](design/tokens.md) |
 | メディアクエリを書く、ブレークポイントを決める | [design/breakpoints.md](design/breakpoints.md) |
 | カンプの比率を画面幅に追従させるか判断する | [design/font-ratio.md](design/font-ratio.md) |
