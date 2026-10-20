@@ -18,8 +18,9 @@ import { CONVERTIBLE_GLOB, IMAGE_GLOB_OPTIONS, UNHANDLED_GLOB } from '../utils/i
 import { FILE_CONCURRENCY, runWithConcurrency } from '../utils/concurrency.mjs'
 
 // libvips の内部キャッシュを制限してメモリ消費を抑える
-// files を 0 にするのは、開いたままの元画像を Windows が上書きも削除もさせないため
-sharp.cache({ memory: 50, files: 0, items: 200 })
+// 元画像はパスではなく Buffer で渡す。パスで渡すと libvips がファイルを開いたまま持ち、
+// Windows ではそのあいだ元画像を上書きも削除もできない
+sharp.cache({ memory: 50, files: 20, items: 200 })
 sharp.concurrency(1)
 
 export const IMAGE_GLOB = CONVERTIBLE_GLOB
@@ -163,7 +164,7 @@ export async function writeWidthVariant(sourcePath, outputPath, targetWidth, siz
   const overrides = overridesFor(relative(paths.src, sourcePath), config)
 
   await ensureFileDir(outputPath)
-  await encoder(sharp(sourcePath).resize(width, height), overrides).toFile(outputPath)
+  await encoder(sharp(await readFile(sourcePath)).resize(width, height), overrides).toFile(outputPath)
 
   return true
 }
@@ -197,9 +198,11 @@ async function processImage(filePath, context, retries = 3, retryDelay = 200) {
       return
     }
 
+    const source = await readFile(filePath)
+
     // 縮小版を作るかは原寸に依る。1x1 のような画像で同じ寸法を 2 枚配らない。
     // 幅違いを作るときもリサイズ先の算出に実寸が要る
-    const size = outputs.length > 1 || widths.length > 0 ? await sharp(filePath).metadata() : null
+    const size = outputs.length > 1 || widths.length > 0 ? await sharp(source).metadata() : null
     const scalable = size ? hasScaledVariant(size.width, size.height, sourceDensity) : false
     const [{ relative: convertedName }] = outputs
 
@@ -209,7 +212,7 @@ async function processImage(filePath, context, retries = 3, retryDelay = 200) {
         if (!isOriginal && !scalable) return
 
         // 別インスタンスで並列に流す。clone() に有意な差は無く、メモリは僅かに増える
-        const pipeline = sharp(filePath)
+        const pipeline = sharp(source)
         if (!isOriginal) {
           const factor = sourceDensity / out.density
           pipeline.resize(scaleDown(size.width, factor), scaleDown(size.height, factor))
