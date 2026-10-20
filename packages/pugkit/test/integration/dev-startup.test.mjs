@@ -220,7 +220,7 @@ describe('監視の対象', () => {
   // start() は chokidar の初期走査の完了を待たない。待たずに書き込むと
   // 監視が始まる前の変更になり、イベントが届かないことがある
   const untilWatching = watcher => new Promise(resolve => watcher.watcher.once('ready', resolve))
-  const waitForWatch = () => new Promise(resolve => setTimeout(resolve, 1200))
+  const WATCH_TIMEOUT = { timeout: 5000 }
 
   it('public のドットファイルの変更を検知する', async () => {
     const { project, context, watcher } = await startWatcher(
@@ -234,9 +234,8 @@ describe('監視の対象', () => {
     expect((await served()).trim()).toBe('v1')
 
     await project.write({ 'public/.well-known/acme-challenge/token': 'v2\n' })
-    await waitForWatch()
 
-    expect((await served()).trim()).toBe('v2')
+    await expect.poll(async () => (await served()).trim(), WATCH_TIMEOUT).toBe('v2')
   })
 
   it('「.」始まりのディレクトリに置いたプロジェクトでも監視できる', async () => {
@@ -252,9 +251,8 @@ describe('監視の対象', () => {
     builder.context.cache.setPageHtml(page, '<html></html>')
 
     await project.write({ 'src/index.pug': 'extends /_partials/_layout.pug\nblock content\n  h1 Edited\n' })
-    await waitForWatch()
 
     // 変更が届いていればキャッシュが無効化されている
-    expect(builder.context.cache.getPageHtml(page)).toBeUndefined()
+    await expect.poll(() => builder.context.cache.getPageHtml(page), WATCH_TIMEOUT).toBeUndefined()
   })
 })
