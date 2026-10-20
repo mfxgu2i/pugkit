@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, afterEach, onTestFinished } from 'vitest'
 import { isAbsolute } from 'node:path'
+import { execFileSync } from 'node:child_process'
 import { rm, symlink } from 'node:fs/promises'
 import { loadConfig } from '../../config/main.mjs'
 import { createTempProject } from '../helpers/project.mjs'
@@ -290,6 +291,17 @@ describe('プロジェクトルートの綴り', () => {
     const config = await loadConfig(lowercaseDrive)
 
     expect(config.root).toBe(project.root)
+  })
+
+  it.skipIf(process.platform !== 'win32')('Windows でも subst ドライブを実体のドライブに解決しない', async () => {
+    const project = await createTempProject()
+    const drive = 'P:'
+    execFileSync('subst', [drive, project.root])
+    onTestFinished(() => execFileSync('subst', [drive, '/D']))
+
+    const config = await loadConfig(`${drive}\\`)
+
+    expect(config.root).toBe(`${drive}\\`)
   })
 
   it.skipIf(process.platform === 'win32')('POSIX ではシンボリックリンクを解決しない', async () => {

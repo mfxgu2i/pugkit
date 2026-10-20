@@ -1,5 +1,5 @@
 import { realpathSync } from 'node:fs'
-import { isAbsolute, resolve } from 'node:path'
+import { isAbsolute, parse, resolve } from 'node:path'
 
 /** build の出力先の既定値。設定の既定値と BuildContext のフォールバックで共有する */
 export const DEFAULT_OUT_DIR = 'dist'
@@ -23,15 +23,22 @@ export function resolveFromRoot(root, dir) {
  * パス文字列をキーにしているので、食い違うと再ビルドや幅違い画像の出力が黙って漏れる。
  *
  * realpath はシンボリックリンクも解決するので、POSIX では使わない。macOS の /tmp が
- * /private/tmp に変わるなど、利用者が渡したパスとログやエラーの表示がずれる
+ * /private/tmp に変わるなど、利用者が渡したパスとログやエラーの表示がずれる。
+ * Windows でも subst やネットワークドライブは実体（`\\server\share`）に解決されるので、
+ * ドライブが変わるときは採らない
  */
 export function resolveRoot(root) {
   const absolute = resolve(root)
   if (process.platform !== 'win32') return absolute
 
   try {
-    return realpathSync.native(absolute)
+    const real = realpathSync.native(absolute)
+    return isSameDrive(real, absolute) ? real : absolute
   } catch {
     return absolute
   }
+}
+
+function isSameDrive(a, b) {
+  return parse(a).root.toLowerCase() === parse(b).root.toLowerCase()
 }
