@@ -1,4 +1,4 @@
-import { glob } from 'glob'
+import { glob } from '../utils/glob.mjs'
 import { resolve } from 'node:path'
 import * as esbuild from 'esbuild'
 import { writeFile } from 'node:fs/promises'

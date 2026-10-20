@@ -1,5 +1,7 @@
-import { describe, expect, it, vi, afterEach } from 'vitest'
+import { describe, expect, it, vi, afterEach, onTestFinished } from 'vitest'
 import { isAbsolute } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { rm, symlink } from 'node:fs/promises'
 import { loadConfig } from '../../config/main.mjs'
 import { createTempProject } from '../helpers/project.mjs'
 
@@ -272,5 +274,44 @@ describe('画像設定の正規化', () => {
   it.each(['avif', 'webp', 'compress'])('format: %s はそのまま通る', async value => {
     const config = await load(`export default { build: { image: { format: '${value}' } } }\n`)
     expect(config.build.image.format).toBe(value)
+  })
+})
+
+/**
+ * 依存グラフや画像の幅はパス文字列をキーにしている。root の綴りが Sass などの返すパスと
+ * 食い違うと、dev の差分ビルドや幅違い画像の出力が黙って漏れる
+ */
+describe('プロジェクトルートの綴り', () => {
+  it.skipIf(process.platform !== 'win32')('Windows ではドライブレターを実在の綴りに揃える', async () => {
+    const project = await createTempProject()
+    const lowercaseDrive = project.root.replace(/^[A-Z]:/, drive => drive.toLowerCase())
+    // 前提: 渡すパスの綴りが実在と違う
+    expect(lowercaseDrive).not.toBe(project.root)
+
+    const config = await loadConfig(lowercaseDrive)
+
+    expect(config.root).toBe(project.root)
+  })
+
+  it.skipIf(process.platform !== 'win32')('Windows でも subst ドライブを実体のドライブに解決しない', async () => {
+    const project = await createTempProject()
+    const drive = 'P:'
+    execFileSync('subst', [drive, project.root])
+    onTestFinished(() => execFileSync('subst', [drive, '/D']))
+
+    const config = await loadConfig(`${drive.toLowerCase()}\\`)
+
+    expect(config.root).toBe(`${drive}\\`)
+  })
+
+  it.skipIf(process.platform === 'win32')('POSIX ではシンボリックリンクを解決しない', async () => {
+    const project = await createTempProject()
+    const link = `${project.root}-link`
+    await symlink(project.root, link)
+    onTestFinished(() => rm(link, { force: true }))
+
+    const config = await loadConfig(link)
+
+    expect(config.root).toBe(link)
   })
 })

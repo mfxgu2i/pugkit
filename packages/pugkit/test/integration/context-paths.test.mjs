@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll, afterAll } from 'vitest'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, parse, resolve } from 'node:path'
 import { BuildContext } from '../../core/context.mjs'
 
 let root
@@ -87,7 +87,7 @@ describe('cacheDir safety', () => {
   })
 
   it('should reject an absolute path that contains the project root', () => {
-    expect(() => new BuildContext(createConfig({ cacheDir: '/' }), 'development')).toThrow()
+    expect(() => new BuildContext(createConfig({ cacheDir: parse(root).root }), 'development')).toThrow()
   })
 
   it('should reject outDir even when it is an absolute path', () => {

@@ -23,11 +23,14 @@ export async function ensureFileDir(filePath) {
   await ensureDir(dirname(filePath))
 }
 
+// Windows では、エクスプローラーやウイルス対策ソフトが掴んでいるあいだ EBUSY や EPERM で失敗する
+const RM_OPTIONS = { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }
+
 /**
  * ディレクトリをクリーンアップ
  */
 export async function cleanDir(dirPath) {
-  await rm(dirPath, { recursive: true, force: true })
+  await rm(dirPath, RM_OPTIONS)
   await mkdir(dirPath, { recursive: true })
 }
 
@@ -82,7 +85,7 @@ export async function resetDevCache(dirPath) {
       )
     }
 
-    await rm(dirPath, { recursive: true, force: true })
+    await rm(dirPath, RM_OPTIONS)
   }
 
   await mkdir(dirPath, { recursive: true })

@@ -1,4 +1,4 @@
-import { glob } from 'glob'
+import { glob } from '../utils/glob.mjs'
 import { relative } from 'node:path'
 import { imageOutputPaths } from '../tasks/image.mjs'
 import { svgOutputPath, SVG_GLOB, SVG_IGNORE } from '../tasks/svg.mjs'
@@ -6,7 +6,8 @@ import { iconDirOf, isReservedSpriteName, spriteOutputPath, SPRITE_FILENAME } fr
 import { publicOutputPath } from '../tasks/copy.mjs'
 import { IMAGE_GLOB, IMAGE_IGNORE } from '../tasks/image.mjs'
 import { isReservedImageName } from '../utils/image-density.mjs'
-import { OUTPUT_EXT_RE } from '../utils/image-formats.mjs'
+import { IMAGE_GLOB_OPTIONS, OUTPUT_EXT_RE } from '../utils/image-formats.mjs'
+import { toPosix } from '../utils/paths.mjs'
 
 /**
  * 出力先の一意性を、タスクをまたいで一度だけ確かめる。
@@ -24,9 +25,6 @@ import { OUTPUT_EXT_RE } from '../utils/image-formats.mjs'
  * ビルドが作る形の名前を src と public に置かせないことで肩代わりする（docs/adr/0011）。
  */
 
-// パス比較は区切り文字を揃えてから行う（glob は「/」、path.relative は OS 依存）
-const normalize = p => p.replace(/\\/g, '/')
-
 /** 出力の相対パス → それを書く担当（表示用の名前） */
 async function collectOwners(context) {
   const { paths, config } = context
@@ -38,26 +36,26 @@ async function collectOwners(context) {
   // 突き合わせの鍵は「出力ルートからの相対パス」。絶対パスの導出は各タスクの
   // *OutputPath に任せ、ここはそれを共通の形に直すだけにする
   const claim = (absoluteOutput, source) => {
-    const key = normalize(relative(paths.output, absoluteOutput))
+    const key = toPosix(relative(paths.output, absoluteOutput))
     const existing = owners.get(key)
     if (existing && existing !== source) conflicts.push({ output: key, a: existing, b: source })
     else owners.set(key, source)
   }
 
   const [images, svgs, publicFiles] = await Promise.all([
-    glob(IMAGE_GLOB, { cwd: paths.src, ignore: IMAGE_IGNORE }),
+    glob(IMAGE_GLOB, { ...IMAGE_GLOB_OPTIONS, cwd: paths.src, ignore: IMAGE_IGNORE }),
     glob(SVG_GLOB, { cwd: paths.src, ignore: SVG_IGNORE }),
     glob('**/*', { cwd: paths.public, nodir: true, dot: true })
   ])
 
   for (const rel of images) {
-    if (isReservedImageName(rel)) reservedImages.push(`src/${normalize(rel)}`)
-    for (const out of imageOutputPaths(rel, config, paths)) claim(out.absolute, `src/${normalize(rel)}`)
+    if (isReservedImageName(rel)) reservedImages.push(`src/${toPosix(rel)}`)
+    for (const out of imageOutputPaths(rel, config, paths)) claim(out.absolute, `src/${toPosix(rel)}`)
   }
 
   for (const rel of svgs) {
-    if (isReservedSpriteName(rel)) reservedSprites.push(`src/${normalize(rel)}`)
-    claim(svgOutputPath(rel, paths), `src/${normalize(rel)}`)
+    if (isReservedSpriteName(rel)) reservedSprites.push(`src/${toPosix(rel)}`)
+    claim(svgOutputPath(rel, paths), `src/${toPosix(rel)}`)
   }
 
   // スプライトは icons ディレクトリごとに 1 ファイルを生成する。
@@ -71,9 +69,9 @@ async function collectOwners(context) {
   // public は画像以外も含むので、予約名の検査は画像として出力されうる拡張子に絞る。
   // 絞らないと report@400w.pdf のような無関係なファイルまで中止させる
   for (const rel of publicFiles) {
-    if (OUTPUT_EXT_RE.test(rel) && isReservedImageName(rel)) reservedImages.push(`public/${normalize(rel)}`)
-    if (isReservedSpriteName(rel)) reservedSprites.push(`public/${normalize(rel)}`)
-    claim(publicOutputPath(rel, paths), `public/${normalize(rel)}`)
+    if (OUTPUT_EXT_RE.test(rel) && isReservedImageName(rel)) reservedImages.push(`public/${toPosix(rel)}`)
+    if (isReservedSpriteName(rel)) reservedSprites.push(`public/${toPosix(rel)}`)
+    claim(publicOutputPath(rel, paths), `public/${toPosix(rel)}`)
   }
 
   return { conflicts, reservedImages, reservedSprites }

@@ -319,7 +319,8 @@ describe('配信できないアセット', () => {
    *
    * 読み取り権限を落としたファイルで、消失と同じ「存在するのに読めない」を作る。
    */
-  it('読み出しに失敗してもサーバーは動き続ける', async () => {
+  // Windows の chmod は読み取り専用にするだけで、読めないファイルを作れない
+  it.skipIf(process.platform === 'win32')('読み出しに失敗してもサーバーは動き続ける', async () => {
     const server = await startDevServer()
     const unreadable = `${server.context.paths.outputRoot}/assets/css/style.css`
     await mkdir(dirname(unreadable), { recursive: true })
@@ -510,15 +511,12 @@ describe('幅違いの画像', () => {
     expect((await server.get('/assets/img/hero@200w.webp')).status).toBe(404)
   })
 
-  /**
-   * build の glob は拡張子の大小を区別するので hero.JPG は 1 枚も出力されない。
-   * dev が大小を無視して当てると、dev だけが 200 を返すことになる
-   */
-  it('拡張子が大文字の元画像には当てない', async () => {
+  /** build は拡張子の大小を区別せずに画像を変換する。dev も同じ元画像から作る */
+  it('拡張子が大文字の元画像からも作る', async () => {
     const server = await startWithImages()
     await writeFile(server.project.path('src/assets/img/photo.JPG'), await jpegBuffer(800, 600))
 
-    expect((await server.get('/assets/img/photo@400w.webp')).status).toBe(404)
+    expect((await server.get('/assets/img/photo@400w.webp')).status).toBe(200)
   })
 
   /** compress モードは拡張子を読み替えない。a.jpg は a@400w.webp を生まない */

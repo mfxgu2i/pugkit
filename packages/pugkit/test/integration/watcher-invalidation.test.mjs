@@ -1,3 +1,4 @@
+import { relative } from 'node:path'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { FileWatcher } from '../../core/watcher.mjs'
 import { CacheManager } from '../../core/cache.mjs'
@@ -545,8 +546,7 @@ describe('再生成のログ', () => {
   ]
 
   /** 出力先の基準は public だけ違う。ログに出る相対パスもそれに従う */
-  const relOf = ({ kind, file }) =>
-    file().slice((kind === 'public' ? context.paths.public : context.paths.src).length + 1)
+  const relOf = ({ kind, file }) => relative(kind === 'public' ? context.paths.public : context.paths.src, file())
 
   it.each(cases)('$kind: 変更したファイルを種別名つきで出す', async testCase => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})

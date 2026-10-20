@@ -1,4 +1,4 @@
-import { glob } from 'glob'
+import { glob } from '../utils/glob.mjs'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, relative, resolve, extname } from 'node:path'
 import sharp from 'sharp'
@@ -14,11 +14,15 @@ import {
   widthDimensions,
   widthName
 } from '../utils/image-density.mjs'
-import { CONVERTIBLE_GLOB, UNHANDLED_GLOB } from '../utils/image-formats.mjs'
+import { CONVERTIBLE_GLOB, IMAGE_GLOB_OPTIONS, UNHANDLED_GLOB } from '../utils/image-formats.mjs'
 import { FILE_CONCURRENCY, runWithConcurrency } from '../utils/concurrency.mjs'
+import { toPosix } from '../utils/paths.mjs'
 
 // libvips の内部キャッシュを制限してメモリ消費を抑える
-sharp.cache({ memory: 50, files: 20, items: 200 })
+// 画像はパスではなく Buffer で渡す。パスで渡すと libvips がファイルを開いたまま持ち、
+// Windows ではそのあいだ上書きも削除もできない。sharp のキャッシュはプロセスで共有なので、
+// 他の箇所がパスで渡しても開いたままにならないよう、ファイルのキャッシュも切っておく
+sharp.cache({ memory: 50, files: 0, items: 200 })
 sharp.concurrency(1)
 
 export const IMAGE_GLOB = CONVERTIBLE_GLOB
@@ -83,6 +87,7 @@ export async function imageTask(context, options = {}) {
   }
 
   const images = await glob(IMAGE_GLOB, {
+    ...IMAGE_GLOB_OPTIONS,
     cwd: paths.src,
     absolute: true,
     ignore: IMAGE_IGNORE
@@ -114,7 +119,7 @@ export async function imageTask(context, options = {}) {
  */
 async function warnUnhandledImages(context) {
   const { paths } = context
-  const unhandled = await glob(UNHANDLED_GLOB, { cwd: paths.src, ignore: IMAGE_IGNORE })
+  const unhandled = await glob(UNHANDLED_GLOB, { ...IMAGE_GLOB_OPTIONS, cwd: paths.src, ignore: IMAGE_IGNORE })
 
   if (unhandled.length === 0) return
 
@@ -138,7 +143,7 @@ function resolveEncoder(ext, config) {
 
 /** 個別上書き設定。幅違いにも同じ値を掛ける（幅ごとには変えられない） */
 function overridesFor(relativePath, config) {
-  return config.build.image.overrides?.[relativePath.replace(/\\/g, '/')] ?? {}
+  return config.build.image.overrides?.[toPosix(relativePath)] ?? {}
 }
 
 /**
@@ -161,7 +166,7 @@ export async function writeWidthVariant(sourcePath, outputPath, targetWidth, siz
   const overrides = overridesFor(relative(paths.src, sourcePath), config)
 
   await ensureFileDir(outputPath)
-  await encoder(sharp(sourcePath).resize(width, height), overrides).toFile(outputPath)
+  await encoder(sharp(await readFile(sourcePath)).resize(width, height), overrides).toFile(outputPath)
 
   return true
 }
@@ -195,9 +200,11 @@ async function processImage(filePath, context, retries = 3, retryDelay = 200) {
       return
     }
 
+    const source = await readFile(filePath)
+
     // 縮小版を作るかは原寸に依る。1x1 のような画像で同じ寸法を 2 枚配らない。
     // 幅違いを作るときもリサイズ先の算出に実寸が要る
-    const size = outputs.length > 1 || widths.length > 0 ? await sharp(filePath).metadata() : null
+    const size = outputs.length > 1 || widths.length > 0 ? await sharp(source).metadata() : null
     const scalable = size ? hasScaledVariant(size.width, size.height, sourceDensity) : false
     const [{ relative: convertedName }] = outputs
 
@@ -207,7 +214,7 @@ async function processImage(filePath, context, retries = 3, retryDelay = 200) {
         if (!isOriginal && !scalable) return
 
         // 別インスタンスで並列に流す。clone() に有意な差は無く、メモリは僅かに増える
-        const pipeline = sharp(filePath)
+        const pipeline = sharp(source)
         if (!isOriginal) {
           const factor = sourceDensity / out.density
           pipeline.resize(scaleDown(size.width, factor), scaleDown(size.height, factor))
@@ -221,7 +228,7 @@ async function processImage(filePath, context, retries = 3, retryDelay = 200) {
       )
     ])
   } catch (error) {
-    if (retries > 0 && error.message.includes('unsupported image format')) {
+    if (retries > 0 && /unsupported image format|Buffer is empty/.test(error.message)) {
       await new Promise(resolve => setTimeout(resolve, retryDelay))
       return processImage(filePath, context, retries - 1, retryDelay * 2)
     }
