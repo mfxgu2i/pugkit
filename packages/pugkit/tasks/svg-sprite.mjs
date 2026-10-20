@@ -33,8 +33,6 @@ const SPRITE_SVGO_CONFIG = {
   ]
 }
 
-// パス比較は区切り文字を揃えてから行う（glob は「/」、path.relative は OS 依存）
-
 /** スプライトが書き出すファイル名 */
 export const SPRITE_FILENAME = 'icons.svg'
 

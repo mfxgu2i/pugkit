@@ -25,8 +25,6 @@ import { toPosix } from '../utils/paths.mjs'
  * ビルドが作る形の名前を src と public に置かせないことで肩代わりする（docs/adr/0011）。
  */
 
-// パス比較は区切り文字を揃えてから行う（glob は「/」、path.relative は OS 依存）
-
 /** 出力の相対パス → それを書く担当（表示用の名前） */
 async function collectOwners(context) {
   const { paths, config } = context
