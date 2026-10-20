@@ -30,6 +30,15 @@ export async function prepareDevSession(context, runTask) {
   await runInitialTasks(runTask)
 }
 
+const LISTEN_ERROR_MESSAGES = {
+  EADDRINUSE: port => `ポート ${port} は既に使用されています。別の dev サーバーが起動していないか確認してください`,
+  EACCES: port =>
+    `ポート ${port} を使う権限がありません。--port か server.port で別のポートを指定してください。` +
+    'Windows では Hyper-V や WSL が予約した範囲に当たることがあります。' +
+    '範囲は netsh interface ipv4 show excludedportrange protocol=tcp で確認でき、' +
+    '管理者で net stop winnat と net start winnat を実行すると解放されることがあります'
+}
+
 /**
  * ポートが使用可能か確認する。使用中なら起動を中止する。
  *
@@ -41,23 +50,8 @@ export function assertPortAvailable(port, host) {
     const tester = net
       .createServer()
       .once('error', error => {
-        if (error.code === 'EADDRINUSE') {
-          reject(
-            new Error(`ポート ${port} は既に使用されています。別の dev サーバーが起動していないか確認してください`)
-          )
-          return
-        }
-        if (error.code === 'EACCES') {
-          reject(
-            new Error(
-              `ポート ${port} を使う権限がありません。--port か server.port で別のポートを指定してください。` +
-                'Windows では Hyper-V や WSL が予約した範囲に当たることがあります' +
-                '（netsh interface ipv4 show excludedportrange protocol=tcp で確認できます）'
-            )
-          )
-          return
-        }
-        reject(error)
+        const message = LISTEN_ERROR_MESSAGES[error.code]?.(port)
+        reject(message ? new Error(message) : error)
       })
       .once('listening', () => tester.close(() => resolve()))
       .listen(port, host)
