@@ -228,7 +228,7 @@ async function processImage(filePath, context, retries = 3, retryDelay = 200) {
       )
     ])
   } catch (error) {
-    if (retries > 0 && error.message.includes('unsupported image format')) {
+    if (retries > 0 && /unsupported image format|Buffer is empty/.test(error.message)) {
       await new Promise(resolve => setTimeout(resolve, retryDelay))
       return processImage(filePath, context, retries - 1, retryDelay * 2)
     }
