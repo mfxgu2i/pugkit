@@ -14,7 +14,7 @@ import {
   widthDimensions,
   widthName
 } from '../utils/image-density.mjs'
-import { CONVERTIBLE_GLOB, UNHANDLED_GLOB, isConvertibleImage } from '../utils/image-formats.mjs'
+import { CONVERTIBLE_GLOB, IMAGE_GLOB_OPTIONS, UNHANDLED_GLOB } from '../utils/image-formats.mjs'
 import { FILE_CONCURRENCY, runWithConcurrency } from '../utils/concurrency.mjs'
 
 // libvips の内部キャッシュを制限してメモリ消費を抑える
@@ -84,6 +84,7 @@ export async function imageTask(context, options = {}) {
   }
 
   const images = await glob(IMAGE_GLOB, {
+    ...IMAGE_GLOB_OPTIONS,
     cwd: paths.src,
     absolute: true,
     ignore: IMAGE_IGNORE
@@ -93,7 +94,6 @@ export async function imageTask(context, options = {}) {
   // src に .webp しか置いていない場合がまさにそれで、
   // 早期リターンより後ろに置くと「何も出力されないのに無警告」になる
   await warnUnhandledImages(context)
-  await warnUppercaseExtensions(context)
 
   if (images.length === 0) {
     logger.skip('image', 'No images found')
@@ -116,21 +116,11 @@ export async function imageTask(context, options = {}) {
  */
 async function warnUnhandledImages(context) {
   const { paths } = context
-  const unhandled = await glob(UNHANDLED_GLOB, { cwd: paths.src, ignore: IMAGE_IGNORE })
+  const unhandled = await glob(UNHANDLED_GLOB, { ...IMAGE_GLOB_OPTIONS, cwd: paths.src, ignore: IMAGE_IGNORE })
 
   if (unhandled.length === 0) return
 
   logger.warn('image', `変換対象外のため出力されません（public/ に置いてください）: ${unhandled.sort().join(', ')}`)
-}
-
-async function warnUppercaseExtensions(context) {
-  const { paths } = context
-  const candidates = await glob(CONVERTIBLE_GLOB, { cwd: paths.src, ignore: IMAGE_IGNORE, nocase: true })
-  const uppercase = candidates.filter(file => !isConvertibleImage(file))
-
-  if (uppercase.length === 0) return
-
-  logger.warn('image', `拡張子が大文字のため出力されません（小文字にしてください）: ${uppercase.sort().join(', ')}`)
 }
 
 /**

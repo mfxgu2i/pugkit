@@ -239,19 +239,14 @@ describe('変換対象外の画像', () => {
     await withCapturedLogs(logs, () => imageTask(makeContext({ density: 2 })))
 
     expect(logs.join('\n')).not.toMatch(/変換対象外/)
-    expect(logs.join('\n')).not.toMatch(/大文字/)
   })
 
-  it('拡張子が大文字の画像は出力せず、そのことを警告する', async () => {
+  it('拡張子が大文字の画像も変換する', async () => {
     await createNoisyJpeg(resolve(srcDir, 'photo.JPG'))
 
-    const logs = []
-    await withCapturedLogs(logs, () => imageTask(makeContext({ density: 2 })))
+    await imageTask(makeContext({ density: 2 }))
 
-    const output = await listFiles(distDir)
-    expect(output).toContain('normal.webp')
-    expect(output).not.toContain('photo.webp')
-    expect(logs.join('\n')).toMatch(/大文字.*photo\.JPG/)
+    expect(await listFiles(distDir)).toContain('photo.webp')
   })
 
   /**

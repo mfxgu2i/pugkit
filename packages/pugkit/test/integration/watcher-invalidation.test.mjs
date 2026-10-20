@@ -66,7 +66,7 @@ describe('ファイルの分類', () => {
     ['assets/icons/arrow.svg', 'sprite'],
     ['assets/logo.svg', 'svg'],
     ['assets/img/hero.jpg', 'image'],
-    ['assets/img/hero.PNG', null],
+    ['assets/img/hero.PNG', 'image'],
     ['README.md', null]
   ])('%s は %s', (relativePath, expected) => {
     expect(watcher.classify(at(relativePath))).toBe(expected)

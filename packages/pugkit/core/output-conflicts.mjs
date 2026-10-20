@@ -6,7 +6,7 @@ import { iconDirOf, isReservedSpriteName, spriteOutputPath, SPRITE_FILENAME } fr
 import { publicOutputPath } from '../tasks/copy.mjs'
 import { IMAGE_GLOB, IMAGE_IGNORE } from '../tasks/image.mjs'
 import { isReservedImageName } from '../utils/image-density.mjs'
-import { OUTPUT_EXT_RE } from '../utils/image-formats.mjs'
+import { IMAGE_GLOB_OPTIONS, OUTPUT_EXT_RE } from '../utils/image-formats.mjs'
 
 /**
  * 出力先の一意性を、タスクをまたいで一度だけ確かめる。
@@ -45,7 +45,7 @@ async function collectOwners(context) {
   }
 
   const [images, svgs, publicFiles] = await Promise.all([
-    glob(IMAGE_GLOB, { cwd: paths.src, ignore: IMAGE_IGNORE }),
+    glob(IMAGE_GLOB, { ...IMAGE_GLOB_OPTIONS, cwd: paths.src, ignore: IMAGE_IGNORE }),
     glob(SVG_GLOB, { cwd: paths.src, ignore: SVG_IGNORE }),
     glob('**/*', { cwd: paths.public, nodir: true, dot: true })
   ])
