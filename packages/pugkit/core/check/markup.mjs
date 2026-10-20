@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { FILE_CONCURRENCY, runWithConcurrency } from '../../utils/concurrency.mjs'
+import { toPosix } from '../../utils/paths.mjs'
 
 /**
  * markuplint に出力 HTML を渡して妥当性を見る。
@@ -59,8 +60,6 @@ async function loadMarkuplint() {
     throw error
   }
 }
-
-const toPosix = p => p.replace(/\\/g, '/')
 
 /**
  * 1 ファイル分を検査する。

@@ -16,6 +16,7 @@ import {
 } from '../utils/image-density.mjs'
 import { CONVERTIBLE_GLOB, IMAGE_GLOB_OPTIONS, UNHANDLED_GLOB } from '../utils/image-formats.mjs'
 import { FILE_CONCURRENCY, runWithConcurrency } from '../utils/concurrency.mjs'
+import { toPosix } from '../utils/paths.mjs'
 
 // libvips の内部キャッシュを制限してメモリ消費を抑える
 // 元画像はパスではなく Buffer で渡す。パスで渡すと libvips がファイルを開いたまま持ち、
@@ -141,7 +142,7 @@ function resolveEncoder(ext, config) {
 
 /** 個別上書き設定。幅違いにも同じ値を掛ける（幅ごとには変えられない） */
 function overridesFor(relativePath, config) {
-  return config.build.image.overrides?.[relativePath.replace(/\\/g, '/')] ?? {}
+  return config.build.image.overrides?.[toPosix(relativePath)] ?? {}
 }
 
 /**

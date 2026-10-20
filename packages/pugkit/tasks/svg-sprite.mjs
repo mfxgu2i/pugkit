@@ -4,6 +4,7 @@ import { resolve, dirname, relative } from 'node:path'
 import { optimize } from 'svgo'
 import { logger } from '../utils/logger.mjs'
 import { ensureFileDir } from '../utils/file.mjs'
+import { toPosix } from '../utils/paths.mjs'
 
 /**
  * SVGO設定（スプライト用）
@@ -33,7 +34,6 @@ const SPRITE_SVGO_CONFIG = {
 }
 
 // パス比較は区切り文字を揃えてから行う（glob は「/」、path.relative は OS 依存）
-const normalize = p => p.replace(/\\/g, '/')
 
 /** スプライトが書き出すファイル名 */
 export const SPRITE_FILENAME = 'icons.svg'
@@ -62,7 +62,7 @@ export async function findIconDirs(srcDir) {
  * 規則がずれると、検知されない衝突や消し残しになる
  */
 export function iconDirOf(relativePath) {
-  const segments = normalize(relativePath).split('/')
+  const segments = toPosix(relativePath).split('/')
   const index = segments.indexOf('icons')
   if (index === -1 || index === segments.length - 1) return null
 
@@ -75,7 +75,7 @@ export function iconDirOf(relativePath) {
  * icons ディレクトリの有無で結果が変わらないよう、名前だけで判定する
  */
 export function isReservedSpriteName(relativePath) {
-  return normalize(relativePath).split('/').pop() === SPRITE_FILENAME
+  return toPosix(relativePath).split('/').pop() === SPRITE_FILENAME
 }
 
 /**
@@ -148,7 +148,7 @@ async function generateSprite(iconDir, outputPath) {
   for (const svgFile of svgFiles) {
     // id は icons ディレクトリからの相対パス。直下なら従来どおりファイル名になり、
     // サブディレクトリに分けても別々の id になる
-    const symbolId = normalize(relative(iconDir, svgFile)).replace(/\.svg$/, '')
+    const symbolId = toPosix(relative(iconDir, svgFile)).replace(/\.svg$/, '')
     const svgContent = await readFile(svgFile, 'utf-8')
 
     // SVGを最適化

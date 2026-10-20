@@ -1,5 +1,6 @@
 import { subdirPrefix } from '../utils/subdir.mjs'
 import { relative } from 'node:path'
+import { toPosix } from '../utils/paths.mjs'
 
 /**
  * siteUrl が空のとき、絶対URLを組み立てるプロパティにだけ通知を挟む。
@@ -42,7 +43,7 @@ function notifyOnAbsoluteUrl(url, notify) {
  */
 export function createBuilderVars(filePath, paths, config, { onMissingSiteUrl } = {}) {
   const relativePath = relative(paths.src, filePath)
-  const normalizedPath = relativePath.replace(/\\/g, '/')
+  const normalizedPath = toPosix(relativePath)
   const depth = normalizedPath.split('/').length - 1
   const autoDir = depth === 0 ? './' : '../'.repeat(depth)
 

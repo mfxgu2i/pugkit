@@ -42,3 +42,8 @@ export function resolveRoot(root) {
 function isSameDrive(a, b) {
   return parse(a).root.toLowerCase() === parse(b).root.toLowerCase()
 }
+
+/** Windows の区切り文字「\」を「/」にそろえる。URL や設定のキーと突き合わせるときに使う */
+export function toPosix(path) {
+  return path.replace(/\\/g, '/')
+}

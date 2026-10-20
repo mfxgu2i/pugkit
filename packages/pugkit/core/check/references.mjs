@@ -5,6 +5,7 @@ import { collectHtmlReferences } from './html-references.mjs'
 import { collectCssReferences } from './css-references.mjs'
 import { referencePath, resolveReference } from './reference-url.mjs'
 import { FILE_CONCURRENCY, runWithConcurrency } from '../../utils/concurrency.mjs'
+import { toPosix } from '../../utils/paths.mjs'
 
 /**
  * 出力に書かれた参照が実在するかを見る。
@@ -16,8 +17,6 @@ import { FILE_CONCURRENCY, runWithConcurrency } from '../../utils/concurrency.mj
  * 見るのは dist に出た .html と .css。由来は区別しない。守りたいのは納品物としての
  * dist であって、public に手で置いた HTML のリンク切れも同じ壊れ方をする。
  */
-
-const toPosix = p => p.replace(/\\/g, '/')
 
 const RULE = 'missing-reference'
 

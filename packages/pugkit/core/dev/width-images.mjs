@@ -7,6 +7,7 @@ import { isConvertibleImage } from '../../utils/image-formats.mjs'
 import { writeWidthVariant } from '../../tasks/image.mjs'
 import { contains } from '../../utils/safe-dir.mjs'
 import { stripSubdir } from '../../utils/subdir.mjs'
+import { toPosix } from '../../utils/paths.mjs'
 
 /**
  * dev で幅違いをリクエスト時に生成する。
@@ -39,12 +40,13 @@ const CONTENT_TYPES = {
 /**
  * 「_」始まりのセグメントを含むか。build の IMAGE_IGNORE と同じ扱いにする。
  *
- * 判定するのは URL 由来のパスなので、区切りは「/」。path.sep で分けると
- * Windows では 1 つのセグメントとして扱われ、dev だけが `_` 配下を配信する。
- * ただし Windows は `%5C` から戻した「\」も区切りとして解決するので、それも区切る
+ * URL 由来のパスでも、Windows は `%5C` から戻した「\」を区切りとして解決する。
+ * 「/」だけで分けると `_` 配下に届いてしまうので、そろえてから分ける
  */
 function isHidden(urlRelativePath) {
-  return urlRelativePath.split(/[\\/]/).some(segment => segment.startsWith('_'))
+  return toPosix(urlRelativePath)
+    .split('/')
+    .some(segment => segment.startsWith('_'))
 }
 
 /**
