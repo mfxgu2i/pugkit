@@ -299,7 +299,7 @@ describe('プロジェクトルートの綴り', () => {
     execFileSync('subst', [drive, project.root])
     onTestFinished(() => execFileSync('subst', [drive, '/D']))
 
-    const config = await loadConfig(`${drive}\\`)
+    const config = await loadConfig(`${drive.toLowerCase()}\\`)
 
     expect(config.root).toBe(`${drive}\\`)
   })

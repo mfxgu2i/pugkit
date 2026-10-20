@@ -28,8 +28,10 @@ export function resolveFromRoot(root, dir) {
  * ドライブが変わるときは採らない
  */
 export function resolveRoot(root) {
-  const absolute = resolve(root)
-  if (process.platform !== 'win32') return absolute
+  if (process.platform !== 'win32') return resolve(root)
+
+  // realpath を採らないときも、ドライブレターだけは glob や Sass と同じ大文字にそろえる
+  const absolute = resolve(root).replace(/^[a-z]:/, drive => drive.toUpperCase())
 
   try {
     const real = realpathSync.native(absolute)
